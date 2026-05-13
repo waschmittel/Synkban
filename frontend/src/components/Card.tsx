@@ -1,8 +1,9 @@
-import { Show } from "solid-js";
-import type { Card as CardType } from "../types";
+import { For, Show } from "solid-js";
+import type { Card as CardType, Label } from "../types";
 
 interface Props {
   card: CardType;
+  labels: Label[];
   onDelete: (id: string) => void;
   onClick: (card: CardType) => void;
 }
@@ -22,18 +23,79 @@ export default function Card(props: Props) {
     document.querySelectorAll(".drop-placeholder").forEach((el) => el.remove());
   };
 
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      props.onClick(props.card);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      props.onDelete(props.card.id);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      let next = el.nextElementSibling as HTMLElement | null;
+      while (next && !next.classList.contains("card")) {
+        next = next.nextElementSibling as HTMLElement | null;
+      }
+      next?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      let prev = el.previousElementSibling as HTMLElement | null;
+      while (prev && !prev.classList.contains("card")) {
+        prev = prev.previousElementSibling as HTMLElement | null;
+      }
+      prev?.focus();
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      const currentList = el.closest(".list") as HTMLElement | null;
+      const nextList = currentList?.nextElementSibling as HTMLElement | null;
+      if (nextList?.classList.contains("list")) {
+        const firstCard = nextList.querySelector(".card") as HTMLElement | null;
+        firstCard ? firstCard.focus() : (nextList as HTMLElement).focus();
+      }
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      const currentList = el.closest(".list") as HTMLElement | null;
+      const prevList = currentList?.previousElementSibling as HTMLElement | null;
+      if (prevList?.classList.contains("list")) {
+        const firstCard = prevList.querySelector(".card") as HTMLElement | null;
+        firstCard ? firstCard.focus() : (prevList as HTMLElement).focus();
+      }
+    }
+  };
+
+  const cardLabels = () =>
+    props.labels.filter((l) => props.card.label_ids?.includes(l.id));
+
   const hasDescription = () => !!props.card.description;
 
   return (
     <div
       class="card"
+      tabindex="0"
       draggable={true}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={() => props.onClick(props.card)}
+      onKeyDown={handleKeyDown}
       data-card-id={props.card.id}
       data-card-position={props.card.position}
     >
+      <Show when={cardLabels().length > 0}>
+        <div class="card-labels">
+          <For each={cardLabels()}>
+            {(label) => (
+              <span
+                class="card-label-chip"
+                style={{ "background-color": label.color }}
+                title={label.name}
+              >
+                {label.name}
+              </span>
+            )}
+          </For>
+        </div>
+      </Show>
       <div class="card-content">
         <span class="card-title">{props.card.title}</span>
         <Show when={hasDescription()}>

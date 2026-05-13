@@ -26,6 +26,7 @@ pub async fn update_card(
         body.description.as_deref(),
         body.position,
         body.list_id.as_deref(),
+        body.label_ids.as_deref(),
     )?;
     Ok(HttpResponse::Ok().json(card))
 }

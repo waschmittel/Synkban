@@ -54,13 +54,17 @@ After any code change:
 ### Data model
 
 ```
+Board  →  has many Labels (per-board)
 Board  →  has many Lists  →  has many Cards
+Cards  →  reference Labels by ID (label_ids: Vec<String>)
 ```
 
 - IDs are UUIDs (v4), generated server-side.
 - `position: f64` — fractional indexing. New items: `max + 1.0`. Reorder: midpoint between neighbors.
 - Card `description` — ProseMirror doc JSON string, or empty string `""`.
+- Card `label_ids` — array of label IDs (subset of board's labels). Uses `#[serde(default)]` so existing cards without the field deserialize as empty vec.
 - Timestamps — `YYYY-MM-DD HH:MM:SS` UTC, generated in `store.rs` (no chrono crate).
+- **Labels** — stored in `board.json` as a `labels: Vec<Label>` array. Each label has `id`, `name`, `color`. Colors are auto-assigned from a 12-color pastel palette (evenly distributed hues) in interleaved order for max visual distinction. `board.json` is read/written via the private `BoardFile` struct in `store.rs`; the public `Board` response type omits labels (labels only appear in `BoardDetail`). No separate labels file.
 
 ### File storage layout
 
@@ -78,20 +82,24 @@ data/boards/{board-id}/lists/{list-id}/cards/{card-id}.json
 ## API Endpoints
 
 ```
-GET    /api/changes                   → { mtime: u64 } (newest file mtime, for poll efficiency)
-GET    /api/boards                    → Board[]
-POST   /api/boards          {title}   → Board (201)
-GET    /api/boards/:id                → BoardDetail (nested lists + cards)
-PUT    /api/boards/:id       {title}  → Board
-DELETE /api/boards/:id                → 204
+GET    /api/changes                          → { mtime: u64 } (newest file mtime, for poll efficiency)
+GET    /api/boards                           → Board[]
+POST   /api/boards          {title}          → Board (201)
+GET    /api/boards/:id                       → BoardDetail (nested lists + cards + labels)
+PUT    /api/boards/:id       {title}         → Board
+DELETE /api/boards/:id                       → 204
 
-POST   /api/boards/:bid/lists {title} → List (201)
-PUT    /api/lists/:id    {title?,pos?} → List
-DELETE /api/lists/:id                 → 204
+POST   /api/boards/:bid/labels  {name}       → Label (201) — auto-assigns pastel color
+PUT    /api/labels/:id          {name}       → Label
+DELETE /api/labels/:id                       → 204
 
-POST   /api/lists/:lid/cards {title}  → Card (201)
-PUT    /api/cards/:id  {title?,desc?,pos?,list_id?} → Card
-DELETE /api/cards/:id                 → 204
+POST   /api/boards/:bid/lists {title}        → List (201)
+PUT    /api/lists/:id    {title?,pos?}       → List
+DELETE /api/lists/:id                        → 204
+
+POST   /api/lists/:lid/cards {title}         → Card (201)
+PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?} → Card
+DELETE /api/cards/:id                        → 204
 ```
 
 ## Adding New Features
@@ -130,6 +138,8 @@ DELETE /api/cards/:id                 → 204
 - **Card description** is a JSON string, not a JSON object. It's `JSON.stringify(prosemirrorDoc)` on save, `JSON.parse(description)` on load.
 - **Unsaved changes confirmation** — CardDetail modal shows a centered overlay dialog (`.unsaved-overlay` + `.unsaved-dialog`) with Save/Discard/Cancel when closing with dirty state. Save button is focused by default with a prominent focus ring. Enter executes whichever button is focused (Tab to move between buttons). Escape dismisses the dialog. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded via `guardedClose()`.
 - **Periodic polling** — Home and Board pages poll `GET /api/changes` every 15s, which returns the newest file mtime from the data directory (cheap stat walk, no JSON parsing). Full refetch only happens when mtime changes. This efficiently reflects external file changes (rsync, git pull, Syncthing) without unnecessary data transfers.
+- **Labels** — per-board colored tags. Stored in `board.json` (not separate files). Board labels flow down as `props.labels` through `BoardPage → List → Card`. CardDetail receives `boardLabels` prop and manages `selectedLabelIds` signal. `onSave` callback signature includes `labelIds: string[]`. Label management UI is a dropdown panel from the board title bar ("Labels" button). Label colors use `color-mix()` for selected state in the label picker.
+- **Keyboard navigation** — Cards have `tabindex="0"` and handle `↑↓` (move within list), `←→` (jump to adjacent list), `Enter`/`Space` (open card), `Delete`/`Backspace` (delete card). Focus style via `.card:focus-visible`. Keyboard hint bar shown in board title bar. CardDetail `Ctrl+Enter` saves, `Escape` closes (with unsaved guard), title `Enter` focuses the editor.
 
 ## Dependencies
 

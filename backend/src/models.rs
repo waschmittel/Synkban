@@ -1,5 +1,12 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Label {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Board {
     pub id: String,
@@ -24,6 +31,8 @@ pub struct Card {
     pub description: String,
     pub position: f64,
     pub created_at: String,
+    #[serde(default)]
+    pub label_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,6 +40,7 @@ pub struct BoardDetail {
     pub id: String,
     pub title: String,
     pub created_at: String,
+    pub labels: Vec<Label>,
     pub lists: Vec<ListWithCards>,
 }
 
@@ -81,4 +91,15 @@ pub struct UpdateCard {
     pub description: Option<String>,
     pub position: Option<f64>,
     pub list_id: Option<String>,
+    pub label_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateLabel {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateLabel {
+    pub name: String,
 }

@@ -13,6 +13,10 @@ export default function BoardPage() {
     (id) => api.getBoard(id)
   );
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
+  const [showLabelPanel, setShowLabelPanel] = createSignal(false);
+  const [newLabelName, setNewLabelName] = createSignal("");
+  const [editingLabelId, setEditingLabelId] = createSignal<string | null>(null);
+  const [editingLabelName, setEditingLabelName] = createSignal("");
 
   let lastMtime = 0;
   onMount(() => {
@@ -61,8 +65,8 @@ export default function BoardPage() {
     setSelectedCard(card);
   };
 
-  const handleCardSave = async (id: string, title: string, description: string) => {
-    await api.updateCard(id, { title, description });
+  const handleCardSave = async (id: string, title: string, description: string, labelIds: string[]) => {
+    await api.updateCard(id, { title, description, label_ids: labelIds });
     setSelectedCard(null);
     refetch();
   };
@@ -142,6 +146,33 @@ export default function BoardPage() {
     refetch();
   };
 
+  const handleCreateLabel = async (e: Event) => {
+    e.preventDefault();
+    const name = newLabelName().trim();
+    if (!name) return;
+    await api.createLabel(params.id, name);
+    setNewLabelName("");
+    refetch();
+  };
+
+  const handleDeleteLabel = async (labelId: string) => {
+    await api.deleteLabel(labelId);
+    refetch();
+  };
+
+  const startEditLabel = (labelId: string, currentName: string) => {
+    setEditingLabelId(labelId);
+    setEditingLabelName(currentName);
+  };
+
+  const handleUpdateLabel = async (labelId: string) => {
+    const name = editingLabelName().trim();
+    if (!name) return;
+    await api.updateLabel(labelId, name);
+    setEditingLabelId(null);
+    refetch();
+  };
+
   return (
     <div class="board-page">
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
@@ -149,6 +180,95 @@ export default function BoardPage() {
           <>
             <div class="board-title-bar">
               <h2>{b().title}</h2>
+              <div class="board-kbd-hint">
+                <span><kbd>↑↓</kbd> navigate cards</span>
+                <span><kbd>←→</kbd> switch list</span>
+                <span><kbd>Enter</kbd> open card</span>
+                <span><kbd>Del</kbd> delete card</span>
+              </div>
+              <button
+                class="btn btn-board-labels"
+                onClick={() => setShowLabelPanel((v) => !v)}
+                title="Manage labels"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                  <line x1="7" y1="7" x2="7.01" y2="7" />
+                </svg>
+                Labels
+              </button>
+              <Show when={showLabelPanel()}>
+                <div class="label-panel">
+                  <div class="label-panel-header">
+                    <span>Board Labels</span>
+                    <button class="label-panel-close" onClick={() => setShowLabelPanel(false)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="label-panel-list">
+                    <For each={b().labels} fallback={<p class="label-panel-empty">No labels yet</p>}>
+                      {(label) => (
+                        <div class="label-panel-item">
+                          <Show
+                            when={editingLabelId() === label.id}
+                            fallback={
+                              <>
+                                <span
+                                  class="label-panel-swatch"
+                                  style={{ "background-color": label.color }}
+                                />
+                                <span
+                                  class="label-panel-name"
+                                  onClick={() => startEditLabel(label.id, label.name)}
+                                  title="Click to rename"
+                                >
+                                  {label.name}
+                                </span>
+                                <button
+                                  class="label-panel-delete"
+                                  onClick={() => handleDeleteLabel(label.id)}
+                                  title="Delete label"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                  </svg>
+                                </button>
+                              </>
+                            }
+                          >
+                            <input
+                              ref={(el) => requestAnimationFrame(() => el.focus())}
+                              class="label-panel-edit-input"
+                              type="text"
+                              value={editingLabelName()}
+                              onInput={(e) => setEditingLabelName(e.currentTarget.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleUpdateLabel(label.id);
+                                if (e.key === "Escape") setEditingLabelId(null);
+                              }}
+                              onBlur={() => handleUpdateLabel(label.id)}
+                            />
+                          </Show>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                  <form class="label-panel-form" onSubmit={handleCreateLabel}>
+                    <input
+                      type="text"
+                      placeholder="New label name..."
+                      value={newLabelName()}
+                      onInput={(e) => setNewLabelName(e.currentTarget.value)}
+                      class="label-panel-input"
+                    />
+                    <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                  </form>
+                </div>
+              </Show>
             </div>
             <div
               class="lists-container"
@@ -159,6 +279,7 @@ export default function BoardPage() {
                 {(list) => (
                   <List
                     list={list}
+                    labels={b().labels}
                     onAddCard={handleAddCard}
                     onDeleteCard={handleDeleteCard}
                     onDeleteList={handleDeleteList}
@@ -182,6 +303,7 @@ export default function BoardPage() {
         {(card) => (
           <CardDetail
             card={card()}
+            boardLabels={board()?.labels ?? []}
             onSave={handleCardSave}
             onClose={() => setSelectedCard(null)}
           />

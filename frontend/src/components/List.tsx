@@ -1,10 +1,11 @@
 import { For } from "solid-js";
-import type { Card as CardType, ListWithCards } from "../types";
+import type { Card as CardType, Label, ListWithCards } from "../types";
 import Card from "./Card";
 import AddForm from "./AddForm";
 
 interface Props {
   list: ListWithCards;
+  labels: Label[];
   onAddCard: (listId: string, title: string) => void;
   onDeleteCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
@@ -119,7 +120,12 @@ export default function List(props: Props) {
       <div class="cards-container">
         <For each={props.list.cards}>
           {(card) => (
-            <Card card={card} onDelete={props.onDeleteCard} onClick={props.onCardClick} />
+            <Card
+              card={card}
+              labels={props.labels}
+              onDelete={props.onDeleteCard}
+              onClick={props.onCardClick}
+            />
           )}
         </For>
       </div>

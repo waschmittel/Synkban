@@ -1,4 +1,4 @@
-import { onMount, onCleanup, createSignal, Show } from "solid-js";
+import { onMount, onCleanup, createSignal, Show, For } from "solid-js";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import {
@@ -9,7 +9,7 @@ import {
 import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
 import { exampleSetup } from "prosemirror-example-setup";
-import type { Card } from "../types";
+import type { Card, Label } from "../types";
 
 const schema = new Schema({
   nodes: addListNodes(basicSchema.spec.nodes, "paragraph block*", "block"),
@@ -36,7 +36,8 @@ function isDocEmpty(doc: PmNode): boolean {
 
 interface Props {
   card: Card;
-  onSave: (id: string, title: string, description: string) => void;
+  boardLabels: Label[];
+  onSave: (id: string, title: string, description: string, labelIds: string[]) => void;
   onClose: () => void;
 }
 
@@ -44,6 +45,9 @@ export default function CardDetail(props: Props) {
   let editorRef!: HTMLDivElement;
   let view: EditorView | undefined;
   const [title, setTitle] = createSignal(props.card.title);
+  const [selectedLabelIds, setSelectedLabelIds] = createSignal<string[]>(
+    props.card.label_ids ?? []
+  );
   const [dirty, setDirty] = createSignal(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = createSignal(false);
 
@@ -68,12 +72,19 @@ export default function CardDetail(props: Props) {
     view?.destroy();
   });
 
+  const toggleLabel = (labelId: string) => {
+    setSelectedLabelIds((ids) =>
+      ids.includes(labelId) ? ids.filter((id) => id !== labelId) : [...ids, labelId]
+    );
+    setDirty(true);
+  };
+
   const handleSave = () => {
     if (!view) return;
     const doc = view.state.doc;
     const description = isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
     setDirty(false);
-    props.onSave(props.card.id, title(), description);
+    props.onSave(props.card.id, title(), description, selectedLabelIds());
   };
 
   const guardedClose = () => {
@@ -142,6 +153,39 @@ export default function CardDetail(props: Props) {
           </button>
         </div>
         <div class="modal-body">
+          <Show when={props.boardLabels.length > 0}>
+            <div class="modal-section-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+              <span class="modal-label">Labels</span>
+            </div>
+            <div class="label-picker">
+              <For each={props.boardLabels}>
+                {(label) => {
+                  const selected = () => selectedLabelIds().includes(label.id);
+                  return (
+                    <button
+                      class="label-picker-item"
+                      classList={{ "label-picker-item--selected": selected() }}
+                      style={{ "--label-color": label.color }}
+                      onClick={() => toggleLabel(label.id)}
+                      title={selected() ? `Remove "${label.name}"` : `Add "${label.name}"`}
+                    >
+                      <span class="label-picker-dot" style={{ "background-color": label.color }} />
+                      <span class="label-picker-name">{label.name}</span>
+                      <Show when={selected()}>
+                        <svg class="label-picker-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </Show>
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
           <div class="modal-section-header">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="17" y1="10" x2="3" y2="10" />

@@ -196,12 +196,201 @@ body {
 
 .board-title-bar {
   padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
 }
 
 .board-title-bar h2 {
   color: white;
   font-size: 18px;
   font-weight: 700;
+}
+
+.btn-board-labels {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.btn-board-labels:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+/* ═══ Label Panel ═══ */
+.label-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 20px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  width: 280px;
+  z-index: 50;
+  animation: slideUp 0.15s ease;
+}
+
+.label-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5e6c84;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #ebedf0;
+}
+
+.label-panel-close {
+  background: none;
+  border: none;
+  color: #6b778c;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  transition: color 0.1s, background 0.1s;
+}
+
+.label-panel-close:hover {
+  color: #172b4d;
+  background: #f4f5f7;
+}
+
+.label-panel-list {
+  padding: 8px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.label-panel-empty {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #8993a4;
+  font-style: italic;
+}
+
+.label-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  transition: background 0.1s;
+}
+
+.label-panel-item:hover {
+  background: #f4f5f7;
+}
+
+.label-panel-swatch {
+  width: 24px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.label-panel-name {
+  flex: 1;
+  font-size: 14px;
+  color: #172b4d;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-panel-name:hover {
+  text-decoration: underline;
+}
+
+.label-panel-delete {
+  background: none;
+  border: none;
+  color: #8993a4;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+}
+
+.label-panel-item:hover .label-panel-delete {
+  opacity: 1;
+}
+
+.label-panel-delete:hover {
+  color: #eb5a46;
+}
+
+.label-panel-edit-input {
+  flex: 1;
+  border: 2px solid #0079bf;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.label-panel-form {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #ebedf0;
+}
+
+.label-panel-input {
+  flex: 1;
+  border: 2px solid #dfe1e6;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.label-panel-input:focus {
+  border-color: #0079bf;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+/* ═══ Card Labels ═══ */
+.card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.card-label-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.6);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lists-container {
@@ -935,4 +1124,85 @@ body {
 /* ═══ Selection highlight ═══ */
 ::selection {
   background: #cce5ff;
+}
+
+/* ═══ Card keyboard focus ═══ */
+.card:focus-visible {
+  outline: 2px solid #0079bf;
+  outline-offset: 1px;
+  background: #f0f6fd;
+  box-shadow: 0 2px 8px rgba(0, 121, 191, 0.2);
+}
+
+/* ═══ Label Picker (in CardDetail) ═══ */
+.label-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.label-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 8px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  background: #f4f5f7;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #172b4d;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.label-picker-item:hover {
+  background: #ebecf0;
+}
+
+.label-picker-item--selected {
+  border-color: var(--label-color);
+  background: color-mix(in srgb, var(--label-color) 25%, white);
+}
+
+.label-picker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.label-picker-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-picker-check {
+  color: #172b4d;
+  flex-shrink: 0;
+}
+
+/* ═══ Keyboard shortcut hint (Board page) ═══ */
+.board-kbd-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.board-kbd-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.7);
 }

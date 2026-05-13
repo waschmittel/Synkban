@@ -1,4 +1,4 @@
-import type { Board, BoardDetail, Card, ListWithCards } from "./types";
+import type { Board, BoardDetail, Card, Label, ListWithCards } from "./types";
 
 const BASE = "/api";
 
@@ -65,6 +65,7 @@ export const api = {
       description?: string;
       position?: number;
       list_id?: string;
+      label_ids?: string[];
     }
   ) =>
     request<Card>(`/cards/${id}`, {
@@ -74,4 +75,19 @@ export const api = {
 
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
+
+  createLabel: (boardId: string, name: string) =>
+    request<Label>(`/boards/${boardId}/labels`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  updateLabel: (id: string, name: string) =>
+    request<Label>(`/labels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteLabel: (id: string) =>
+    request<void>(`/labels/${id}`, { method: "DELETE" }),
 };

@@ -4,6 +4,23 @@ use std::path::{Path, PathBuf};
 use crate::errors::AppError;
 use crate::models::*;
 
+// Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
+// Interleaved hues: 0°, 180°, 90°, 270°, 45°, 225°, 135°, 315°, 30°, 210°, 150°, 330°
+const LABEL_COLORS: &[&str] = &[
+    "#ffb3b3", // rose
+    "#9bf6ff", // sky
+    "#caffbf", // lime
+    "#c9b3ff", // lavender
+    "#ffd6a5", // peach
+    "#a0c4ff", // periwinkle
+    "#fdffb6", // lemon
+    "#ffc6ff", // pink
+    "#b5ead7", // mint
+    "#ffdac1", // apricot
+    "#c7ceea", // steel blue
+    "#e2f0cb", // pale green
+];
+
 fn boards_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("boards")
 }
@@ -47,7 +64,6 @@ fn now_timestamp() -> String {
     let minutes = (time_secs % 3600) / 60;
     let seconds = time_secs % 60;
 
-    // days since epoch to date
     let mut y = 1970i64;
     let mut remaining = days as i64;
     loop {
@@ -84,6 +100,22 @@ fn now_timestamp() -> String {
 
 fn is_leap(y: i64) -> bool {
     (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+/// Internal representation of board.json on disk (includes labels).
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct BoardFile {
+    id: String,
+    title: String,
+    created_at: String,
+    #[serde(default)]
+    labels: Vec<Label>,
+}
+
+impl From<BoardFile> for Board {
+    fn from(b: BoardFile) -> Self {
+        Board { id: b.id, title: b.title, created_at: b.created_at }
+    }
 }
 
 // --- Change detection ---
@@ -133,7 +165,8 @@ pub fn list_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
         if entry.file_type()?.is_dir() {
             let board_json = entry.path().join("board.json");
             if board_json.exists() {
-                boards.push(read_json::<Board>(&board_json)?);
+                let bf: BoardFile = read_json(&board_json)?;
+                boards.push(Board::from(bf));
             }
         }
     }
@@ -146,13 +179,14 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
     let dir = board_dir(data_dir, &id);
     fs::create_dir_all(dir.join("lists"))?;
 
-    let board = Board {
-        id,
+    let bf = BoardFile {
+        id: id.clone(),
         title: title.to_string(),
         created_at: now_timestamp(),
+        labels: Vec::new(),
     };
-    write_json(&dir.join("board.json"), &board)?;
-    Ok(board)
+    write_json(&dir.join("board.json"), &bf)?;
+    Ok(Board { id, title: bf.title, created_at: bf.created_at })
 }
 
 pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppError> {
@@ -161,7 +195,7 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
     if !board_json.exists() {
         return Err(AppError::NotFound("Board not found".into()));
     }
-    let board: Board = read_json(&board_json)?;
+    let bf: BoardFile = read_json(&board_json)?;
 
     let mut lists_with_cards = Vec::new();
     let lists_path = lists_dir(data_dir, board_id);
@@ -199,9 +233,10 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
     lists_with_cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
 
     Ok(BoardDetail {
-        id: board.id,
-        title: board.title,
-        created_at: board.created_at,
+        id: bf.id,
+        title: bf.title,
+        created_at: bf.created_at,
+        labels: bf.labels,
         lists: lists_with_cards,
     })
 }
@@ -212,10 +247,10 @@ pub fn update_board(data_dir: &Path, board_id: &str, title: &str) -> Result<Boar
     if !board_json.exists() {
         return Err(AppError::NotFound("Board not found".into()));
     }
-    let mut board: Board = read_json(&board_json)?;
-    board.title = title.to_string();
-    write_json(&board_json, &board)?;
-    Ok(board)
+    let mut bf: BoardFile = read_json(&board_json)?;
+    bf.title = title.to_string();
+    write_json(&board_json, &bf)?;
+    Ok(Board { id: bf.id, title: bf.title, created_at: bf.created_at })
 }
 
 pub fn delete_board(data_dir: &Path, board_id: &str) -> Result<(), AppError> {
@@ -225,6 +260,85 @@ pub fn delete_board(data_dir: &Path, board_id: &str) -> Result<(), AppError> {
     }
     fs::remove_dir_all(&dir)?;
     Ok(())
+}
+
+// --- Labels ---
+
+pub fn create_label(data_dir: &Path, board_id: &str, name: &str) -> Result<Label, AppError> {
+    let board_json = board_dir(data_dir, board_id).join("board.json");
+    if !board_json.exists() {
+        return Err(AppError::NotFound("Board not found".into()));
+    }
+    let mut bf: BoardFile = read_json(&board_json)?;
+    let color = LABEL_COLORS[bf.labels.len() % LABEL_COLORS.len()].to_string();
+    let label = Label {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.to_string(),
+        color,
+    };
+    bf.labels.push(label.clone());
+    write_json(&board_json, &bf)?;
+    Ok(label)
+}
+
+pub fn update_label(data_dir: &Path, board_id: &str, label_id: &str, name: &str) -> Result<Label, AppError> {
+    let board_json = board_dir(data_dir, board_id).join("board.json");
+    if !board_json.exists() {
+        return Err(AppError::NotFound("Board not found".into()));
+    }
+    let mut bf: BoardFile = read_json(&board_json)?;
+    let label = bf.labels.iter_mut().find(|l| l.id == label_id)
+        .ok_or_else(|| AppError::NotFound("Label not found".into()))?;
+    label.name = name.to_string();
+    let updated = label.clone();
+    write_json(&board_json, &bf)?;
+    Ok(updated)
+}
+
+pub fn delete_label(data_dir: &Path, board_id: &str, label_id: &str) -> Result<(), AppError> {
+    let board_json = board_dir(data_dir, board_id).join("board.json");
+    if !board_json.exists() {
+        return Err(AppError::NotFound("Board not found".into()));
+    }
+    let mut bf: BoardFile = read_json(&board_json)?;
+    let before = bf.labels.len();
+    bf.labels.retain(|l| l.id != label_id);
+    if bf.labels.len() == before {
+        return Err(AppError::NotFound("Label not found".into()));
+    }
+    write_json(&board_json, &bf)?;
+    Ok(())
+}
+
+/// Find the board_id that owns the given label_id (scans all boards).
+fn find_board_for_label(data_dir: &Path, label_id: &str) -> Result<String, AppError> {
+    let dir = boards_dir(data_dir);
+    if dir.exists() {
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                let board_id = entry.file_name().to_string_lossy().to_string();
+                let board_json = entry.path().join("board.json");
+                if board_json.exists() {
+                    let bf: BoardFile = read_json(&board_json)?;
+                    if bf.labels.iter().any(|l| l.id == label_id) {
+                        return Ok(board_id);
+                    }
+                }
+            }
+        }
+    }
+    Err(AppError::NotFound("Label not found".into()))
+}
+
+pub fn update_label_by_id(data_dir: &Path, label_id: &str, name: &str) -> Result<Label, AppError> {
+    let board_id = find_board_for_label(data_dir, label_id)?;
+    update_label(data_dir, &board_id, label_id, name)
+}
+
+pub fn delete_label_by_id(data_dir: &Path, label_id: &str) -> Result<(), AppError> {
+    let board_id = find_board_for_label(data_dir, label_id)?;
+    delete_label(data_dir, &board_id, label_id)
 }
 
 // --- Lists ---
@@ -366,6 +480,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         description: String::new(),
         position: max_pos + 1.0,
         created_at: now_timestamp(),
+        label_ids: Vec::new(),
     };
     write_json(&dir.join(format!("{id}.json")), &card)?;
     Ok(card)
@@ -396,6 +511,7 @@ pub fn update_card(
     description: Option<&str>,
     position: Option<f64>,
     new_list_id: Option<&str>,
+    label_ids: Option<&[String]>,
 ) -> Result<Card, AppError> {
     let (board_id, old_list_id) = find_board_and_list_for_card(data_dir, card_id)?;
     let old_path = cards_dir(data_dir, &board_id, &old_list_id).join(format!("{card_id}.json"));
@@ -409,6 +525,9 @@ pub fn update_card(
     }
     if let Some(p) = position {
         card.position = p;
+    }
+    if let Some(ids) = label_ids {
+        card.label_ids = ids.to_vec();
     }
 
     if let Some(target_list_id) = new_list_id {
