@@ -161,9 +161,11 @@ export default function CardDetail(props: Props) {
   const [attachments, setAttachments] = createSignal<Attachment[]>(props.card.attachments ?? []);
   const [uploading, setUploading] = createSignal(false);
   const [previewAtt, setPreviewAtt] = createSignal<Attachment | null>(null);
+  const [draggingFile, setDraggingFile] = createSignal(false);
   const [dueDate, setDueDate] = createSignal<string>(props.card.due_date ?? "");
   let dueDateRef!: HTMLInputElement;
   let dueDatePickerRef!: HTMLInputElement;
+  let dragCounter = 0;
 
   onMount(() => {
     const doc = docFromDescription(props.card.description);
@@ -239,6 +241,10 @@ export default function CardDetail(props: Props) {
     const file = input.files?.[0];
     if (!file) return;
     input.value = "";
+    uploadFile(file);
+  };
+
+  const uploadFile = async (file: File) => {
     setUploading(true);
     try {
       const att = await api.uploadAttachment(props.card.id, file);
@@ -247,6 +253,42 @@ export default function CardDetail(props: Props) {
       alert(`Upload failed: ${(err as Error).message}`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDragEnter = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter++;
+    if (e.dataTransfer?.types.includes("Files")) {
+      setDraggingFile(true);
+    }
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      setDraggingFile(false);
+    }
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter = 0;
+    setDraggingFile(false);
+    const files = e.dataTransfer?.files;
+    if (!files?.length) return;
+    for (const file of Array.from(files)) {
+      uploadFile(file);
     }
   };
 
@@ -348,8 +390,27 @@ export default function CardDetail(props: Props) {
   const hasLabels = () => props.boardLabels.length > 0;
 
   return (
-    <div class="modal-overlay" onClick={handleOverlayClick} onKeyDown={handleKeyDown}>
+    <div
+      class="modal-overlay"
+      classList={{ "modal-overlay--drop-active": draggingFile() }}
+      onClick={handleOverlayClick}
+      onKeyDown={handleKeyDown}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div class="modal-content">
+        <Show when={draggingFile()}>
+          <div class="drop-zone-overlay">
+            <div class="drop-zone-message">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+              <span>Drop files to attach</span>
+            </div>
+          </div>
+        </Show>
         <div class="modal-header">
           <div class="modal-header-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

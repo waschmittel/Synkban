@@ -991,6 +991,34 @@ body {
   flex-direction: column;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.2s ease;
+  position: relative;
+}
+
+.modal-overlay--drop-active .modal-content {
+  outline: 3px dashed #4a90d9;
+  outline-offset: -3px;
+}
+
+.drop-zone-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(74, 144, 217, 0.08);
+  border-radius: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.drop-zone-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #4a90d9;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .modal-header {
