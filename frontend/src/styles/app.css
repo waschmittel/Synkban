@@ -674,24 +674,36 @@ body {
   font-style: italic;
 }
 
-.unsaved-dialog {
-  position: absolute;
-  bottom: 0;
+.unsaved-overlay {
+  position: fixed;
+  top: 0;
   left: 0;
   right: 0;
-  background: #fffbe6;
-  border-top: 2px solid #f2d600;
-  border-radius: 0 0 12px 12px;
-  padding: 16px 24px;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  z-index: 200;
+  animation: fadeIn 0.1s ease;
+}
+
+.unsaved-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 20px;
+  min-width: 340px;
   animation: slideUp 0.15s ease;
 }
 
 .unsaved-dialog p {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: #172b4d;
   margin: 0;
@@ -699,8 +711,12 @@ body {
 
 .unsaved-dialog-actions {
   display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 10px;
+}
+
+.unsaved-dialog-actions .btn:focus {
+  outline: 3px solid #0079bf;
+  outline-offset: 2px;
 }
 
 .btn-danger {

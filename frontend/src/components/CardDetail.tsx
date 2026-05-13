@@ -87,7 +87,12 @@ export default function CardDetail(props: Props) {
   const handleDialogKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleSave();
+      const active = document.activeElement as HTMLElement;
+      if (active?.tagName === "BUTTON" && active.closest(".unsaved-dialog")) {
+        active.click();
+      } else {
+        handleSave();
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -160,8 +165,10 @@ export default function CardDetail(props: Props) {
           </button>
           {dirty() && <span class="unsaved-indicator">Unsaved changes</span>}
         </div>
-        <Show when={showUnsavedDialog()}>
-          <div class="unsaved-dialog" onKeyDown={handleDialogKeyDown}>
+      </div>
+      <Show when={showUnsavedDialog()}>
+        <div class="unsaved-overlay" onKeyDown={handleDialogKeyDown}>
+          <div class="unsaved-dialog">
             <p>You have unsaved changes.</p>
             <div class="unsaved-dialog-actions">
               <button
@@ -179,8 +186,8 @@ export default function CardDetail(props: Props) {
               </button>
             </div>
           </div>
-        </Show>
-      </div>
+        </div>
+      </Show>
     </div>
   );
 }

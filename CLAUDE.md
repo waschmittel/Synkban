@@ -128,7 +128,7 @@ DELETE /api/cards/:id                 → 204
 - **SolidJS reactivity** — don't destructure props (breaks reactivity). Access as `props.foo`. Use `createMemo` for derived values.
 - **Position gaps are fine.** Fractional indexing leaves gaps (1.0, 2.0, 1.5, 1.25...). This is by design. No need to normalize positions.
 - **Card description** is a JSON string, not a JSON object. It's `JSON.stringify(prosemirrorDoc)` on save, `JSON.parse(description)` on load.
-- **Unsaved changes confirmation** — CardDetail modal shows custom Save/Discard/Cancel dialog when closing with dirty state. Enter defaults to Save, Escape dismisses dialog. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded via `guardedClose()`.
+- **Unsaved changes confirmation** — CardDetail modal shows a centered overlay dialog (`.unsaved-overlay` + `.unsaved-dialog`) with Save/Discard/Cancel when closing with dirty state. Save button is focused by default with a prominent focus ring. Enter executes whichever button is focused (Tab to move between buttons). Escape dismisses the dialog. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded via `guardedClose()`.
 - **Periodic polling** — Home and Board pages poll `GET /api/changes` every 15s, which returns the newest file mtime from the data directory (cheap stat walk, no JSON parsing). Full refetch only happens when mtime changes. This efficiently reflects external file changes (rsync, git pull, Syncthing) without unnecessary data transfers.
 
 ## Dependencies
