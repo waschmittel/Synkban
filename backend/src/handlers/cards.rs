@@ -159,3 +159,66 @@ pub async fn delete_attachment(
     );
     Ok(HttpResponse::NoContent().finish())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_iso_dates() {
+        assert!(is_valid_iso_date("2024-01-01"));
+        assert!(is_valid_iso_date("2024-12-31"));
+        assert!(is_valid_iso_date("2000-02-29"));
+        assert!(is_valid_iso_date("1999-06-15"));
+    }
+
+    #[test]
+    fn invalid_too_short() {
+        assert!(!is_valid_iso_date("2024-1-1"));
+    }
+
+    #[test]
+    fn invalid_not_a_date() {
+        assert!(!is_valid_iso_date("not-a-date"));
+    }
+
+    #[test]
+    fn invalid_wrong_separators() {
+        assert!(!is_valid_iso_date("2024/01/01"));
+    }
+
+    #[test]
+    fn invalid_month_zero() {
+        assert!(!is_valid_iso_date("2024-00-01"));
+    }
+
+    #[test]
+    fn invalid_month_thirteen() {
+        assert!(!is_valid_iso_date("2024-13-01"));
+    }
+
+    #[test]
+    fn invalid_day_zero() {
+        assert!(!is_valid_iso_date("2024-01-00"));
+    }
+
+    #[test]
+    fn invalid_day_thirtytwo() {
+        assert!(!is_valid_iso_date("2024-01-32"));
+    }
+
+    #[test]
+    fn invalid_empty() {
+        assert!(!is_valid_iso_date(""));
+    }
+
+    #[test]
+    fn invalid_no_dashes() {
+        assert!(!is_valid_iso_date("20240101"));
+    }
+
+    #[test]
+    fn invalid_year_zero() {
+        assert!(!is_valid_iso_date("0000-01-01"));
+    }
+}

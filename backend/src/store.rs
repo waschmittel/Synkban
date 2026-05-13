@@ -849,3 +849,761 @@ pub fn get_thumbnail_data(
     }
     Ok(fs::read(&thumb_path)?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn tmp() -> TempDir {
+        let d = TempDir::new().unwrap();
+        drain_file_ops(d.path());
+        d
+    }
+
+    // -- Boards --
+
+    #[test]
+    fn list_boards_empty() {
+        let d = tmp();
+        let boards = list_boards(d.path()).unwrap();
+        assert!(boards.is_empty());
+    }
+
+    #[test]
+    fn create_board_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "My Board").unwrap();
+        assert_eq!(b.title, "My Board");
+        assert!(!b.id.is_empty());
+        assert!(!b.created_at.is_empty());
+        assert!(b.color.is_none());
+        assert!(board_dir(d.path(), &b.id).join("board.json").exists());
+        assert!(lists_dir(d.path(), &b.id).exists());
+    }
+
+    #[test]
+    fn list_boards_returns_created() {
+        let d = tmp();
+        let b1 = create_board(d.path(), "A").unwrap();
+        let b2 = create_board(d.path(), "B").unwrap();
+        let b3 = create_board(d.path(), "C").unwrap();
+        let boards = list_boards(d.path()).unwrap();
+        assert_eq!(boards.len(), 3);
+        let ids: Vec<&str> = boards.iter().map(|b| b.id.as_str()).collect();
+        assert!(ids.contains(&b1.id.as_str()));
+        assert!(ids.contains(&b2.id.as_str()));
+        assert!(ids.contains(&b3.id.as_str()));
+    }
+
+    #[test]
+    fn get_board_not_found() {
+        let d = tmp();
+        let err = get_board(d.path(), "nonexistent").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn get_board_empty() {
+        let d = tmp();
+        let b = create_board(d.path(), "Test").unwrap();
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert_eq!(detail.id, b.id);
+        assert_eq!(detail.title, "Test");
+        assert!(detail.lists.is_empty());
+        assert!(detail.labels.is_empty());
+    }
+
+    #[test]
+    fn get_board_with_lists_and_cards() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l1 = create_list(d.path(), &b.id, "List 1").unwrap();
+        let l2 = create_list(d.path(), &b.id, "List 2").unwrap();
+        let c1 = create_card(d.path(), &l1.id, "Card A").unwrap();
+        let c2 = create_card(d.path(), &l1.id, "Card B").unwrap();
+        let _c3 = create_card(d.path(), &l2.id, "Card C").unwrap();
+
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert_eq!(detail.lists.len(), 2);
+        // lists sorted by position
+        assert_eq!(detail.lists[0].title, "List 1");
+        assert_eq!(detail.lists[1].title, "List 2");
+        assert_eq!(detail.lists[0].cards.len(), 2);
+        assert_eq!(detail.lists[1].cards.len(), 1);
+        // cards sorted by position
+        assert_eq!(detail.lists[0].cards[0].id, c1.id);
+        assert_eq!(detail.lists[0].cards[1].id, c2.id);
+    }
+
+    #[test]
+    fn get_board_filters_archived_cards() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        let c1 = create_card(d.path(), &l.id, "Visible").unwrap();
+        let c2 = create_card(d.path(), &l.id, "Archived").unwrap();
+        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None).unwrap();
+
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert_eq!(detail.lists[0].cards.len(), 1);
+        assert_eq!(detail.lists[0].cards[0].id, c1.id);
+    }
+
+    #[test]
+    fn update_board_title() {
+        let d = tmp();
+        let b = create_board(d.path(), "Old").unwrap();
+        let updated = update_board(d.path(), &b.id, "New", None).unwrap();
+        assert_eq!(updated.title, "New");
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert_eq!(detail.title, "New");
+    }
+
+    #[test]
+    fn update_board_color() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let updated = update_board(d.path(), &b.id, "Board", Some("#ff0000")).unwrap();
+        assert_eq!(updated.color, Some("#ff0000".into()));
+        // clear color
+        let updated = update_board(d.path(), &b.id, "Board", None).unwrap();
+        assert!(updated.color.is_none());
+    }
+
+    #[test]
+    fn update_board_not_found() {
+        let d = tmp();
+        let err = update_board(d.path(), "fake", "X", None).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_board_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        delete_board(d.path(), &b.id).unwrap();
+        assert!(!board_dir(d.path(), &b.id).exists());
+        assert!(list_boards(d.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_board_not_found() {
+        let d = tmp();
+        let err = delete_board(d.path(), "fake").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_board_cascades() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        create_card(d.path(), &l.id, "Card").unwrap();
+        delete_board(d.path(), &b.id).unwrap();
+        assert!(!board_dir(d.path(), &b.id).exists());
+    }
+
+    // -- Labels --
+
+    #[test]
+    fn create_label_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug").unwrap();
+        assert_eq!(label.name, "Bug");
+        assert_eq!(label.color, "#ffb3b3");
+        assert!(!label.id.is_empty());
+    }
+
+    #[test]
+    fn create_label_color_cycling() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let mut colors = Vec::new();
+        for i in 0..13 {
+            let label = create_label(d.path(), &b.id, &format!("L{i}")).unwrap();
+            colors.push(label.color);
+        }
+        for i in 0..12 {
+            assert_eq!(colors[i], LABEL_COLORS[i]);
+        }
+        // 13th wraps to first color
+        assert_eq!(colors[12], LABEL_COLORS[0]);
+    }
+
+    #[test]
+    fn create_label_board_not_found() {
+        let d = tmp();
+        let err = create_label(d.path(), "fake", "Bug").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn update_label_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug").unwrap();
+        let updated = update_label(d.path(), &b.id, &label.id, "Feature").unwrap();
+        assert_eq!(updated.name, "Feature");
+        assert_eq!(updated.id, label.id);
+        assert_eq!(updated.color, label.color);
+    }
+
+    #[test]
+    fn update_label_not_found() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let err = update_label(d.path(), &b.id, "fake", "X").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_label_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug").unwrap();
+        delete_label(d.path(), &b.id, &label.id).unwrap();
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert!(detail.labels.is_empty());
+    }
+
+    #[test]
+    fn delete_label_not_found() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let err = delete_label(d.path(), &b.id, "fake").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn update_label_by_id_scans_boards() {
+        let d = tmp();
+        let _b1 = create_board(d.path(), "Board 1").unwrap();
+        let b2 = create_board(d.path(), "Board 2").unwrap();
+        let label = create_label(d.path(), &b2.id, "Original").unwrap();
+        let updated = update_label_by_id(d.path(), &label.id, "Renamed").unwrap();
+        assert_eq!(updated.name, "Renamed");
+    }
+
+    #[test]
+    fn delete_label_by_id_scans_boards() {
+        let d = tmp();
+        let _b1 = create_board(d.path(), "Board 1").unwrap();
+        let b2 = create_board(d.path(), "Board 2").unwrap();
+        let label = create_label(d.path(), &b2.id, "Bug").unwrap();
+        delete_label_by_id(d.path(), &label.id).unwrap();
+        let detail = get_board(d.path(), &b2.id).unwrap();
+        assert!(detail.labels.is_empty());
+    }
+
+    #[test]
+    fn labels_in_board_detail() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        create_label(d.path(), &b.id, "Bug").unwrap();
+        create_label(d.path(), &b.id, "Feature").unwrap();
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert_eq!(detail.labels.len(), 2);
+    }
+
+    // -- Lists --
+
+    #[test]
+    fn create_list_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "To Do").unwrap();
+        assert_eq!(l.title, "To Do");
+        assert_eq!(l.board_id, b.id);
+        assert_eq!(l.position, 1.0);
+    }
+
+    #[test]
+    fn create_list_position_increments() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l1 = create_list(d.path(), &b.id, "A").unwrap();
+        let l2 = create_list(d.path(), &b.id, "B").unwrap();
+        let l3 = create_list(d.path(), &b.id, "C").unwrap();
+        assert_eq!(l1.position, 1.0);
+        assert_eq!(l2.position, 2.0);
+        assert_eq!(l3.position, 3.0);
+    }
+
+    #[test]
+    fn create_list_board_not_found() {
+        let d = tmp();
+        let err = create_list(d.path(), "fake", "List").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn update_list_title() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "Old").unwrap();
+        let updated = update_list(d.path(), &l.id, Some("New"), None).unwrap();
+        assert_eq!(updated.title, "New");
+        assert_eq!(updated.position, l.position);
+    }
+
+    #[test]
+    fn update_list_position() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        let updated = update_list(d.path(), &l.id, None, Some(5.5)).unwrap();
+        assert_eq!(updated.position, 5.5);
+        assert_eq!(updated.title, "List");
+    }
+
+    #[test]
+    fn update_list_not_found() {
+        let d = tmp();
+        let err = update_list(d.path(), "fake", Some("X"), None).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_list_empty() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        delete_list(d.path(), &l.id).unwrap();
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert!(detail.lists.is_empty());
+    }
+
+    #[test]
+    fn delete_list_archives_cards() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        create_card(d.path(), &l.id, "Card 1").unwrap();
+        create_card(d.path(), &l.id, "Card 2").unwrap();
+        create_card(d.path(), &l.id, "Card 3").unwrap();
+        delete_list(d.path(), &l.id).unwrap();
+
+        assert!(!list_dir(d.path(), &b.id, &l.id).exists());
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        assert_eq!(archived.len(), 3);
+        assert!(archived.iter().all(|c| c.archived));
+    }
+
+    #[test]
+    fn delete_list_not_found() {
+        let d = tmp();
+        let err = delete_list(d.path(), "fake").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    // -- Cards --
+
+    #[test]
+    fn create_card_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        let c = create_card(d.path(), &l.id, "Task").unwrap();
+        assert_eq!(c.title, "Task");
+        assert_eq!(c.list_id, l.id);
+        assert_eq!(c.position, 1.0);
+        assert_eq!(c.description, "");
+        assert!(c.label_ids.is_empty());
+        assert!(!c.archived);
+        assert!(c.attachments.is_empty());
+        assert!(c.due_date.is_none());
+    }
+
+    #[test]
+    fn create_card_position_increments() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let l = create_list(d.path(), &b.id, "List").unwrap();
+        let c1 = create_card(d.path(), &l.id, "A").unwrap();
+        let c2 = create_card(d.path(), &l.id, "B").unwrap();
+        let c3 = create_card(d.path(), &l.id, "C").unwrap();
+        assert_eq!(c1.position, 1.0);
+        assert_eq!(c2.position, 2.0);
+        assert_eq!(c3.position, 3.0);
+    }
+
+    #[test]
+    fn create_card_list_not_found() {
+        let d = tmp();
+        let err = create_card(d.path(), "fake", "Card").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn update_card_title() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "Old").unwrap();
+        let updated = update_card(d.path(), &c.id, Some("New"), None, None, None, None, None, None).unwrap();
+        assert_eq!(updated.title, "New");
+    }
+
+    #[test]
+    fn update_card_description() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let updated = update_card(d.path(), &c.id, None, Some("desc"), None, None, None, None, None).unwrap();
+        assert_eq!(updated.description, "desc");
+    }
+
+    #[test]
+    fn update_card_position() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let updated = update_card(d.path(), &c.id, None, None, Some(5.5), None, None, None, None).unwrap();
+        assert_eq!(updated.position, 5.5);
+    }
+
+    #[test]
+    fn update_card_label_ids() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let ids = vec!["id1".into(), "id2".into()];
+        let updated = update_card(d.path(), &c.id, None, None, None, None, Some(&ids), None, None).unwrap();
+        assert_eq!(updated.label_ids, vec!["id1", "id2"]);
+    }
+
+    #[test]
+    fn update_card_archive_and_restore() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+
+        // archive
+        let updated = update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+        assert!(updated.archived);
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert!(detail.lists[0].cards.is_empty());
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        assert_eq!(archived.len(), 1);
+
+        // restore
+        let restored = update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None).unwrap();
+        assert!(!restored.archived);
+        let detail = get_board(d.path(), &b.id).unwrap();
+        assert_eq!(detail.lists[0].cards.len(), 1);
+    }
+
+    #[test]
+    fn update_card_due_date_set() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let updated = update_card(d.path(), &c.id, None, None, None, None, None, None, Some(Some("2024-06-15"))).unwrap();
+        assert_eq!(updated.due_date, Some("2024-06-15".into()));
+    }
+
+    #[test]
+    fn update_card_due_date_clear() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        // set
+        update_card(d.path(), &c.id, None, None, None, None, None, None, Some(Some("2024-06-15"))).unwrap();
+        // clear
+        let updated = update_card(d.path(), &c.id, None, None, None, None, None, None, Some(None)).unwrap();
+        assert!(updated.due_date.is_none());
+    }
+
+    #[test]
+    fn update_card_due_date_omit_leaves_unchanged() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        update_card(d.path(), &c.id, None, None, None, None, None, None, Some(Some("2024-06-15"))).unwrap();
+        // None = omit field, should leave date unchanged
+        let updated = update_card(d.path(), &c.id, Some("New Title"), None, None, None, None, None, None).unwrap();
+        assert_eq!(updated.due_date, Some("2024-06-15".into()));
+    }
+
+    #[test]
+    fn update_card_move_between_lists() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l1 = create_list(d.path(), &b.id, "L1").unwrap();
+        let l2 = create_list(d.path(), &b.id, "L2").unwrap();
+        let c = create_card(d.path(), &l1.id, "C").unwrap();
+
+        let moved = update_card(d.path(), &c.id, None, None, None, Some(&l2.id), None, None, None).unwrap();
+        assert_eq!(moved.list_id, l2.id);
+
+        let detail = get_board(d.path(), &b.id).unwrap();
+        let list1 = detail.lists.iter().find(|l| l.id == l1.id).unwrap();
+        let list2 = detail.lists.iter().find(|l| l.id == l2.id).unwrap();
+        assert!(list1.cards.is_empty());
+        assert_eq!(list2.cards.len(), 1);
+    }
+
+    #[test]
+    fn update_card_not_found() {
+        let d = tmp();
+        let err = update_card(d.path(), "fake", Some("X"), None, None, None, None, None, None).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_card_must_be_archived() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let err = delete_card(d.path(), &c.id).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
+    }
+
+    #[test]
+    fn delete_card_archived() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+        delete_card(d.path(), &c.id).unwrap();
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        assert!(archived.is_empty());
+    }
+
+    #[test]
+    fn delete_card_cleans_attachments() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        create_attachment(d.path(), &c.id, "test.txt", "text/plain", b"hello").unwrap();
+        let att_dir = attachment_dir(d.path(), &b.id, &c.id);
+        assert!(att_dir.exists());
+
+        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+        delete_card(d.path(), &c.id).unwrap();
+        assert!(!att_dir.exists());
+    }
+
+    #[test]
+    fn delete_card_orphaned() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        // delete list orphans card
+        delete_list(d.path(), &l.id).unwrap();
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        assert_eq!(archived.len(), 1);
+
+        delete_card(d.path(), &c.id).unwrap();
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        assert!(archived.is_empty());
+    }
+
+    #[test]
+    fn get_archived_cards_includes_orphaned() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l1 = create_list(d.path(), &b.id, "L1").unwrap();
+        let l2 = create_list(d.path(), &b.id, "L2").unwrap();
+        let c1 = create_card(d.path(), &l1.id, "InList").unwrap();
+        let _c2 = create_card(d.path(), &l2.id, "Orphaned").unwrap();
+
+        // archive c1 in-place
+        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None).unwrap();
+        // delete l2, orphaning c2
+        delete_list(d.path(), &l2.id).unwrap();
+
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        assert_eq!(archived.len(), 2);
+    }
+
+    #[test]
+    fn restore_orphaned_card_requires_list_id() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        delete_list(d.path(), &l.id).unwrap();
+
+        let l2 = create_list(d.path(), &b.id, "L2").unwrap();
+        // try restore without list_id
+        let err = update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
+
+        // restore with list_id
+        let restored = update_card(d.path(), &c.id, None, None, None, Some(&l2.id), None, Some(false), None).unwrap();
+        assert!(!restored.archived);
+        assert_eq!(restored.list_id, l2.id);
+
+        let detail = get_board(d.path(), &b.id).unwrap();
+        let target = detail.lists.iter().find(|l| l.id == l2.id).unwrap();
+        assert_eq!(target.cards.len(), 1);
+    }
+
+    // -- Attachments --
+
+    #[test]
+    fn create_attachment_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+
+        let att = create_attachment(d.path(), &c.id, "test.txt", "text/plain", b"hello").unwrap();
+        assert_eq!(att.filename, "test.txt");
+        assert_eq!(att.size, 5);
+        assert_eq!(att.content_type, "text/plain");
+
+        // file on disk
+        let att_path = attachment_dir(d.path(), &b.id, &c.id).join(&att.id);
+        assert!(att_path.exists());
+
+        // card JSON updated
+        let (board_id, list_id) = find_board_and_list_for_card(d.path(), &c.id).unwrap();
+        let card: Card = read_json(&cards_dir(d.path(), &board_id, &list_id).join(format!("{}.json", c.id))).unwrap();
+        assert_eq!(card.attachments.len(), 1);
+    }
+
+    #[test]
+    fn create_attachment_image_thumbnail() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+
+        // generate valid PNG bytes via image crate
+        let img = image::RgbImage::from_pixel(2, 2, image::Rgb([255, 0, 0]));
+        let mut png_buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut png_buf, image::ImageFormat::Png).unwrap();
+        let png_data = png_buf.into_inner();
+
+        let att = create_attachment(d.path(), &c.id, "img.png", "image/png", &png_data).unwrap();
+        let thumb_path = attachment_dir(d.path(), &b.id, &c.id).join(format!("{}_thumb", att.id));
+        assert!(thumb_path.exists());
+    }
+
+    #[test]
+    fn get_attachment_data_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "test.txt", "text/plain", b"hello world").unwrap();
+
+        let (meta, data) = get_attachment_data(d.path(), &c.id, &att.id).unwrap();
+        assert_eq!(meta.filename, "test.txt");
+        assert_eq!(data, b"hello world");
+    }
+
+    #[test]
+    fn get_attachment_not_found() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let err = get_attachment_data(d.path(), &c.id, "fake").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_attachment_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "test.txt", "text/plain", b"data").unwrap();
+
+        delete_attachment(d.path(), &c.id, &att.id).unwrap();
+
+        let att_path = attachment_dir(d.path(), &b.id, &c.id).join(&att.id);
+        assert!(!att_path.exists());
+
+        let (board_id, list_id) = find_board_and_list_for_card(d.path(), &c.id).unwrap();
+        let card: Card = read_json(&cards_dir(d.path(), &board_id, &list_id).join(format!("{}.json", c.id))).unwrap();
+        assert!(card.attachments.is_empty());
+    }
+
+    #[test]
+    fn delete_attachment_not_found() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let err = delete_attachment(d.path(), &c.id, "fake").unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn get_thumbnail_not_found_for_text() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "test.txt", "text/plain", b"data").unwrap();
+        let err = get_thumbnail_data(d.path(), &c.id, &att.id).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    // -- Utilities --
+
+    #[test]
+    fn get_latest_mtime_empty() {
+        let d = tmp();
+        let mtime = get_latest_mtime(d.path()).unwrap();
+        assert_eq!(mtime, 0);
+    }
+
+    #[test]
+    fn get_latest_mtime_after_writes() {
+        let d = tmp();
+        let m1 = get_latest_mtime(d.path()).unwrap();
+        assert_eq!(m1, 0);
+        create_board(d.path(), "Board").unwrap();
+        let m2 = get_latest_mtime(d.path()).unwrap();
+        assert!(m2 > 0);
+    }
+
+    #[test]
+    fn drain_file_ops_basic() {
+        let d = tmp();
+        create_board(d.path(), "Board").unwrap();
+        let ops = drain_file_ops(d.path());
+        assert!(!ops.is_empty());
+        assert!(ops.iter().any(|o| o.contains("wrote")));
+        // second drain should be empty
+        let ops2 = drain_file_ops(d.path());
+        assert!(ops2.is_empty());
+    }
+
+    #[test]
+    fn now_timestamp_format() {
+        let ts = now_timestamp();
+        assert_eq!(ts.len(), 19);
+        assert_eq!(&ts[4..5], "-");
+        assert_eq!(&ts[7..8], "-");
+        assert_eq!(&ts[10..11], " ");
+        assert_eq!(&ts[13..14], ":");
+        assert_eq!(&ts[16..17], ":");
+    }
+
+    #[test]
+    fn is_leap_year_cases() {
+        assert!(is_leap(2000));   // divisible by 400
+        assert!(!is_leap(1900));  // divisible by 100 but not 400
+        assert!(is_leap(2024));   // divisible by 4
+        assert!(!is_leap(2023)); // not divisible by 4
+    }
+}
