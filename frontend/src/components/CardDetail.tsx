@@ -5,10 +5,13 @@ import {
   Schema,
   DOMParser as PmDOMParser,
   Node as PmNode,
+  MarkType,
 } from "prosemirror-model";
 import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
-import { exampleSetup } from "prosemirror-example-setup";
+import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
+import { toggleMark } from "prosemirror-commands";
+import { MenuItem, icons, undoItem, redoItem } from "prosemirror-menu";
 import type { Attachment, Card, Label } from "../types";
 import { renderTitle } from "./Card";
 import { api } from "../api";
@@ -19,8 +22,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function isImageType(contentType: string): boolean {
+  return contentType.startsWith("image/");
+}
+
+const filteredNodes = basicSchema.spec.nodes.remove("image").remove("horizontal_rule");
 const schema = new Schema({
-  nodes: addListNodes(basicSchema.spec.nodes, "paragraph block*", "block"),
+  nodes: addListNodes(filteredNodes, "paragraph block*", "block"),
   marks: basicSchema.spec.marks,
 });
 
@@ -61,6 +69,76 @@ function wrapSelection(input: HTMLInputElement, marker: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function markActive(state: EditorState, type: MarkType) {
+  const { from, $from, to, empty } = state.selection;
+  if (empty) return !!type.isInSet(state.storedMarks || $from.marks());
+  return state.doc.rangeHasMark(from, to, type);
+}
+
+function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string) {
+  const overlay = document.createElement("div");
+  overlay.className = "link-dialog-overlay";
+
+  const dialog = document.createElement("div");
+  dialog.className = "link-dialog";
+
+  const label = document.createElement("label");
+  label.className = "link-dialog-label";
+  label.textContent = "URL";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "link-dialog-input";
+  input.placeholder = "https://…";
+  input.value = prefillUrl;
+
+  const actions = document.createElement("div");
+  actions.className = "link-dialog-actions";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "btn btn-primary btn-sm";
+  saveBtn.textContent = "Apply";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn btn-cancel btn-sm";
+  cancelBtn.textContent = "Cancel";
+
+  actions.appendChild(saveBtn);
+  actions.appendChild(cancelBtn);
+  dialog.appendChild(label);
+  dialog.appendChild(input);
+  dialog.appendChild(actions);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => {
+    input.focus();
+    if (prefillUrl) input.select();
+  });
+
+  const close = () => {
+    overlay.remove();
+  };
+
+  const submit = () => {
+    const href = input.value.trim();
+    if (!href) return;
+    close();
+    toggleMark(markType, { href })(view.state, view.dispatch);
+    view.focus();
+  };
+
+  saveBtn.addEventListener("click", submit);
+  cancelBtn.addEventListener("click", () => { close(); view.focus(); });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) { close(); view.focus(); }
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+    if (e.key === "Escape") { e.preventDefault(); close(); view.focus(); }
+  });
+}
+
 interface Props {
   card: Card;
   boardLabels: Label[];
@@ -80,12 +158,46 @@ export default function CardDetail(props: Props) {
   const [showLabelPicker, setShowLabelPicker] = createSignal(false);
   const [attachments, setAttachments] = createSignal<Attachment[]>(props.card.attachments ?? []);
   const [uploading, setUploading] = createSignal(false);
+  const [previewAtt, setPreviewAtt] = createSignal<Attachment | null>(null);
 
   onMount(() => {
     const doc = docFromDescription(props.card.description);
+
+    const menuItems = buildMenuItems(schema);
+    const linkType = schema.marks.link;
+    const customLinkItem = new MenuItem({
+      title: "Add or remove link",
+      icon: icons.link,
+      active(state) { return markActive(state, linkType); },
+      enable(state) { return !state.selection.empty; },
+      run(state, dispatch, view) {
+        if (markActive(state, linkType)) {
+          toggleMark(linkType)(state, dispatch);
+          return true;
+        }
+        const { from, to } = state.selection;
+        const selectedText = state.doc.textBetween(from, to, " ");
+        const trimmed = selectedText.trim();
+        const looksLikeUrl = /^https?:\/\//.test(trimmed) || /^www\./.test(trimmed);
+        showLinkDialog(view, linkType, looksLikeUrl ? trimmed : "");
+      }
+    });
+
+    const inlineMenu = [[
+      menuItems.toggleStrong,
+      menuItems.toggleEm,
+      menuItems.toggleCode,
+      customLinkItem,
+    ].filter(Boolean) as any[]];
+
+    const menuContent = inlineMenu
+      .concat([[menuItems.typeMenu]])
+      .concat([[undoItem, redoItem]])
+      .concat(menuItems.blockMenu);
+
     const state = EditorState.create({
       doc,
-      plugins: exampleSetup({ schema, menuBar: true }),
+      plugins: exampleSetup({ schema, menuBar: true, menuContent }),
     });
     view = new EditorView(editorRef, {
       state,
@@ -164,6 +276,11 @@ export default function CardDetail(props: Props) {
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
+      if (previewAtt()) {
+        setPreviewAtt(null);
+        e.stopPropagation();
+        return;
+      }
       guardedClose();
     }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -309,16 +426,34 @@ export default function CardDetail(props: Props) {
           <div class="attachments-list">
             <For each={attachments()}>
               {(att) => (
-                <div class="attachment-item">
+                <div class="attachment-item" classList={{ "attachment-item--image": isImageType(att.content_type) }}>
+                  <Show when={isImageType(att.content_type)}>
+                    <img
+                      class="attachment-thumb"
+                      src={api.getAttachmentUrl(props.card.id, att.id)}
+                      alt={att.filename}
+                      onClick={() => setPreviewAtt(att)}
+                    />
+                  </Show>
                   <div class="attachment-info">
-                    <a
-                      class="attachment-filename"
-                      href={api.getAttachmentUrl(props.card.id, att.id)}
-                      download={att.filename}
-                      title={att.filename}
-                    >
-                      {att.filename}
-                    </a>
+                    <Show when={isImageType(att.content_type)} fallback={
+                      <a
+                        class="attachment-filename"
+                        href={api.getAttachmentUrl(props.card.id, att.id)}
+                        download={att.filename}
+                        title={att.filename}
+                      >
+                        {att.filename}
+                      </a>
+                    }>
+                      <span
+                        class="attachment-filename attachment-filename--clickable"
+                        title={att.filename}
+                        onClick={() => setPreviewAtt(att)}
+                      >
+                        {att.filename}
+                      </span>
+                    </Show>
                     <span class="attachment-size">{formatSize(att.size)}</span>
                   </div>
                   <button
@@ -379,6 +514,43 @@ export default function CardDetail(props: Props) {
             </div>
           </div>
         </div>
+      </Show>
+      <Show when={previewAtt()}>
+        {(att) => (
+          <div class="image-preview-overlay" onClick={(e) => { if (e.target === e.currentTarget) setPreviewAtt(null); }}>
+            <div class="image-preview-container">
+              <div class="image-preview-header">
+                <span class="image-preview-filename">{att().filename}</span>
+                <div class="image-preview-actions">
+                  <a
+                    class="btn btn-sm image-preview-download"
+                    href={api.getAttachmentUrl(props.card.id, att().id)}
+                    download={att().filename}
+                    title="Download"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </a>
+                  <button class="image-preview-close" onClick={() => setPreviewAtt(null)} title="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <img
+                class="image-preview-img"
+                src={api.getAttachmentUrl(props.card.id, att().id)}
+                alt={att().filename}
+              />
+            </div>
+          </div>
+        )}
       </Show>
     </div>
   );
