@@ -3,6 +3,8 @@ import { Router, Route } from "@solidjs/router";
 import App from "./App";
 import Home from "./pages/Home";
 import BoardPage from "./pages/Board";
+import "prosemirror-view/style/prosemirror.css";
+import "prosemirror-menu/style/menu.css";
 import "./styles/app.css";
 
 render(

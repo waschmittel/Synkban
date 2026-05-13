@@ -566,7 +566,6 @@ body {
   flex-direction: column;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.2s ease;
-  overflow: hidden;
 }
 
 .modal-header {
