@@ -1,9 +1,14 @@
-import { createSignal, createResource, For, Show } from "solid-js";
+import { createSignal, createResource, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
 import { api } from "../api";
 
 export default function Home() {
   const [boards, { refetch }] = createResource(() => api.listBoards());
+  onMount(() => {
+    const id = setInterval(refetch, 15000);
+    onCleanup(() => clearInterval(id));
+  });
+
   const [newTitle, setNewTitle] = createSignal("");
   const [adding, setAdding] = createSignal(false);
 

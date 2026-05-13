@@ -1,6 +1,5 @@
 import type { ParentProps } from "solid-js";
 import { A } from "@solidjs/router";
-import SyncButton from "./components/SyncButton";
 
 export default function App(props: ParentProps) {
   return (
@@ -9,7 +8,6 @@ export default function App(props: ParentProps) {
         <A href="/" class="app-logo">
           Trello Clone
         </A>
-        <SyncButton />
       </header>
       <main class="app-main">{props.children}</main>
     </div>

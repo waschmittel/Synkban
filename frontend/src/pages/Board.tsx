@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createResource, createSignal, For, Show, onMount, onCleanup } from "solid-js";
 import { useParams } from "@solidjs/router";
 import { api } from "../api";
 import type { Card as CardType } from "../types";
@@ -13,6 +13,11 @@ export default function BoardPage() {
     (id) => api.getBoard(id)
   );
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
+
+  onMount(() => {
+    const id = setInterval(refetch, 15000);
+    onCleanup(() => clearInterval(id));
+  });
 
   const handleAddList = async (title: string) => {
     await api.createList(params.id, title);
