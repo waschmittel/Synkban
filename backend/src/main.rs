@@ -1,4 +1,5 @@
 mod errors;
+mod git_sync;
 mod handlers;
 mod models;
 mod store;
@@ -37,6 +38,8 @@ async fn main() -> std::io::Result<()> {
 
     std::fs::create_dir_all(&data_dir)?;
 
+    let git_sync = git_sync::GitSync::new(data_dir.clone());
+
     println!("Server running at http://{bind}");
     println!("Data directory: {}", data_dir.display());
 
@@ -50,6 +53,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .app_data(web::Data::new(data_dir.clone()))
+            .app_data(web::Data::new(git_sync.clone()))
             .route("/api/boards", web::get().to(handlers::boards::list_boards))
             .route("/api/boards", web::post().to(handlers::boards::create_board))
             .route("/api/boards/{id}", web::get().to(handlers::boards::get_board))
@@ -61,6 +65,10 @@ async fn main() -> std::io::Result<()> {
             .route("/api/lists/{list_id}/cards", web::post().to(handlers::cards::create_card))
             .route("/api/cards/{id}", web::put().to(handlers::cards::update_card))
             .route("/api/cards/{id}", web::delete().to(handlers::cards::delete_card))
+            .route("/api/sync/status", web::get().to(handlers::sync::get_status))
+            .route("/api/sync/config", web::get().to(handlers::sync::get_config))
+            .route("/api/sync/config", web::post().to(handlers::sync::update_config))
+            .route("/api/sync/now", web::post().to(handlers::sync::sync_now))
             .default_service(web::get().to(serve_embedded))
     })
     .bind(&bind)?

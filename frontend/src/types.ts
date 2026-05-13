@@ -28,3 +28,22 @@ export interface BoardDetail {
   created_at: string;
   lists: ListWithCards[];
 }
+
+export interface GitSyncConfig {
+  enabled: boolean;
+  remote_url: string;
+  branch: string;
+  sync_interval_secs: number;
+  author_name: string;
+  author_email: string;
+}
+
+export interface SyncStatus {
+  enabled: boolean;
+  initialized: boolean;
+  last_commit: string | null;
+  last_push: string | null;
+  last_pull: string | null;
+  pending_changes: boolean;
+  error: string | null;
+}

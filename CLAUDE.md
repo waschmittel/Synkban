@@ -36,7 +36,8 @@ After any code change:
 - **`store.rs`** is the only file that touches the filesystem for data. All handlers call `store::*` functions.
 - **Handlers** are thin — extract params, call store, return JSON. No business logic in handlers.
 - **Models** in `models.rs` — all data types and request/response DTOs live here.
-- **Errors** in `errors.rs` — `AppError` enum, implements `ResponseError`. Two variants: `NotFound`, `Io`.
+- **Errors** in `errors.rs` — `AppError` enum, implements `ResponseError`. Three variants: `NotFound`, `Io`, `Git`.
+- **Git sync** in `git_sync.rs` — manages git CLI operations for data sync. `GitSync` struct shared via `web::Data`. Auto-commits after each mutation handler (fire-and-forget). Background task runs periodic pull/push. Config stored at `data/.git-sync-config.json`.
 - **Static files** embedded via `include_dir!("$CARGO_MANIFEST_DIR/static")`. The `backend/static/` directory must exist at compile time (created by `build.sh`).
 - **No auth.** Single-user MVP. Don't add auth unless explicitly asked.
 
@@ -74,6 +75,7 @@ data/boards/{board-id}/lists/{list-id}/cards/{card-id}.json
 - Deleting a list: `remove_dir_all` on its directory (cascades cards).
 - Moving a card between lists: write to new location, delete from old location.
 - Finding a card/list requires scanning board directories (no index). Acceptable at MVP scale.
+- Git sync config: `data/.git-sync-config.json` — persists GitSyncConfig (enabled, remote_url, branch, interval, author).
 
 ## API Endpoints
 
@@ -91,6 +93,11 @@ DELETE /api/lists/:id                 → 204
 POST   /api/lists/:lid/cards {title}  → Card (201)
 PUT    /api/cards/:id  {title?,desc?,pos?,list_id?} → Card
 DELETE /api/cards/:id                 → 204
+
+GET    /api/sync/status               → SyncStatus
+GET    /api/sync/config               → GitSyncConfig
+POST   /api/sync/config  {config}     → GitSyncConfig
+POST   /api/sync/now                  → SyncStatus
 ```
 
 ## Adding New Features
@@ -127,6 +134,8 @@ DELETE /api/cards/:id                 → 204
 - **SolidJS reactivity** — don't destructure props (breaks reactivity). Access as `props.foo`. Use `createMemo` for derived values.
 - **Position gaps are fine.** Fractional indexing leaves gaps (1.0, 2.0, 1.5, 1.25...). This is by design. No need to normalize positions.
 - **Card description** is a JSON string, not a JSON object. It's `JSON.stringify(prosemirrorDoc)` on save, `JSON.parse(description)` on load.
+- **Unsaved changes confirmation** — CardDetail modal shows `confirm()` dialog when closing with dirty state. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded.
+- **Git sync requires `git` CLI** on the host. If git is not installed, sync operations fail gracefully with error in `SyncStatus.error`.
 
 ## Dependencies
 
@@ -135,7 +144,7 @@ DELETE /api/cards/:id                 → 204
 - `actix-cors` — CORS middleware
 - `serde` / `serde_json` — serialization
 - `uuid` — ID generation
-- `tokio` — async runtime (rt-multi-thread + macros only)
+- `tokio` — async runtime (rt-multi-thread, macros, process, time, sync)
 - `include_dir` — embed static files in binary
 - `mime_guess` — MIME type detection for static files
 

@@ -5,6 +5,7 @@ use std::fmt;
 pub enum AppError {
     NotFound(String),
     Io(std::io::Error),
+    Git(String),
 }
 
 impl fmt::Display for AppError {
@@ -12,6 +13,7 @@ impl fmt::Display for AppError {
         match self {
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::Io(e) => write!(f, "IO error: {e}"),
+            AppError::Git(msg) => write!(f, "Git error: {msg}"),
         }
     }
 }
@@ -24,6 +26,9 @@ impl ResponseError for AppError {
             }
             AppError::Io(e) => {
                 HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()}))
+            }
+            AppError::Git(msg) => {
+                HttpResponse::InternalServerError().json(serde_json::json!({"error": msg}))
             }
         }
     }

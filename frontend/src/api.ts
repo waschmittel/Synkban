@@ -1,4 +1,4 @@
-import type { Board, BoardDetail, Card, ListWithCards } from "./types";
+import type { Board, BoardDetail, Card, GitSyncConfig, ListWithCards, SyncStatus } from "./types";
 
 const BASE = "/api";
 
@@ -72,4 +72,17 @@ export const api = {
 
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
+
+  getSyncStatus: () => request<SyncStatus>("/sync/status"),
+
+  getSyncConfig: () => request<GitSyncConfig>("/sync/config"),
+
+  updateSyncConfig: (config: GitSyncConfig) =>
+    request<GitSyncConfig>("/sync/config", {
+      method: "POST",
+      body: JSON.stringify(config),
+    }),
+
+  syncNow: () =>
+    request<SyncStatus>("/sync/now", { method: "POST" }),
 };

@@ -71,12 +71,18 @@ export default function CardDetail(props: Props) {
     if (!view) return;
     const doc = view.state.doc;
     const description = isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
+    setDirty(false);
     props.onSave(props.card.id, title(), description);
+  };
+
+  const guardedClose = () => {
+    if (dirty() && !confirm("You have unsaved changes. Close anyway?")) return;
+    props.onClose();
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
-      props.onClose();
+      guardedClose();
     }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       handleSave();
@@ -85,7 +91,7 @@ export default function CardDetail(props: Props) {
 
   const handleOverlayClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
-      props.onClose();
+      guardedClose();
     }
   };
 
@@ -108,7 +114,7 @@ export default function CardDetail(props: Props) {
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); view?.focus(); } }}
             placeholder="Card title..."
           />
-          <button class="modal-close" onClick={props.onClose} title="Close (Esc)">
+          <button class="modal-close" onClick={guardedClose} title="Close (Esc)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -134,7 +140,7 @@ export default function CardDetail(props: Props) {
           <button class="btn btn-primary" onClick={handleSave}>
             Save
           </button>
-          <button class="btn btn-cancel" onClick={props.onClose}>
+          <button class="btn btn-cancel" onClick={guardedClose}>
             Cancel
           </button>
           {dirty() && <span class="unsaved-indicator">Unsaved changes</span>}

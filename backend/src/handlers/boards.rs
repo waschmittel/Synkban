@@ -2,6 +2,7 @@ use actix_web::{web, HttpResponse};
 use std::path::PathBuf;
 
 use crate::errors::AppError;
+use crate::git_sync::GitSync;
 use crate::models::*;
 use crate::store;
 
@@ -12,9 +13,11 @@ pub async fn list_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, A
 
 pub async fn create_board(
     data_dir: web::Data<PathBuf>,
+    git_sync: web::Data<GitSync>,
     body: web::Json<CreateBoard>,
 ) -> Result<HttpResponse, AppError> {
     let board = store::create_board(&data_dir, &body.title)?;
+    git_sync.auto_commit(&format!("created board '{}'", board.title));
     Ok(HttpResponse::Created().json(board))
 }
 
@@ -28,17 +31,22 @@ pub async fn get_board(
 
 pub async fn update_board(
     data_dir: web::Data<PathBuf>,
+    git_sync: web::Data<GitSync>,
     path: web::Path<String>,
     body: web::Json<UpdateBoard>,
 ) -> Result<HttpResponse, AppError> {
     let board = store::update_board(&data_dir, &path.into_inner(), &body.title)?;
+    git_sync.auto_commit(&format!("updated board '{}'", board.title));
     Ok(HttpResponse::Ok().json(board))
 }
 
 pub async fn delete_board(
     data_dir: web::Data<PathBuf>,
+    git_sync: web::Data<GitSync>,
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
-    store::delete_board(&data_dir, &path.into_inner())?;
+    let id = path.into_inner();
+    store::delete_board(&data_dir, &id)?;
+    git_sync.auto_commit(&format!("deleted board '{id}'"));
     Ok(HttpResponse::NoContent().finish())
 }
