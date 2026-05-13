@@ -1,6 +1,6 @@
-# Trello Clone
+# Synkban
 
-A Trello-like kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.
+A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.
 
 ## Features
 
@@ -27,7 +27,7 @@ A Trello-like kanban board with a Rust backend (Actix Web) and SolidJS frontend.
 ./build.sh
 
 # Run (creates ./data/ directory automatically)
-./backend/target/release/tc-backend
+./backend/target/release/synkban
 
 # Open http://localhost:8080
 ```
@@ -60,7 +60,7 @@ This script:
 2. Copies `frontend/dist/` → `backend/static/`
 3. Compiles the backend in release mode, embedding static files into the binary
 
-Output: `backend/target/release/tc-backend` — a single binary you can copy anywhere and run.
+Output: `backend/target/release/synkban` — a single binary you can copy anywhere and run.
 
 ## Configuration
 
@@ -74,7 +74,7 @@ All configuration via environment variables:
 
 Example:
 ```bash
-HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./tc-backend
+HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./synkban
 ```
 
 ## Docker
@@ -82,20 +82,20 @@ HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./tc-backend
 ### Build
 
 ```bash
-./docker-build.sh            # defaults to tc-trello:latest
+./docker-build.sh            # defaults to synkban:latest
 ./docker-build.sh myapp 1.0  # custom name:tag
 # or directly:
-docker build -t tc-trello .
+docker build -t synkban .
 ```
 
 ### Run
 
 ```bash
 # Ephemeral
-docker run -p 8080:8080 tc-trello
+docker run -p 8080:8080 synkban
 
 # Persistent data
-docker run -p 8080:8080 -v tc-data:/app/data tc-trello
+docker run -p 8080:8080 -v synkban-data:/app/data synkban
 ```
 
 The Dockerfile is a multi-stage build:

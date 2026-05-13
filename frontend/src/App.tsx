@@ -9,7 +9,7 @@ function AppHeader() {
   return (
     <header class="app-header">
       <A href="/" class="app-logo">
-        Trello Clone
+        Synkban
       </A>
       <div class="app-header-actions">
         <Show when={lc.hasBoard()}>

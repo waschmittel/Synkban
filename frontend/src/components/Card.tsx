@@ -138,6 +138,19 @@ export default function Card(props: Props) {
   const hasDescription = () => !!props.card.description;
   const hasAttachments = () => (props.card.attachments?.length ?? 0) > 0;
 
+  const getDueDateDisplay = () => {
+    const dd = props.card.due_date;
+    if (!dd) return null;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const due = new Date(dd + "T00:00:00");
+    const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
+    if (diffDays < 0) return { text: `Overdue ${-diffDays}d`, cls: "due-badge--overdue" };
+    if (diffDays === 0) return { text: "Today", cls: "due-badge--today" };
+    if (diffDays === 1) return { text: "Tomorrow", cls: "due-badge--soon" };
+    return { text: `in ${diffDays}d`, cls: "due-badge--future" };
+  };
+
   return (
     <div
       class="card"
@@ -167,8 +180,21 @@ export default function Card(props: Props) {
         </Show>
         <div class="card-content">
           <span class="card-title" innerHTML={renderTitle(props.card.title)} />
-          <Show when={hasDescription() || hasAttachments()}>
+          <Show when={hasDescription() || hasAttachments() || getDueDateDisplay()}>
             <div class="card-badges">
+              <Show when={getDueDateDisplay()}>
+                {(dd) => (
+                  <span class={`due-badge ${dd().cls}`} title={`Due: ${props.card.due_date}`}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    {dd().text}
+                  </span>
+                )}
+              </Show>
               <Show when={hasDescription()}>
                 <span class="card-badge" title="Has description">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

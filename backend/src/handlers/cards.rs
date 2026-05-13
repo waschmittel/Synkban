@@ -21,6 +21,7 @@ pub async fn update_card(
     path: web::Path<String>,
     body: web::Json<UpdateCard>,
 ) -> Result<HttpResponse, AppError> {
+    let due_date = body.due_date.as_ref().map(|dd| dd.as_deref());
     let card = store::update_card(
         &data_dir,
         &path.into_inner(),
@@ -30,6 +31,7 @@ pub async fn update_card(
         body.list_id.as_deref(),
         body.label_ids.as_deref(),
         body.archived,
+        due_date,
     )?;
     Ok(HttpResponse::Ok().json(card))
 }
@@ -78,6 +80,17 @@ pub async fn download_attachment(
     Ok(HttpResponse::Ok()
         .content_type(att.content_type)
         .append_header(("Content-Disposition", disposition))
+        .body(data))
+}
+
+pub async fn download_thumbnail(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse, AppError> {
+    let (card_id, att_id) = path.into_inner();
+    let data = store::get_thumbnail_data(&data_dir, &card_id, &att_id)?;
+    Ok(HttpResponse::Ok()
+        .content_type("image/jpeg")
         .body(data))
 }
 

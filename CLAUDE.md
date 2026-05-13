@@ -1,8 +1,8 @@
-# Agent Instructions — Trello Clone (tc)
+# Agent Instructions — Synkban
 
 ## Project Overview
 
-Trello-like kanban board. Rust backend (Actix Web), SolidJS frontend, file-based JSON storage. Single binary with embedded frontend.
+Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, file-based JSON storage. Single binary with embedded frontend.
 
 ## Build & Run
 
@@ -11,7 +11,7 @@ Trello-like kanban board. Rust backend (Actix Web), SolidJS frontend, file-based
 ./build.sh
 
 # Run
-./backend/target/release/tc-backend
+./backend/target/release/synkban
 # → http://localhost:8080
 
 # Development (two terminals)
@@ -46,7 +46,7 @@ After any code change:
 - **Router:** `@solidjs/router` — routes in `index.tsx`, pages in `pages/`.
 - **API client:** `api.ts` — all backend calls go through this module. Typed fetch wrapper.
 - **Types:** `types.ts` — TypeScript interfaces matching backend models. Keep in sync with `models.rs`.
-- **ProseMirror** for rich text in card descriptions. Schema includes basic nodes + lists, but `image` and `horizontal_rule` nodes are removed (not insertable). The "Insert" dropdown is excluded from the menu. Links use a custom dialog (not the default `openPrompt`) with proper z-index, single URL field, pre-fill from selected URL text. Description stored as ProseMirror JSON string. No raw HTML ever.
+- **ProseMirror** for rich text in card descriptions. Schema includes basic nodes + lists, but `image` and `horizontal_rule` nodes are removed (not insertable). The "Insert" dropdown is excluded from the menu. Editor menu uses flat `blockTypeItem` buttons: Plain, Code, H1, H2, H3 (no nested "Type..." dropdown). Links use a custom dialog (not the default `openPrompt`) with proper z-index, single URL field, pre-fill from selected URL text. Description stored as ProseMirror JSON string. No raw HTML ever.
 - **Drag-and-drop:** Native HTML5 API. No drag library. Position calculated via fractional indexing (midpoint between neighbors). Both cards and lists use the `requestAnimationFrame` trick: browser captures full-opacity ghost synchronously in `dragstart`, then next frame sets the drag class (`display:none`) to hide the original. Cards use `.dragging`, lists use `.list-dragging`. A `.drop-placeholder` line shows card insertion point; a column-sized dashed `.list-drop-placeholder` shows list insertion point. Card `dragstart` calls `stopPropagation()` to prevent list from also entering drag state. Placeholders cleaned up on `dragend` and `drop`.
 - **Auto-focus:** Input fields use `ref={(el) => requestAnimationFrame(() => el.focus())}`. Do not use `autofocus` attribute (doesn't work reliably with SolidJS `Show`).
 - **CSS:** All styles in `styles/app.css`. No CSS modules, no Tailwind, no CSS-in-JS.
@@ -64,7 +64,8 @@ Cards  →  reference Labels by ID (label_ids: Vec<String>)
 - Card `description` — ProseMirror doc JSON string, or empty string `""`.
 - Card `label_ids` — array of label IDs (subset of board's labels). Uses `#[serde(default)]` so existing cards without the field deserialize as empty vec.
 - Card `archived: bool` — soft delete. `get_board` filters out archived cards. `GET /api/boards/:id/archive` returns archived cards. `PUT /api/cards/:id` with `{ archived: false }` restores.
-- Card `attachments: Vec<Attachment>` — stored in card JSON. Binary data at `data/boards/{bid}/attachments/{cid}/{att-id}`. Max 50 MB enforced in handler (`TooLarge` error → HTTP 413). Upload: `POST /api/cards/:id/attachments?filename=...` with raw body bytes (no multipart). Download: `GET /api/cards/:id/attachments/:att_id`.
+- Card `due_date: Option<String>` — optional due date in `YYYY-MM-DD` format. `UpdateCard` uses double-Option (`Option<Option<String>>`) so `null` clears the date vs absent leaves it unchanged. Displayed as color-coded badge in list view (overdue/today/tomorrow/future).
+- Card `attachments: Vec<Attachment>` — stored in card JSON. Binary data at `data/boards/{bid}/attachments/{cid}/{att-id}`. Max 50 MB enforced in handler (`TooLarge` error → HTTP 413). Upload: `POST /api/cards/:id/attachments?filename=...` with raw body bytes (no multipart). Download: `GET /api/cards/:id/attachments/:att_id`. Image attachments get a JPEG thumbnail (`{att-id}_thumb`, max 400px) generated server-side via the `image` crate. Thumbnail served at `GET /api/cards/:cid/attachments/:att_id/thumb`.
 - Timestamps — `YYYY-MM-DD HH:MM:SS` UTC, generated in `store.rs` (no chrono crate).
 - **Labels** — stored in `board.json` as a `labels: Vec<Label>` array. Each label has `id`, `name`, `color`. Colors are auto-assigned from a 12-color pastel palette (evenly distributed hues) in interleaved order for max visual distinction. `board.json` is read/written via the private `BoardFile` struct in `store.rs`; the public `Board` response type omits labels (labels only appear in `BoardDetail`). No separate labels file.
 
@@ -77,7 +78,7 @@ data/boards/{board-id}/lists/{list-id}/cards/{card-id}.json
 ```
 
 - Deleting a board: `remove_dir_all` on its directory (cascades lists + cards).
-- Deleting a list: `remove_dir_all` on its directory (cascades cards).
+- Deleting a list: enumerates card JSONs to remove their attachment dirs, then `remove_dir_all` on the list directory.
 - Moving a card between lists: write to new location, delete from old location.
 - Attachment binaries: `data/boards/{bid}/attachments/{cid}/{att-id}` (no extension). Metadata lives in card JSON.
 - Finding a card/list requires scanning board directories (no index). Acceptable at MVP scale.
@@ -103,11 +104,12 @@ DELETE /api/lists/:id                        → 204
 GET    /api/boards/:bid/archive              → Card[] (archived cards, sorted by created_at desc)
 
 POST   /api/lists/:lid/cards {title}         → Card (201)
-PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?,archived?} → Card
+PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?,archived?,due_date?} → Card
 DELETE /api/cards/:id                        → 204
 
 POST   /api/cards/:cid/attachments?filename=… → Attachment (201) — raw body bytes, Content-Type header
 GET    /api/cards/:cid/attachments/:att_id    → binary (Content-Disposition: attachment)
+GET    /api/cards/:cid/attachments/:att_id/thumb → JPEG thumbnail (404 if not image)
 DELETE /api/cards/:cid/attachments/:att_id    → 204
 ```
 
@@ -149,16 +151,18 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 - **Periodic polling** — Home and Board pages poll `GET /api/changes` every 15s, which returns the newest file mtime from the data directory (cheap stat walk, no JSON parsing). Full refetch only happens when mtime changes. This efficiently reflects external file changes (rsync, git pull, Syncthing) without unnecessary data transfers.
 - **Labels** — per-board colored tags. Stored in `board.json` (not separate files). Board labels flow down as `props.labels` through `BoardPage → List → Card`. CardDetail receives `boardLabels` prop and manages `selectedLabelIds` signal. `onSave` callback signature includes `labelIds: string[]`. Label management UI is a **right-side slide-out drawer** (`.label-drawer`, always rendered for CSS transition, toggled via `.label-drawer--open` class → `translateX(0)`). The "Labels" button lives in `.app-header-actions` (visible only on board pages). Label names support `**bold**` and `*italic*` markdown (rendered via `renderTitle()` from `Card.tsx`; Ctrl+B/I wraps selection in the drawer inputs). Label colors use `color-mix()` for selected state in the label picker.
 - **LabelContext** — `LabelContext.tsx` exposes `{ isOpen, open, close, toggle, hasBoard, setHasBoard }` via SolidJS context. `App.tsx` wraps everything in `LabelProvider`. The `AppHeader` sub-component in `App.tsx` reads context to show/hide the Labels button. `Board.tsx` calls `lc.setHasBoard(true)` on mount and `lc.setHasBoard(false)` on cleanup. This pattern allows the header (outside the router outlet) to control drawer state owned by the board page.
-- **Keyboard navigation** — Cards have `tabindex="0"` and handle `↑↓` (move within list), `←→` (jump to adjacent list), `Shift+↑↓` (reorder card in list), `Shift+←→` (move card to adjacent list), `Enter`/`Space` (open card), `Delete`/`Backspace` (delete card), `e` (edit focused card). When no card is focused, any arrow key focuses the first/last card in the board. Navigating `←→` to an empty list focuses the list's `.add-trigger` button. When `.add-trigger` (card list) is focused: `←→` navigates to adjacent list, `↑` focuses last card in current list, `Enter`/`Space` opens the add-card form. Focus style via `.card:focus-visible`. Shortcuts hidden by default — press `?` to toggle `ShortcutHelp` modal, or click the `?` button in the app header. The header `?` button dispatches a `toggle-shortcuts` `CustomEvent` on `document`; `Board.tsx` listens for it in `onMount`. Global shortcuts: `l` (add list), `n`/`c` (add card to focused/first list), `e` (edit focused card), `g` (toggle label drawer), `?` (toggle help), `Escape` (close drawer/help/blur card). Home page: `n` (open new board form). CardDetail: `Ctrl+Enter` saves, `Escape` closes (with unsaved guard), title `Enter` focuses editor, `Ctrl+B`/`Ctrl+I` wraps selection in `**bold**`/`*italic*` markdown. Drawer inputs: `Escape` closes the entire drawer.
+- **Keyboard navigation** — Cards have `tabindex="0"` and handle `↑↓` (move within list), `←→` (jump to adjacent list), `Shift+↑↓` (reorder card in list), `Shift+←→` (move card to adjacent list), `Enter`/`Space` (open card), `Delete`/`Backspace` (delete card), `e` (edit focused card). When no card is focused, any arrow key focuses the first/last card in the board. Navigating `←→` to an empty list focuses the list's `.add-trigger` button. When `.add-trigger` (card list) is focused: `←→` navigates to adjacent list, `↑` focuses last card in current list, `Enter`/`Space` opens the add-card form. Focus style via `.card:focus-visible`. Shortcuts hidden by default — press `?` to toggle `ShortcutHelp` modal, or click the `?` button in the app header. The header `?` button dispatches a `toggle-shortcuts` `CustomEvent` on `document`; `Board.tsx` listens for it in `onMount`. Global shortcuts: `l` (add list), `n`/`c` (add card to focused/first list), `e` (edit focused card), `g` (toggle label drawer), `f` (toggle filter bar), `?` (toggle help), `Escape` (close drawer/help/blur card). Home page: `n` (open new board form). CardDetail: `Ctrl+Enter` saves, `Escape` closes (with unsaved guard), title `Enter` focuses editor, `Ctrl+B`/`Ctrl+I` wraps selection in `**bold**`/`*italic*` markdown, `l` toggles label picker, `d` focuses due date input. Drawer inputs: `Escape` closes the entire drawer. Attachments: `tabindex="0"`, `Delete`/`Backspace` removes, `Enter` previews (images) or downloads (other files).
 - **Card title markdown** — titles support `**text**` (bold) and `*text*` (italic). `renderTitle(title)` in `Card.tsx` converts to `<strong>`/`<em>` HTML and is used via `innerHTML` in both card list view and CardDetail. Stored as-is (markdown string) in the title field. Ctrl+B/I in the title input in CardDetail wraps the selected text.
-- **`isInInput` guard** — `Board.tsx` defines `isInInput(target)` that returns true if the event target is an INPUT, TEXTAREA, contentEditable element, or inside `.modal-overlay`, `.label-drawer`, `.shortcut-help-overlay`, or `.archive-overlay`. All global keydown handlers check this before acting, so shortcuts don't fire while typing or when a dialog is open.
+- **`isInInput` guard** — `Board.tsx` defines `isInInput(target)` that returns true if the event target is an INPUT, TEXTAREA, contentEditable element, or inside `.modal-overlay`, `.label-drawer`, `.shortcut-help-overlay`, `.archive-overlay`, or `.filter-bar`. All global keydown handlers check this before acting, so shortcuts don't fire while typing or when a dialog is open.
 - **Focus restoration** — `Board.tsx` tracks `lastFocusedCardId` signal. Set on card click/keyboard open. After modal closes (`handleCardSave`, `handleModalClose`), `restoreFocus()` uses `requestAnimationFrame` to `querySelector('[data-card-id="..."]').focus()`. Ensures keyboard user returns to the card they were on. After `handleMoveCard`, a `pendingFocusCardId` signal is set; a `createEffect` watches the `board` resource and restores focus after SolidJS finishes re-rendering — this ensures focus works for cross-list moves where the card element is destroyed and recreated. During polling refetch, the currently focused card ID is also captured into `pendingFocusCardId` before `refetch()` so focus survives DOM recreation from auto-updates.
 - **ShortcutHelp** — `components/ShortcutHelp.tsx` renders a centered modal overlay with all shortcuts organized by section (Navigation, Move Card, Cards, Board, Card Detail, Global). Closes on `Escape`, `?`, or overlay click. Rendered via `<Show when={showHelp()}>` in `Board.tsx`.
 - **Board color** — `Board` and `BoardDetail` have an optional `color` field (`Option<String>` in Rust, `color?: string` in TS). Set via `PUT /api/boards/:id` with `{ title, color }`. `Board.tsx` syncs the value to `--board-color` CSS custom property on `:root` via `createEffect`. CSS uses `linear-gradient(rgba(0,0,0,0.2), ...), var(--board-color)` for the header (dark overlay for readability) and `color-mix(in srgb, var(--board-color) 50%, white)` for the board page background (muted/pastel). Color picker shows 16 preset swatches. `onCleanup` resets `--board-color` to `#0079bf`. Home page board cards show their color as card background via inline style.
 - **Board rename** — Clicking the board title `h2.board-title-text` activates an inline `input.board-title-input`. Blur or Enter commits (calls `api.updateBoard`); Escape cancels. State: `showRename` + `renameValue` signals in `Board.tsx`.
 - **Archive (soft delete)** — Cards have `archived: bool` field. The archive button (`.card-archive`) and `Delete`/`Backspace` key both show a confirmation dialog (`.archive-overlay` + `.unsaved-dialog`) before calling `api.archiveCard`. Archived cards are filtered out by `get_board` on the backend. "Archive" button in the board title bar opens an `.archive-modal-overlay` listing all archived cards with Restore buttons (calls `api.restoreCard` → `PUT /api/cards/:id` with `{ archived: false }`).
 - **Attachments** — Files up to 50 MB. Upload via `POST /api/cards/:id/attachments?filename=...` with raw body (no multipart). Backend stores binary at `data/boards/{bid}/attachments/{cid}/{att-id}`, metadata in card JSON. `CardDetail` shows an attachments section with download links and delete buttons. Local `attachments` signal keeps UI in sync without refetch. `api.uploadAttachment` uses a raw `fetch` (bypasses the JSON helper) with the file as body; `api.getAttachmentUrl` returns a direct URL for `<a download>` links. Image attachments (`content_type` starting with `image/`) show inline thumbnails; clicking thumbnail or filename opens a lightbox preview (`.image-preview-overlay`, z-index 300) with download button. Escape closes preview without closing CardDetail.
-- **CardDetail label UX** — only assigned labels shown as chips in the detail modal. A small "+ Add label" button toggles an inline picker showing all board labels with checkmarks. Clicking an assigned chip removes it immediately. Picker hidden by default to reduce noise.
+- **CardDetail label UX** — only assigned labels shown as chips in the detail modal. Chips are display-only (no click-to-remove); each has a small × button for removal. A "+ Add label" button toggles an inline picker showing all board labels with checkmarks. Picker hidden by default to reduce noise. `l` key toggles picker when not in an input/editor.
+- **Board filtering** — `f` key toggles a filter bar below the title bar. Text input filters cards by title and description (raw JSON string match). Label chips filter by label (multi-select, AND with text filter: card matches if it has at least one selected label). Clear button resets all filters. Filter state: `showFilterBar`, `filterText`, `filterLabelIds` signals in `Board.tsx`. `cardMatchesFilter()` returns true when (no text OR title/description contains text) AND (no label filter OR card has at least one filtered label). `.filter-bar` is included in `isInInput()` guard so board shortcuts don't fire while typing in filter input.
+- **Due dates in CardDetail** — date input between labels and description sections. `dueDate` signal synced from card data. Clear button to unset. `d` key focuses the date input. `onSave` callback includes `dueDate: string | null` parameter.
 - **Card layout** — `.card-main` wrapper (flex-column) contains `.card-labels` above `.card-content`, so labels never shrink the title. `.card-actions` remains as a flex-row sibling to `.card-main`.
 
 ## Dependencies
@@ -171,6 +175,7 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 - `tokio` — async runtime (rt-multi-thread + macros only)
 - `include_dir` — embed static files in binary
 - `mime_guess` — MIME type detection for static files
+- `image` — server-side thumbnail generation for image attachments
 
 ### Frontend (package.json)
 - `solid-js` + `@solidjs/router` — UI framework + routing

@@ -20,6 +20,6 @@ cargo build --release
 
 echo ""
 echo "=== Build complete ==="
-echo "Single binary: backend/target/release/tc-backend"
-echo "Run from anywhere: ./backend/target/release/tc-backend"
+echo "Single binary: backend/target/release/synkban"
+echo "Run from anywhere: ./backend/target/release/synkban"
 echo "Open: http://localhost:8080"

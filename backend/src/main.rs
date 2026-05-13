@@ -70,6 +70,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/cards/{id}", web::delete().to(handlers::cards::delete_card))
             .route("/api/cards/{card_id}/attachments", web::post().to(handlers::cards::upload_attachment))
             .route("/api/cards/{card_id}/attachments/{att_id}", web::get().to(handlers::cards::download_attachment))
+            .route("/api/cards/{card_id}/attachments/{att_id}/thumb", web::get().to(handlers::cards::download_thumbnail))
             .route("/api/cards/{card_id}/attachments/{att_id}", web::delete().to(handlers::cards::delete_attachment))
             .default_service(web::get().to(serve_embedded))
     })

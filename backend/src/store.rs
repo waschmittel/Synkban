@@ -473,6 +473,20 @@ pub fn update_list(
 pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let dir = list_dir(data_dir, &board_id, list_id);
+    let cdir = cards_dir(data_dir, &board_id, list_id);
+    if cdir.exists() {
+        for entry in fs::read_dir(&cdir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "json") {
+                let card_id = path.file_stem().unwrap().to_string_lossy().to_string();
+                let att_dir = attachment_dir(data_dir, &board_id, &card_id);
+                if att_dir.exists() {
+                    let _ = fs::remove_dir_all(&att_dir);
+                }
+            }
+        }
+    }
     fs::remove_dir_all(&dir)?;
     Ok(())
 }
@@ -530,6 +544,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         label_ids: Vec::new(),
         archived: false,
         attachments: Vec::new(),
+        due_date: None,
     };
     write_json(&dir.join(format!("{id}.json")), &card)?;
     Ok(card)
@@ -562,6 +577,7 @@ pub fn update_card(
     new_list_id: Option<&str>,
     label_ids: Option<&[String]>,
     archived: Option<bool>,
+    due_date: Option<Option<&str>>,
 ) -> Result<Card, AppError> {
     let (board_id, old_list_id) = find_board_and_list_for_card(data_dir, card_id)?;
     let old_path = cards_dir(data_dir, &board_id, &old_list_id).join(format!("{card_id}.json"));
@@ -581,6 +597,9 @@ pub fn update_card(
     }
     if let Some(a) = archived {
         card.archived = a;
+    }
+    if let Some(dd) = due_date {
+        card.due_date = dd.map(|s| s.to_string());
     }
 
     if let Some(target_list_id) = new_list_id {
@@ -603,6 +622,10 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
     let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
     let path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
     fs::remove_file(&path)?;
+    let att_dir = attachment_dir(data_dir, &board_id, card_id);
+    if att_dir.exists() {
+        let _ = fs::remove_dir_all(&att_dir);
+    }
     Ok(())
 }
 
@@ -621,6 +644,9 @@ pub fn create_attachment(
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     fs::create_dir_all(&att_dir)?;
     fs::write(att_dir.join(&att_id), data)?;
+    if content_type.starts_with("image/") {
+        create_thumbnail(&att_dir, &att_id, data);
+    }
 
     let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
     let mut card: Card = read_json(&card_path)?;
@@ -670,5 +696,28 @@ pub fn delete_attachment(
     write_json(&card_path, &card)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     let _ = fs::remove_file(att_dir.join(att_id));
+    let _ = fs::remove_file(att_dir.join(format!("{att_id}_thumb")));
     Ok(())
+}
+
+fn create_thumbnail(att_dir: &Path, att_id: &str, data: &[u8]) {
+    let Ok(img) = image::load_from_memory(data) else { return };
+    let thumb = img.thumbnail(400, 400);
+    let mut buf = std::io::Cursor::new(Vec::new());
+    if thumb.write_to(&mut buf, image::ImageFormat::Jpeg).is_ok() {
+        let _ = fs::write(att_dir.join(format!("{att_id}_thumb")), buf.into_inner());
+    }
+}
+
+pub fn get_thumbnail_data(
+    data_dir: &Path,
+    card_id: &str,
+    att_id: &str,
+) -> Result<Vec<u8>, AppError> {
+    let (board_id, _) = find_board_and_list_for_card(data_dir, card_id)?;
+    let thumb_path = attachment_dir(data_dir, &board_id, card_id).join(format!("{att_id}_thumb"));
+    if !thumb_path.exists() {
+        return Err(AppError::NotFound("Thumbnail not found".into()));
+    }
+    Ok(fs::read(&thumb_path)?)
 }

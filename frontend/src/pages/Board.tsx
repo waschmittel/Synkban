@@ -35,7 +35,8 @@ function isInInput(target: EventTarget | null): boolean {
     !!el.closest(".modal-overlay") ||
     !!el.closest(".label-drawer") ||
     !!el.closest(".shortcut-help-overlay") ||
-    !!el.closest(".archive-overlay")
+    !!el.closest(".archive-overlay") ||
+    !!el.closest(".filter-bar")
   );
 }
 
@@ -62,6 +63,11 @@ export default function BoardPage() {
   // Board rename state
   const [showRename, setShowRename] = createSignal(false);
   const [renameValue, setRenameValue] = createSignal("");
+
+  // Filter state
+  const [showFilterBar, setShowFilterBar] = createSignal(false);
+  const [filterText, setFilterText] = createSignal("");
+  const [filterLabelIds, setFilterLabelIds] = createSignal<string[]>([]);
 
   // Restore focus to a moved card after board resource re-renders.
   createEffect(() => {
@@ -123,6 +129,9 @@ export default function BoardPage() {
           const focused = document.activeElement as HTMLElement | null;
           if (focused?.classList.contains("card")) focused.blur();
         }
+      } else if (e.key === "f") {
+        e.preventDefault();
+        setShowFilterBar((v) => !v);
       } else if (e.key === "g") {
         e.preventDefault();
         lc.toggle();
@@ -311,9 +320,10 @@ export default function BoardPage() {
     id: string,
     title: string,
     description: string,
-    labelIds: string[]
+    labelIds: string[],
+    dueDate: string | null
   ) => {
-    await api.updateCard(id, { title, description, label_ids: labelIds });
+    await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate });
     setSelectedCard(null);
     restoreFocus();
     refetch();
@@ -487,6 +497,33 @@ export default function BoardPage() {
     }
   };
 
+  const toggleFilterLabel = (labelId: string) => {
+    setFilterLabelIds((ids) =>
+      ids.includes(labelId) ? ids.filter((id) => id !== labelId) : [...ids, labelId]
+    );
+  };
+
+  const cardMatchesFilter = (card: CardType): boolean => {
+    const text = filterText().toLowerCase();
+    const labelIds = filterLabelIds();
+    if (text) {
+      const titleMatch = card.title.toLowerCase().includes(text);
+      const descMatch = card.description.toLowerCase().includes(text);
+      if (!titleMatch && !descMatch) return false;
+    }
+    if (labelIds.length > 0) {
+      if (!card.label_ids?.some((id) => labelIds.includes(id))) return false;
+    }
+    return true;
+  };
+
+  const isFiltering = () => !!filterText() || filterLabelIds().length > 0;
+
+  const filteredCards = (cards: CardType[]) => {
+    if (!isFiltering()) return cards;
+    return cards.filter(cardMatchesFilter);
+  };
+
   return (
     <div
       class="board-page"
@@ -575,24 +612,78 @@ export default function BoardPage() {
                 </Show>
               </div>
             </div>
+            <Show when={showFilterBar()}>
+              <div class="filter-bar">
+                <input
+                  ref={(el) => requestAnimationFrame(() => el.focus())}
+                  class="filter-text-input"
+                  type="text"
+                  placeholder="Filter cards..."
+                  value={filterText()}
+                  onInput={(e) => setFilterText(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.stopPropagation();
+                      if (!filterText() && filterLabelIds().length === 0) {
+                        setShowFilterBar(false);
+                      } else {
+                        setFilterText("");
+                        setFilterLabelIds([]);
+                      }
+                    }
+                  }}
+                />
+                <Show when={b().labels.length > 0}>
+                  <div class="filter-labels">
+                    <For each={b().labels}>
+                      {(label) => {
+                        const active = () => filterLabelIds().includes(label.id);
+                        return (
+                          <button
+                            class="filter-label-chip"
+                            classList={{ "filter-label-chip--active": active() }}
+                            style={{ "--label-color": label.color }}
+                            onClick={() => toggleFilterLabel(label.id)}
+                          >
+                            <span class="filter-label-dot" style={{ "background-color": label.color }} />
+                            <span innerHTML={renderTitle(label.name)} />
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </Show>
+                <Show when={isFiltering()}>
+                  <button class="filter-clear" onClick={() => { setFilterText(""); setFilterLabelIds([]); }}>
+                    Clear
+                  </button>
+                </Show>
+              </div>
+            </Show>
             <div
               class="lists-container"
               onDragOver={handleListDragOver}
               onDrop={handleListDrop}
             >
               <For each={b().lists}>
-                {(list) => (
-                  <List
-                    list={list}
-                    labels={b().labels}
-                    onAddCard={handleAddCard}
-                    onArchiveCard={handleArchiveCard}
-                    onDeleteList={handleDeleteList}
-                    onCardClick={handleCardClick}
-                    onDropCard={handleDropCard}
-                    onMoveCard={handleMoveCard}
-                  />
-                )}
+                {(list) => {
+                  const filtered = () =>
+                    isFiltering()
+                      ? { ...list, cards: filteredCards(list.cards) }
+                      : list;
+                  return (
+                    <List
+                      list={filtered()}
+                      labels={b().labels}
+                      onAddCard={handleAddCard}
+                      onArchiveCard={handleArchiveCard}
+                      onDeleteList={handleDeleteList}
+                      onCardClick={handleCardClick}
+                      onDropCard={handleDropCard}
+                      onMoveCard={handleMoveCard}
+                    />
+                  );
+                }}
               </For>
               <div class="add-list-wrapper">
                 <AddForm

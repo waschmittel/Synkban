@@ -29,6 +29,7 @@ export interface Card {
   label_ids: string[];
   archived: boolean;
   attachments: Attachment[];
+  due_date?: string;
 }
 
 export interface ListWithCards {

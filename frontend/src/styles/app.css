@@ -1341,19 +1341,32 @@ body {
 }
 
 .label-assigned-chip {
-  display: inline-block;
-  padding: 4px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 12px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
   color: rgba(0, 0, 0, 0.65);
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
 }
 
-.label-assigned-chip:hover {
-  opacity: 0.75;
-  transform: scale(0.97);
+.label-chip-remove {
+  background: none;
+  border: none;
+  color: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.1s, background 0.1s;
+}
+
+.label-chip-remove:hover {
+  color: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .label-add-btn {
@@ -1709,10 +1722,15 @@ body {
   flex-wrap: wrap;
 }
 
+.attachment-item:focus-visible {
+  outline: 2px solid #0079bf;
+  outline-offset: 1px;
+}
+
 .attachment-thumb {
   width: 100%;
   max-height: 160px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 4px;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -1866,4 +1884,154 @@ body {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* ═══ Due Date Badge (card list view) ═══ */
+.due-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.due-badge--overdue {
+  background: #ffebe6;
+  color: #bf2600;
+}
+
+.due-badge--today {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.due-badge--soon {
+  background: #e3fcef;
+  color: #006644;
+}
+
+.due-badge--future {
+  background: #f4f5f7;
+  color: #6b778c;
+}
+
+/* ═══ Due Date Input (CardDetail) ═══ */
+.due-date-area {
+  margin-bottom: 16px;
+}
+
+.due-date-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.due-date-input {
+  border: 2px solid #dfe1e6;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.due-date-input:focus {
+  border-color: #0079bf;
+}
+
+.due-date-clear {
+  background: none;
+  border: none;
+  color: #8993a4;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  transition: color 0.1s, background 0.1s;
+}
+
+.due-date-clear:hover {
+  color: #eb5a46;
+  background: #fce4e4;
+}
+
+/* ═══ Filter Bar ═══ */
+.filter-bar {
+  padding: 6px 20px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-text-input {
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.9);
+  min-width: 180px;
+  transition: border-color 0.15s;
+}
+
+.filter-text-input:focus {
+  border-color: #0079bf;
+  background: white;
+}
+
+.filter-labels {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filter-label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #172b4d;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.filter-label-chip:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.filter-label-chip--active {
+  border-color: var(--label-color);
+  background: color-mix(in srgb, var(--label-color) 30%, white);
+}
+
+.filter-label-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.filter-clear {
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #172b4d;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.filter-clear:hover {
+  background: rgba(0, 0, 0, 0.14);
 }

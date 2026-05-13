@@ -13,7 +13,7 @@ export default defineConfig({
     { name: "chromium", use: { browserName: "chromium" } },
   ],
   webServer: {
-    command: "./backend/target/release/tc-backend",
+    command: "./backend/target/release/synkban",
     port: 8080,
     reuseExistingServer: false,
     env: { DATA_DIR: "./test-data", HOST: "127.0.0.1", PORT: "8080" },

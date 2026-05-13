@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_NAME="${1:-tc-trello}"
+IMAGE_NAME="${1:-synkban}"
 TAG="${2:-latest}"
 
 echo "=== Building Docker image: ${IMAGE_NAME}:${TAG} ==="
@@ -13,4 +13,4 @@ echo "Run with:"
 echo "  docker run -p 8080:8080 ${IMAGE_NAME}:${TAG}"
 echo ""
 echo "With persistent data:"
-echo "  docker run -p 8080:8080 -v tc-data:/app ${IMAGE_NAME}:${TAG}"
+echo "  docker run -p 8080:8080 -v synkban-data:/app ${IMAGE_NAME}:${TAG}"

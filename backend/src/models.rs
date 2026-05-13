@@ -48,6 +48,8 @@ pub struct Card {
     pub archived: bool,
     #[serde(default)]
     pub attachments: Vec<Attachment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_date: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -111,6 +113,8 @@ pub struct UpdateCard {
     pub list_id: Option<String>,
     pub label_ids: Option<Vec<String>>,
     pub archived: Option<bool>,
+    #[serde(default)]
+    pub due_date: Option<Option<String>>,
 }
 
 #[derive(Debug, Deserialize)]

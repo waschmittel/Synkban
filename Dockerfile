@@ -16,7 +16,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-COPY --from=backend-build /app/backend/target/release/tc-backend ./tc-backend
+COPY --from=backend-build /app/backend/target/release/synkban ./synkban
 
 ENV DATA_DIR="./data"
 ENV HOST="0.0.0.0"
@@ -25,4 +25,4 @@ EXPOSE 8080
 
 VOLUME /app/data
 
-CMD ["./tc-backend"]
+CMD ["./synkban"]

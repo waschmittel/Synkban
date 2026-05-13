@@ -70,6 +70,7 @@ export const api = {
       list_id?: string;
       label_ids?: string[];
       archived?: boolean;
+      due_date?: string | null;
     }
   ) =>
     request<Card>(`/cards/${id}`, {
@@ -125,6 +126,9 @@ export const api = {
 
   getAttachmentUrl: (cardId: string, attId: string) =>
     `${BASE}/cards/${cardId}/attachments/${attId}`,
+
+  getAttachmentThumbUrl: (cardId: string, attId: string) =>
+    `${BASE}/cards/${cardId}/attachments/${attId}/thumb`,
 
   deleteAttachment: (cardId: string, attId: string) =>
     request<void>(`/cards/${cardId}/attachments/${attId}`, { method: "DELETE" }),

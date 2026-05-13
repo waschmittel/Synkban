@@ -1,5 +1,5 @@
 [package]
-name = "tc-backend"
+name = "synkban"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,4 @@ uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 include_dir = "0.7"
 mime_guess = "2"
+image = "0.25"

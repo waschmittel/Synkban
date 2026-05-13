@@ -82,6 +82,7 @@ export default function ShortcutHelp(props: Props) {
           <Section title="Board">
             <Row keys={["l"]} desc="Add new list" />
             <Row keys={["g"]} desc="Toggle label panel" />
+            <Row keys={["f"]} desc="Toggle filter bar" />
           </Section>
           <Section title="Card Detail">
             <Row keys={["Ctrl", "Enter"]} desc="Save" />
@@ -89,6 +90,13 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
             <Row keys={["Enter"]} desc="Title → focus editor" />
+            <Row keys={["l"]} desc="Toggle label picker" />
+            <Row keys={["d"]} desc="Focus due date input" />
+          </Section>
+          <Section title="Attachments">
+            <Row keys={["Tab"]} desc="Navigate attachments" />
+            <Row keys={["Del"]} desc="Delete focused attachment" />
+            <Row keys={["Enter"]} desc="Preview/download attachment" />
           </Section>
           <Section title="Global">
             <Row keys={["?"]} desc="Show / hide this help" />

@@ -1,7 +1,7 @@
 {
-  "name": "tc",
+  "name": "synkban",
   "version": "1.0.0",
-  "description": "A Trello-like kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.",
+  "description": "A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.",
   "main": "index.js",
   "scripts": {
     "test": "playwright test"

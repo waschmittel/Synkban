@@ -11,7 +11,7 @@ import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { toggleMark } from "prosemirror-commands";
-import { MenuItem, icons, undoItem, redoItem } from "prosemirror-menu";
+import { MenuItem, blockTypeItem, icons, undoItem, redoItem } from "prosemirror-menu";
 import type { Attachment, Card, Label } from "../types";
 import { renderTitle } from "./Card";
 import { api } from "../api";
@@ -142,7 +142,7 @@ function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string
 interface Props {
   card: Card;
   boardLabels: Label[];
-  onSave: (id: string, title: string, description: string, labelIds: string[]) => void;
+  onSave: (id: string, title: string, description: string, labelIds: string[], dueDate: string | null) => void;
   onClose: () => void;
 }
 
@@ -159,6 +159,8 @@ export default function CardDetail(props: Props) {
   const [attachments, setAttachments] = createSignal<Attachment[]>(props.card.attachments ?? []);
   const [uploading, setUploading] = createSignal(false);
   const [previewAtt, setPreviewAtt] = createSignal<Attachment | null>(null);
+  const [dueDate, setDueDate] = createSignal<string>(props.card.due_date ?? "");
+  let dueDateRef!: HTMLInputElement;
 
   onMount(() => {
     const doc = docFromDescription(props.card.description);
@@ -190,8 +192,16 @@ export default function CardDetail(props: Props) {
       customLinkItem,
     ].filter(Boolean) as any[]];
 
+    const typeButtons = [
+      schema.nodes.paragraph && blockTypeItem(schema.nodes.paragraph, { title: "Plain text", label: "Plain" }),
+      schema.nodes.code_block && blockTypeItem(schema.nodes.code_block, { title: "Code block", label: "Code" }),
+      schema.nodes.heading && blockTypeItem(schema.nodes.heading, { title: "Heading 1", label: "H1", attrs: { level: 1 } }),
+      schema.nodes.heading && blockTypeItem(schema.nodes.heading, { title: "Heading 2", label: "H2", attrs: { level: 2 } }),
+      schema.nodes.heading && blockTypeItem(schema.nodes.heading, { title: "Heading 3", label: "H3", attrs: { level: 3 } }),
+    ].filter(Boolean) as any[];
+
     const menuContent = inlineMenu
-      .concat([[menuItems.typeMenu]])
+      .concat([typeButtons])
       .concat([[undoItem, redoItem]])
       .concat(menuItems.blockMenu);
 
@@ -247,7 +257,8 @@ export default function CardDetail(props: Props) {
     const doc = view.state.doc;
     const description = isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
     setDirty(false);
-    props.onSave(props.card.id, title(), description, selectedLabelIds());
+    const dd = dueDate().trim();
+    props.onSave(props.card.id, title(), description, selectedLabelIds(), dd || null);
   };
 
   const guardedClose = () => {
@@ -285,6 +296,17 @@ export default function CardDetail(props: Props) {
     }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       handleSave();
+    }
+    const el = e.target as HTMLElement;
+    const isTyping = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.contentEditable === "true";
+    if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === "d") {
+        e.preventDefault();
+        dueDateRef?.focus();
+      } else if (e.key === "l") {
+        e.preventDefault();
+        setShowLabelPicker((v) => !v);
+      }
     }
   };
 
@@ -358,10 +380,19 @@ export default function CardDetail(props: Props) {
                     <span
                       class="label-assigned-chip"
                       style={{ "background-color": label.color }}
-                      title={`Remove "${label.name}"`}
-                      onClick={() => toggleLabel(label.id)}
-                      innerHTML={renderTitle(label.name)}
-                    />
+                    >
+                      <span innerHTML={renderTitle(label.name)} />
+                      <button
+                        class="label-chip-remove"
+                        title={`Remove "${label.name}"`}
+                        onClick={() => toggleLabel(label.id)}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </span>
                   )}
                 </For>
                 <button
@@ -404,6 +435,38 @@ export default function CardDetail(props: Props) {
               </Show>
             </div>
           </Show>
+          <div class="due-date-area">
+            <div class="modal-section-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span class="modal-label">Due Date</span>
+            </div>
+            <div class="due-date-input-row">
+              <input
+                ref={dueDateRef!}
+                type="date"
+                class="due-date-input"
+                value={dueDate()}
+                onInput={(e) => { setDueDate(e.currentTarget.value); setDirty(true); }}
+              />
+              <Show when={dueDate()}>
+                <button
+                  class="due-date-clear"
+                  onClick={() => { setDueDate(""); setDirty(true); }}
+                  title="Clear due date"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </Show>
+            </div>
+          </div>
           <div class="modal-section-header">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="17" y1="10" x2="3" y2="10" />
@@ -426,13 +489,34 @@ export default function CardDetail(props: Props) {
           <div class="attachments-list">
             <For each={attachments()}>
               {(att) => (
-                <div class="attachment-item" classList={{ "attachment-item--image": isImageType(att.content_type) }}>
+                <div
+                  class="attachment-item"
+                  classList={{ "attachment-item--image": isImageType(att.content_type) }}
+                  tabindex="0"
+                  onKeyDown={(e) => {
+                    if (e.key === "Delete" || e.key === "Backspace") {
+                      e.preventDefault();
+                      handleDeleteAttachment(att.id);
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (isImageType(att.content_type)) {
+                        setPreviewAtt(att);
+                      } else {
+                        const a = document.createElement("a");
+                        a.href = api.getAttachmentUrl(props.card.id, att.id);
+                        a.download = att.filename;
+                        a.click();
+                      }
+                    }
+                  }}
+                >
                   <Show when={isImageType(att.content_type)}>
                     <img
                       class="attachment-thumb"
-                      src={api.getAttachmentUrl(props.card.id, att.id)}
+                      src={api.getAttachmentThumbUrl(props.card.id, att.id)}
                       alt={att.filename}
                       onClick={() => setPreviewAtt(att)}
+                      onError={(e) => { (e.target as HTMLImageElement).src = api.getAttachmentUrl(props.card.id, att.id); }}
                     />
                   </Show>
                   <div class="attachment-info">
