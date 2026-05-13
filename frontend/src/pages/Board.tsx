@@ -803,6 +803,8 @@ export default function BoardPage() {
             boardLabels={board()?.labels ?? []}
             onSave={handleCardSave}
             onClose={handleModalClose}
+            onToggleFilter={() => setShowFilterBar((v) => !v)}
+            onToggleHelp={() => setShowHelp((v) => !v)}
           />
         )}
       </Show>

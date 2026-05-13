@@ -92,6 +92,8 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Enter"]} desc="Title → focus editor" />
             <Row keys={["l"]} desc="Toggle label picker" />
             <Row keys={["d"]} desc="Focus due date input" />
+            <Row keys={["f"]} desc="Toggle filter bar" />
+            <Row keys={["?"]} desc="Toggle shortcuts help" />
           </Section>
           <Section title="Attachments">
             <Row keys={["Tab"]} desc="Navigate attachments" />

@@ -11,7 +11,7 @@ import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { toggleMark } from "prosemirror-commands";
-import { MenuItem, blockTypeItem, icons, undoItem, redoItem } from "prosemirror-menu";
+import { MenuItem, Dropdown, blockTypeItem, icons, undoItem, redoItem } from "prosemirror-menu";
 import type { Attachment, Card, Label } from "../types";
 import { renderTitle } from "./Card";
 import { api } from "../api";
@@ -144,6 +144,8 @@ interface Props {
   boardLabels: Label[];
   onSave: (id: string, title: string, description: string, labelIds: string[], dueDate: string | null) => void;
   onClose: () => void;
+  onToggleFilter?: () => void;
+  onToggleHelp?: () => void;
 }
 
 export default function CardDetail(props: Props) {
@@ -192,16 +194,16 @@ export default function CardDetail(props: Props) {
       customLinkItem,
     ].filter(Boolean) as any[]];
 
-    const typeButtons = [
-      schema.nodes.paragraph && blockTypeItem(schema.nodes.paragraph, { title: "Plain text", label: "Plain" }),
-      schema.nodes.code_block && blockTypeItem(schema.nodes.code_block, { title: "Code block", label: "Code" }),
-      schema.nodes.heading && blockTypeItem(schema.nodes.heading, { title: "Heading 1", label: "H1", attrs: { level: 1 } }),
-      schema.nodes.heading && blockTypeItem(schema.nodes.heading, { title: "Heading 2", label: "H2", attrs: { level: 2 } }),
-      schema.nodes.heading && blockTypeItem(schema.nodes.heading, { title: "Heading 3", label: "H3", attrs: { level: 3 } }),
-    ].filter(Boolean) as any[];
+    const typeDropdown = new Dropdown([
+      blockTypeItem(schema.nodes.paragraph, { title: "Plain text", label: "Plain" }),
+      blockTypeItem(schema.nodes.code_block, { title: "Code block", label: "Code" }),
+      blockTypeItem(schema.nodes.heading, { title: "Heading 1", label: "H1", attrs: { level: 1 } }),
+      blockTypeItem(schema.nodes.heading, { title: "Heading 2", label: "H2", attrs: { level: 2 } }),
+      blockTypeItem(schema.nodes.heading, { title: "Heading 3", label: "H3", attrs: { level: 3 } }),
+    ], { label: "Type" });
 
     const menuContent = inlineMenu
-      .concat([typeButtons])
+      .concat([[typeDropdown]])
       .concat([[undoItem, redoItem]])
       .concat(menuItems.blockMenu);
 
@@ -306,6 +308,12 @@ export default function CardDetail(props: Props) {
       } else if (e.key === "l") {
         e.preventDefault();
         setShowLabelPicker((v) => !v);
+      } else if (e.key === "f") {
+        e.preventDefault();
+        props.onToggleFilter?.();
+      } else if (e.key === "?") {
+        e.preventDefault();
+        props.onToggleHelp?.();
       }
     }
   };
