@@ -36,7 +36,7 @@ pub async fn update_board(
     path: web::Path<String>,
     body: web::Json<UpdateBoard>,
 ) -> Result<HttpResponse, AppError> {
-    let board = store::update_board(&data_dir, &path.into_inner(), &body.title)?;
+    let board = store::update_board(&data_dir, &path.into_inner(), &body.title, body.color.as_deref())?;
     Ok(HttpResponse::Ok().json(board))
 }
 

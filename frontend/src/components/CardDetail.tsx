@@ -10,6 +10,7 @@ import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
 import { exampleSetup } from "prosemirror-example-setup";
 import type { Card, Label } from "../types";
+import { renderTitle } from "./Card";
 
 const schema = new Schema({
   nodes: addListNodes(basicSchema.spec.nodes, "paragraph block*", "block"),
@@ -34,6 +35,25 @@ function isDocEmpty(doc: PmNode): boolean {
   return doc.childCount === 0 || (doc.childCount === 1 && doc.firstChild!.isTextblock && doc.firstChild!.content.size === 0);
 }
 
+function wrapSelection(input: HTMLInputElement, marker: string) {
+  const start = input.selectionStart ?? 0;
+  const end = input.selectionEnd ?? 0;
+  const val = input.value;
+  const sel = val.slice(start, end);
+  if (!sel) return;
+  const mlen = marker.length;
+  if (sel.startsWith(marker) && sel.endsWith(marker) && sel.length > mlen * 2) {
+    const unwrapped = sel.slice(mlen, -mlen);
+    input.value = val.slice(0, start) + unwrapped + val.slice(end);
+    input.setSelectionRange(start, start + unwrapped.length);
+  } else {
+    const wrapped = marker + sel + marker;
+    input.value = val.slice(0, start) + wrapped + val.slice(end);
+    input.setSelectionRange(start + mlen, start + mlen + sel.length);
+  }
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 interface Props {
   card: Card;
   boardLabels: Label[];
@@ -50,6 +70,7 @@ export default function CardDetail(props: Props) {
   );
   const [dirty, setDirty] = createSignal(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = createSignal(false);
+  const [showLabelPicker, setShowLabelPicker] = createSignal(false);
 
   onMount(() => {
     const doc = docFromDescription(props.card.description);
@@ -120,11 +141,33 @@ export default function CardDetail(props: Props) {
     }
   };
 
+  const handleTitleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      view?.focus();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === "b") {
+        e.preventDefault();
+        wrapSelection(e.currentTarget as HTMLInputElement, "**");
+      } else if (e.key === "i") {
+        e.preventDefault();
+        wrapSelection(e.currentTarget as HTMLInputElement, "*");
+      }
+    }
+  };
+
   const handleOverlayClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) {
       guardedClose();
     }
   };
+
+  const assignedLabels = () =>
+    props.boardLabels.filter((l) => selectedLabelIds().includes(l.id));
+
+  const hasLabels = () => props.boardLabels.length > 0;
 
   return (
     <div class="modal-overlay" onClick={handleOverlayClick} onKeyDown={handleKeyDown}>
@@ -142,7 +185,7 @@ export default function CardDetail(props: Props) {
             type="text"
             value={title()}
             onInput={(e) => { setTitle(e.currentTarget.value); setDirty(true); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); view?.focus(); } }}
+            onKeyDown={handleTitleKeyDown}
             placeholder="Card title..."
           />
           <button class="modal-close" onClick={guardedClose} title="Close (Esc)">
@@ -153,7 +196,7 @@ export default function CardDetail(props: Props) {
           </button>
         </div>
         <div class="modal-body">
-          <Show when={props.boardLabels.length > 0}>
+          <Show when={hasLabels()}>
             <div class="modal-section-header">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
@@ -161,29 +204,57 @@ export default function CardDetail(props: Props) {
               </svg>
               <span class="modal-label">Labels</span>
             </div>
-            <div class="label-picker">
-              <For each={props.boardLabels}>
-                {(label) => {
-                  const selected = () => selectedLabelIds().includes(label.id);
-                  return (
-                    <button
-                      class="label-picker-item"
-                      classList={{ "label-picker-item--selected": selected() }}
-                      style={{ "--label-color": label.color }}
+            <div class="label-assigned-area">
+              <div class="label-assigned-chips">
+                <For each={assignedLabels()}>
+                  {(label) => (
+                    <span
+                      class="label-assigned-chip"
+                      style={{ "background-color": label.color }}
+                      title={`Remove "${label.name}"`}
                       onClick={() => toggleLabel(label.id)}
-                      title={selected() ? `Remove "${label.name}"` : `Add "${label.name}"`}
-                    >
-                      <span class="label-picker-dot" style={{ "background-color": label.color }} />
-                      <span class="label-picker-name">{label.name}</span>
-                      <Show when={selected()}>
-                        <svg class="label-picker-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </Show>
-                    </button>
-                  );
-                }}
-              </For>
+                      innerHTML={renderTitle(label.name)}
+                    />
+                  )}
+                </For>
+                <button
+                  class="label-add-btn"
+                  onClick={() => setShowLabelPicker((v) => !v)}
+                  title={showLabelPicker() ? "Hide label picker" : "Add/remove labels"}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  {showLabelPicker() ? "Done" : "Add label"}
+                </button>
+              </div>
+              <Show when={showLabelPicker()}>
+                <div class="label-picker">
+                  <For each={props.boardLabels}>
+                    {(label) => {
+                      const selected = () => selectedLabelIds().includes(label.id);
+                      return (
+                        <button
+                          class="label-picker-item"
+                          classList={{ "label-picker-item--selected": selected() }}
+                          style={{ "--label-color": label.color }}
+                          onClick={() => toggleLabel(label.id)}
+                          title={selected() ? `Remove "${label.name}"` : `Add "${label.name}"`}
+                        >
+                          <span class="label-picker-dot" style={{ "background-color": label.color }} />
+                          <span class="label-picker-name" innerHTML={renderTitle(label.name)} />
+                          <Show when={selected()}>
+                            <svg class="label-picker-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </Show>
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
             </div>
           </Show>
           <div class="modal-section-header">
@@ -197,7 +268,7 @@ export default function CardDetail(props: Props) {
           </div>
           <div class="editor-wrapper" ref={editorRef!} />
           <div class="editor-hint">
-            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save
+            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save (title and description)
           </div>
         </div>
         <div class="modal-footer">

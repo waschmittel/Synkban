@@ -10,11 +10,8 @@ interface Props {
   onDeleteCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
   onCardClick: (card: CardType) => void;
-  onDropCard: (
-    cardId: string,
-    targetListId: string,
-    position: number
-  ) => void;
+  onDropCard: (cardId: string, targetListId: string, position: number) => void;
+  onMoveCard: (cardId: string, targetListId: string, position: number) => void;
 }
 
 export default function List(props: Props) {
@@ -125,6 +122,7 @@ export default function List(props: Props) {
               labels={props.labels}
               onDelete={props.onDeleteCard}
               onClick={props.onCardClick}
+              onMove={props.onMoveCard}
             />
           )}
         </For>

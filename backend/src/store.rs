@@ -110,11 +110,13 @@ struct BoardFile {
     created_at: String,
     #[serde(default)]
     labels: Vec<Label>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
 }
 
 impl From<BoardFile> for Board {
     fn from(b: BoardFile) -> Self {
-        Board { id: b.id, title: b.title, created_at: b.created_at }
+        Board { id: b.id, title: b.title, created_at: b.created_at, color: b.color }
     }
 }
 
@@ -184,9 +186,10 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
         title: title.to_string(),
         created_at: now_timestamp(),
         labels: Vec::new(),
+        color: None,
     };
     write_json(&dir.join("board.json"), &bf)?;
-    Ok(Board { id, title: bf.title, created_at: bf.created_at })
+    Ok(Board { id, title: bf.title, created_at: bf.created_at, color: None })
 }
 
 pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppError> {
@@ -236,12 +239,13 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
         id: bf.id,
         title: bf.title,
         created_at: bf.created_at,
+        color: bf.color,
         labels: bf.labels,
         lists: lists_with_cards,
     })
 }
 
-pub fn update_board(data_dir: &Path, board_id: &str, title: &str) -> Result<Board, AppError> {
+pub fn update_board(data_dir: &Path, board_id: &str, title: &str, color: Option<&str>) -> Result<Board, AppError> {
     let dir = board_dir(data_dir, board_id);
     let board_json = dir.join("board.json");
     if !board_json.exists() {
@@ -249,8 +253,9 @@ pub fn update_board(data_dir: &Path, board_id: &str, title: &str) -> Result<Boar
     }
     let mut bf: BoardFile = read_json(&board_json)?;
     bf.title = title.to_string();
+    bf.color = color.map(|s| s.to_string());
     write_json(&board_json, &bf)?;
-    Ok(Board { id: bf.id, title: bf.title, created_at: bf.created_at })
+    Ok(Board { id: bf.id, title: bf.title, created_at: bf.created_at, color: bf.color })
 }
 
 pub fn delete_board(data_dir: &Path, board_id: &str) -> Result<(), AppError> {

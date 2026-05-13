@@ -28,10 +28,10 @@ export const api = {
 
   getBoard: (id: string) => request<BoardDetail>(`/boards/${id}`),
 
-  updateBoard: (id: string, title: string) =>
+  updateBoard: (id: string, title: string, color?: string | null) =>
     request<Board>(`/boards/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, color }),
     }),
 
   deleteBoard: (id: string) =>

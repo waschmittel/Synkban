@@ -90,7 +90,10 @@ export default function Home() {
         <div class="board-grid">
           <For each={boards()}>
             {(board) => (
-              <div class="board-card">
+              <div
+                class="board-card"
+                style={board.color ? { "background": board.color } : {}}
+              >
                 <A href={`/board/${board.id}`} class="board-card-link">
                   {board.title}
                 </A>

@@ -15,6 +15,13 @@ import CardDetail from "../components/CardDetail";
 import ShortcutHelp from "../components/ShortcutHelp";
 import { useLabelContext } from "../LabelContext";
 
+const BOARD_COLORS = [
+  "#0079bf", "#026aa7", "#5ba4cf", "#29cce5",
+  "#b3d9ff", "#519839", "#4bbf6b", "#d29034",
+  "#f5a623", "#eb5a46", "#cd5a91", "#89609e",
+  "#172b4d", "#838c91", "#7a6652", "#344563",
+];
+
 function isInInput(target: EventTarget | null): boolean {
   if (!target) return false;
   const el = target as HTMLElement;
@@ -39,8 +46,9 @@ export default function BoardPage() {
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastFocusedCardId, setLastFocusedCardId] = createSignal<string | null>(null);
+  const [showColorPicker, setShowColorPicker] = createSignal(false);
 
-  // Label panel state (rendered in drawer, managed by context)
+  // Label panel state
   const [newLabelName, setNewLabelName] = createSignal("");
   const [editingLabelId, setEditingLabelId] = createSignal<string | null>(null);
   const [editingLabelName, setEditingLabelName] = createSignal("");
@@ -68,11 +76,16 @@ export default function BoardPage() {
       } else if (e.key === "Escape") {
         if (showHelp()) {
           setShowHelp(false);
+        } else if (showColorPicker()) {
+          setShowColorPicker(false);
         } else {
           lc.close();
           const focused = document.activeElement as HTMLElement | null;
           if (focused?.classList.contains("card")) focused.blur();
         }
+      } else if (e.key === "g") {
+        e.preventDefault();
+        lc.toggle();
       } else if (e.key === "l") {
         e.preventDefault();
         const trigger = document.querySelector(
@@ -91,6 +104,24 @@ export default function BoardPage() {
         if (focused?.classList.contains("card")) {
           e.preventDefault();
           (focused as HTMLElement).click();
+        }
+      } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key) && !e.shiftKey) {
+        const focused = document.activeElement;
+        if (!focused || !focused.classList.contains("card")) {
+          e.preventDefault();
+          const lists = document.querySelectorAll(".list");
+          if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+            const firstList = lists[0];
+            const firstCard = firstList?.querySelector(".card") as HTMLElement | null;
+            if (firstCard) firstCard.focus();
+            else (firstList?.querySelector(".add-trigger") as HTMLElement | null)?.focus();
+          } else {
+            const lastList = lists[lists.length - 1];
+            const cards = lastList?.querySelectorAll(".card");
+            const lastCard = cards?.[cards.length - 1] as HTMLElement | null;
+            if (lastCard) lastCard.focus();
+            else (lastList?.querySelector(".add-trigger") as HTMLElement | null)?.focus();
+          }
         }
       }
     };
@@ -143,6 +174,19 @@ export default function BoardPage() {
   ) => {
     await api.updateCard(cardId, { list_id: targetListId, position });
     refetch();
+  };
+
+  const handleMoveCard = async (
+    cardId: string,
+    targetListId: string,
+    position: number
+  ) => {
+    await api.updateCard(cardId, { list_id: targetListId, position });
+    refetch();
+    // Restore focus after refetch redraws
+    requestAnimationFrame(() => {
+      (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
+    });
   };
 
   const handleCardClick = (card: CardType) => {
@@ -256,6 +300,16 @@ export default function BoardPage() {
     refetch();
   };
 
+  // --- Board color ---
+
+  const handleSetBoardColor = async (color: string | null) => {
+    const b = board();
+    if (!b) return;
+    await api.updateBoard(b.id, b.title, color);
+    refetch();
+    setShowColorPicker(false);
+  };
+
   // --- Label management ---
 
   const handleCreateLabel = async (e: Event) => {
@@ -288,13 +342,93 @@ export default function BoardPage() {
     refetch();
   };
 
+  const drawerInputKeyDown = (e: KeyboardEvent, onEnter: () => void) => {
+    if (e.key === "Escape") { e.stopPropagation(); lc.close(); }
+    if (e.key === "Enter") { e.preventDefault(); onEnter(); }
+  };
+
+  const wrapSelection = (input: HTMLInputElement, marker: string) => {
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const val = input.value;
+    const sel = val.slice(start, end);
+    if (!sel) return;
+    const mlen = marker.length;
+    if (sel.startsWith(marker) && sel.endsWith(marker) && sel.length > mlen * 2) {
+      const unwrapped = sel.slice(mlen, -mlen);
+      input.value = val.slice(0, start) + unwrapped + val.slice(end);
+      input.setSelectionRange(start, start + unwrapped.length);
+    } else {
+      const wrapped = marker + sel + marker;
+      input.value = val.slice(0, start) + wrapped + val.slice(end);
+      input.setSelectionRange(start + mlen, start + mlen + sel.length);
+    }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  const labelInputKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+      e.preventDefault();
+      wrapSelection(e.currentTarget as HTMLInputElement, "**");
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "i") {
+      e.preventDefault();
+      wrapSelection(e.currentTarget as HTMLInputElement, "*");
+    }
+  };
+
   return (
-    <div class="board-page">
+    <div
+      class="board-page"
+      style={board()?.color ? { "background-color": board()!.color } : {}}
+      onClick={() => showColorPicker() && setShowColorPicker(false)}
+    >
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
         {(b) => (
           <>
             <div class="board-title-bar">
               <h2>{b().title}</h2>
+              <div class="board-color-area" onClick={(e) => e.stopPropagation()}>
+                <button
+                  class="board-color-btn"
+                  classList={{ "board-color-btn--active": showColorPicker() }}
+                  onClick={() => setShowColorPicker((v) => !v)}
+                  title="Board color"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 4.236 2.636 7.855 6.356 9.312C9.203 21.088 10 20.018 10 18.773v-1.12c-1.988.398-2.773-.506-3.084-1.154C6.664 15.956 6.232 15.665 5.8 15.4c-.388-.235-.04-.379.072-.367.574.08 1.028.558 1.39 1.086.27.397.566.784 1.004.784.452 0 .706-.123.852-.25.25-2.11 2.43-2.703 2.43-2.703s-1.548-.552-1.548-3v-.53C10 8.72 11.28 7 12 7s2 1.72 2 3.42v.53c0 2.448-1.548 3-1.548 3s2.18.592 2.43 2.703c.146.127.4.25.852.25.438 0 .734-.387 1.004-.784.362-.528.816-1.006 1.39-1.086.112-.012.46.132.072.367-.432.265-.864.556-1.116 1.099C16.773 17.147 15.988 18.051 14 17.653v1.12c0 1.245.797 2.315 1.644 2.539C19.364 19.855 22 16.236 22 12c0-5.523-4.477-10-10-10z" />
+                  </svg>
+                </button>
+                <Show when={showColorPicker()}>
+                  <div class="board-color-dropdown">
+                    <div class="board-color-grid">
+                      <For each={BOARD_COLORS}>
+                        {(color) => (
+                          <button
+                            class="board-color-swatch"
+                            classList={{ "board-color-swatch--active": b().color === color }}
+                            style={{ "background-color": color }}
+                            onClick={() => handleSetBoardColor(color)}
+                            title={color}
+                          >
+                            <Show when={b().color === color}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            </Show>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                    <button
+                      class="board-color-reset"
+                      onClick={() => handleSetBoardColor(null)}
+                    >
+                      Reset to default
+                    </button>
+                  </div>
+                </Show>
+              </div>
             </div>
             <div
               class="lists-container"
@@ -311,6 +445,7 @@ export default function BoardPage() {
                     onDeleteList={handleDeleteList}
                     onCardClick={handleCardClick}
                     onDropCard={handleDropCard}
+                    onMoveCard={handleMoveCard}
                   />
                 )}
               </For>
@@ -323,19 +458,12 @@ export default function BoardPage() {
               </div>
             </div>
 
-            {/* Right-side label drawer — always rendered for CSS transition */}
+            {/* Right-side label drawer */}
             <div class="label-drawer" classList={{ "label-drawer--open": lc.isOpen() }}>
               <div class="label-drawer-header">
                 <span>Labels</span>
                 <button class="label-drawer-close" onClick={lc.close} title="Close">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                  >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
@@ -363,26 +491,16 @@ export default function BoardPage() {
                             />
                             <span
                               class="label-drawer-name"
-                              onClick={() =>
-                                startEditLabel(label.id, label.name)
-                              }
+                              innerHTML={label.name.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*(.+?)\*/g, "<em>$1</em>")}
+                              onClick={() => startEditLabel(label.id, label.name)}
                               title="Click to rename"
-                            >
-                              {label.name}
-                            </span>
+                            />
                             <button
                               class="label-drawer-delete"
                               onClick={() => handleDeleteLabel(label.id)}
                               title="Delete label"
                             >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2.5"
-                              >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                 <line x1="18" y1="6" x2="6" y2="18" />
                                 <line x1="6" y1="6" x2="18" y2="18" />
                               </svg>
@@ -399,12 +517,14 @@ export default function BoardPage() {
                           class="label-drawer-edit-input"
                           type="text"
                           value={editingLabelName()}
-                          onInput={(e) =>
-                            setEditingLabelName(e.currentTarget.value)
-                          }
+                          onInput={(e) => setEditingLabelName(e.currentTarget.value)}
                           onKeyDown={(e) => {
+                            labelInputKeyDown(e);
                             if (e.key === "Enter") handleUpdateLabel(label.id);
-                            if (e.key === "Escape") setEditingLabelId(null);
+                            if (e.key === "Escape") {
+                              e.stopPropagation();
+                              setEditingLabelId(null);
+                            }
                           }}
                           onBlur={() => handleUpdateLabel(label.id)}
                         />
@@ -417,9 +537,14 @@ export default function BoardPage() {
               <form class="label-drawer-form" onSubmit={handleCreateLabel}>
                 <input
                   type="text"
-                  placeholder="New label name…"
+                  placeholder="New label name… (**bold** *italic*)"
                   value={newLabelName()}
                   onInput={(e) => setNewLabelName(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    labelInputKeyDown(e);
+                    drawerInputKeyDown(e, () => { /* submit via form */ });
+                    if (e.key === "Escape") { e.stopPropagation(); lc.close(); }
+                  }}
                   class="label-drawer-input"
                 />
                 <button type="submit" class="btn btn-primary btn-sm">

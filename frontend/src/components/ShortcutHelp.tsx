@@ -64,8 +64,14 @@ export default function ShortcutHelp(props: Props) {
         </div>
         <div class="shortcut-help-body">
           <Section title="Navigation">
-            <Row keys={["↑", "↓"]} desc="Move between cards in a list" />
+            <Row keys={["↑", "↓"]} desc="Move between cards" />
             <Row keys={["←", "→"]} desc="Jump to adjacent list" />
+          </Section>
+          <Section title="Move Card">
+            <Row keys={["Shift", "↑"]} desc="Move card up" />
+            <Row keys={["Shift", "↓"]} desc="Move card down" />
+            <Row keys={["Shift", "←"]} desc="Move card to prev list" />
+            <Row keys={["Shift", "→"]} desc="Move card to next list" />
           </Section>
           <Section title="Cards">
             <Row keys={["Enter"]} desc="Open focused card" />
@@ -75,9 +81,12 @@ export default function ShortcutHelp(props: Props) {
           </Section>
           <Section title="Board">
             <Row keys={["l"]} desc="Add new list" />
+            <Row keys={["g"]} desc="Toggle label panel" />
           </Section>
           <Section title="Card Detail">
             <Row keys={["Ctrl", "Enter"]} desc="Save" />
+            <Row keys={["Ctrl", "B"]} desc="Bold selection (title)" />
+            <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
             <Row keys={["Enter"]} desc="Title → focus editor" />
           </Section>

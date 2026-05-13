@@ -8,6 +8,7 @@ export interface Board {
   id: string;
   title: string;
   created_at: string;
+  color?: string;
 }
 
 export interface Card {
@@ -33,6 +34,7 @@ export interface BoardDetail {
   id: string;
   title: string;
   created_at: string;
+  color?: string;
   labels: Label[];
   lists: ListWithCards[];
 }

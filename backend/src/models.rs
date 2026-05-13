@@ -12,6 +12,8 @@ pub struct Board {
     pub id: String,
     pub title: String,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,6 +42,8 @@ pub struct BoardDetail {
     pub id: String,
     pub title: String,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub labels: Vec<Label>,
     pub lists: Vec<ListWithCards>,
 }
@@ -67,6 +71,7 @@ pub struct CreateBoard {
 #[derive(Debug, Deserialize)]
 pub struct UpdateBoard {
     pub title: String,
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
