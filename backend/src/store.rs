@@ -681,6 +681,10 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
             (board_id.clone(), archived_cards_dir(data_dir, board_id).join(format!("{card_id}.json")))
         }
     };
+    let card: Card = read_json(&path)?;
+    if !card.archived {
+        return Err(AppError::BadRequest("only archived cards can be permanently deleted".into()));
+    }
     fs::remove_file(&path)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     if att_dir.exists() {
