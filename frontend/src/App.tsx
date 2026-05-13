@@ -1,15 +1,59 @@
 import type { ParentProps } from "solid-js";
+import { Show } from "solid-js";
 import { A } from "@solidjs/router";
+import { LabelProvider, useLabelContext } from "./LabelContext";
+
+function AppHeader() {
+  const lc = useLabelContext();
+
+  return (
+    <header class="app-header">
+      <A href="/" class="app-logo">
+        Trello Clone
+      </A>
+      <div class="app-header-actions">
+        <Show when={lc.hasBoard()}>
+          <button
+            class="btn-header-labels"
+            classList={{ "btn-header-labels--active": lc.isOpen() }}
+            onClick={lc.toggle}
+            title="Manage labels"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+            Labels
+          </button>
+        </Show>
+        <button
+          class="btn-header-shortcuts"
+          onClick={() =>
+            document.dispatchEvent(new CustomEvent("toggle-shortcuts"))
+          }
+          title="Keyboard shortcuts"
+        >
+          <kbd>?</kbd>
+        </button>
+      </div>
+    </header>
+  );
+}
 
 export default function App(props: ParentProps) {
   return (
-    <div class="app">
-      <header class="app-header">
-        <A href="/" class="app-logo">
-          Trello Clone
-        </A>
-      </header>
-      <main class="app-main">{props.children}</main>
-    </div>
+    <LabelProvider>
+      <div class="app">
+        <AppHeader />
+        <main class="app-main">{props.children}</main>
+      </div>
+    </LabelProvider>
   );
 }

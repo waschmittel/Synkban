@@ -6,7 +6,7 @@ export default function Home() {
   const [boards, { refetch }] = createResource(() => api.listBoards());
   let lastMtime = 0;
   onMount(() => {
-    const id = setInterval(async () => {
+    const pollId = setInterval(async () => {
       try {
         const { mtime } = await api.checkChanges();
         if (mtime !== lastMtime) {
@@ -15,7 +15,26 @@ export default function Home() {
         }
       } catch { /* ignore poll errors */ }
     }, 15000);
-    onCleanup(() => clearInterval(id));
+
+    const handleKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey
+      ) return;
+      if (e.key === "n") {
+        e.preventDefault();
+        setAdding(true);
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    onCleanup(() => {
+      clearInterval(pollId);
+      document.removeEventListener("keydown", handleKey);
+    });
   });
 
   const [newTitle, setNewTitle] = createSignal("");
