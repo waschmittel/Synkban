@@ -79,9 +79,10 @@ data/boards/{board-id}/archived_cards/{card-id}.json
 ```
 
 - Deleting a board: `remove_dir_all` on its directory (cascades lists + cards).
-- Deleting a list: archives all cards in the list (moves them to `data/boards/{bid}/archived_cards/` with `archived: true`), then `remove_dir_all` on the list directory. Frontend shows a confirmation dialog when deleting a list that contains cards.
+- Deleting a list: archives all cards in the list (moves them to `data/boards/{bid}/archived_cards/` with `archived: true`), then `remove_dir_all` on the list directory. Cleans up empty `lists/` dir. Frontend shows a confirmation dialog when deleting a list that contains cards.
 - Moving a card between lists: write to new location, delete from old location.
-- Attachment binaries: `data/boards/{bid}/attachments/{cid}/{att-id}` (no extension). Metadata lives in card JSON.
+- Attachment binaries: `data/boards/{bid}/attachments/{cid}/{att-id}` (no extension). Thumbnails at `{att-id}_thumb`. Metadata lives in card JSON.
+- **Empty dir cleanup** — `remove_dir_if_empty()` in `store.rs` cleans up empty parent dirs after deletions: `attachments/{cid}/`, `attachments/`, `archived_cards/`, `lists/`. Tracked in file ops log.
 - Finding a card/list requires scanning board directories (no index). Acceptable at MVP scale.
 
 ## API Endpoints

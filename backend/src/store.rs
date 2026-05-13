@@ -25,6 +25,15 @@ pub fn drain_file_ops(data_dir: &Path) -> Vec<String> {
     })
 }
 
+fn remove_dir_if_empty(dir: &Path) {
+    if let Ok(mut entries) = fs::read_dir(dir) {
+        if entries.next().is_none() {
+            track("deleted empty dir", dir);
+            let _ = fs::remove_dir(dir);
+        }
+    }
+}
+
 // Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
 // Interleaved hues: 0°, 180°, 90°, 270°, 45°, 225°, 135°, 315°, 30°, 210°, 150°, 330°
 const LABEL_COLORS: &[&str] = &[
@@ -527,6 +536,8 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
     }
     track("deleted dir", &dir);
     fs::remove_dir_all(&dir)?;
+    let lists_parent = lists_dir(data_dir, &board_id);
+    remove_dir_if_empty(&lists_parent);
     Ok(())
 }
 
@@ -677,6 +688,9 @@ pub fn update_card(
         write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
         track("deleted", &old_path);
         fs::remove_file(&old_path)?;
+        if let Some(parent) = old_path.parent() {
+            remove_dir_if_empty(parent);
+        }
         return Ok(card);
     }
 
@@ -718,6 +732,12 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
         track("deleted dir", &att_dir);
         let _ = fs::remove_dir_all(&att_dir);
     }
+    if let Some(parent) = att_dir.parent() {
+        remove_dir_if_empty(parent);
+    }
+    // Clean up archived_cards/ dir if empty after deleting orphaned card
+    let orphan_dir = archived_cards_dir(data_dir, &board_id);
+    remove_dir_if_empty(&orphan_dir);
     Ok(())
 }
 
@@ -799,6 +819,10 @@ pub fn delete_attachment(
         track("deleted", &thumb_file);
     }
     let _ = fs::remove_file(&thumb_file);
+    remove_dir_if_empty(&att_dir);
+    if let Some(parent) = att_dir.parent() {
+        remove_dir_if_empty(parent);
+    }
     Ok(())
 }
 
