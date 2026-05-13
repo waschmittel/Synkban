@@ -59,6 +59,7 @@ export default function BoardPage() {
   const [showArchive, setShowArchive] = createSignal(false);
   const [archivedCards, setArchivedCards] = createSignal<CardType[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
+  const [confirmDeleteCardId, setConfirmDeleteCardId] = createSignal<string | null>(null);
 
   // Board rename state
   const [showRename, setShowRename] = createSignal(false);
@@ -273,6 +274,11 @@ export default function BoardPage() {
     await api.restoreCard(cardId);
     setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
     refetch();
+  };
+
+  const handleDeleteArchivedCard = async (cardId: string) => {
+    await api.deleteCard(cardId);
+    setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
   };
 
   // --- List / Card actions ---
@@ -896,12 +902,43 @@ export default function BoardPage() {
                 {(card) => (
                   <div class="archive-card-item">
                     <span class="archive-card-title" innerHTML={renderTitle(card.title)} />
-                    <button
-                      class="btn btn-primary btn-sm"
-                      onClick={() => handleRestoreCard(card.id)}
-                    >
-                      Restore
-                    </button>
+                    <div class="archive-card-actions">
+                      <Show
+                        when={confirmDeleteCardId() === card.id}
+                        fallback={
+                          <>
+                            <button
+                              class="btn btn-primary btn-sm"
+                              onClick={() => handleRestoreCard(card.id)}
+                            >
+                              Restore
+                            </button>
+                            <button
+                              class="btn btn-danger btn-sm"
+                              onClick={() => setConfirmDeleteCardId(card.id)}
+                              title="Permanently delete"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        }
+                      >
+                        <span class="archive-confirm-text">Delete permanently?</span>
+                        <button
+                          class="btn btn-danger btn-sm"
+                          ref={(el) => requestAnimationFrame(() => el.focus())}
+                          onClick={() => { handleDeleteArchivedCard(card.id); setConfirmDeleteCardId(null); }}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          class="btn btn-cancel btn-sm"
+                          onClick={() => setConfirmDeleteCardId(null)}
+                        >
+                          No
+                        </button>
+                      </Show>
+                    </div>
                   </div>
                 )}
               </For>

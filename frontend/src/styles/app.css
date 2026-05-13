@@ -1677,6 +1677,20 @@ body {
   word-break: break-word;
 }
 
+.archive-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.archive-confirm-text {
+  font-size: 12px;
+  color: #eb5a46;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .archive-empty {
   font-size: 14px;
   color: #8993a4;
@@ -1992,11 +2006,40 @@ body {
   font-size: 13px;
   outline: none;
   transition: border-color 0.15s;
-  font-family: inherit;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  letter-spacing: 0.5px;
+  width: 120px;
 }
 
 .due-date-input:focus {
   border-color: #0079bf;
+}
+
+.due-date-picker-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.due-date-calendar-btn {
+  background: none;
+  border: 1px solid #dfe1e6;
+  border-radius: 4px;
+  color: #5e6c84;
+  cursor: pointer;
+  padding: 5px 6px;
+  display: flex;
+  align-items: center;
+  transition: color 0.1s, background 0.1s, border-color 0.1s;
+}
+
+.due-date-calendar-btn:hover {
+  color: #0079bf;
+  border-color: #0079bf;
+  background: rgba(0, 121, 191, 0.06);
 }
 
 .due-date-clear {
