@@ -442,6 +442,7 @@ test.describe("Labels", () => {
 
     // Open card detail and assign label
     await page.locator(".card").click();
+    await page.locator(".label-add-btn").click();
     await expect(page.locator(".label-picker")).toBeVisible();
     await page.locator(".label-picker-item").click();
     await expect(page.locator(".label-picker-item")).toHaveClass(/label-picker-item--selected/);

@@ -1,6 +1,7 @@
 import {
   createResource,
   createSignal,
+  createEffect,
   For,
   Show,
   onMount,
@@ -47,6 +48,22 @@ export default function BoardPage() {
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastFocusedCardId, setLastFocusedCardId] = createSignal<string | null>(null);
   const [showColorPicker, setShowColorPicker] = createSignal(false);
+  const [pendingFocusCardId, setPendingFocusCardId] = createSignal<string | null>(null);
+
+  // Restore focus to a moved card after board resource re-renders.
+  // requestAnimationFrame runs after SolidJS flushes DOM updates for the new board() value.
+  createEffect(() => {
+    board(); // subscribe
+    const cardId = pendingFocusCardId();
+    if (!cardId) return;
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
+      if (el) {
+        setPendingFocusCardId(null);
+        el.focus();
+      }
+    });
+  });
 
   // Label panel state
   const [newLabelName, setNewLabelName] = createSignal("");
@@ -106,22 +123,54 @@ export default function BoardPage() {
           (focused as HTMLElement).click();
         }
       } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key) && !e.shiftKey) {
-        const focused = document.activeElement;
-        if (!focused || !focused.classList.contains("card")) {
+        const focused = document.activeElement as HTMLElement | null;
+        const isCard = focused?.classList.contains("card");
+        // add-trigger inside a .list (not the add-list-wrapper trigger)
+        const isCardListTrigger =
+          focused?.classList.contains("add-trigger") &&
+          !!focused.closest(".list") &&
+          !focused.closest(".add-list-wrapper");
+
+        if (!isCard && !isCardListTrigger) {
+          // Nothing relevant focused — jump to first/last card
           e.preventDefault();
           const lists = document.querySelectorAll(".list");
           if (e.key === "ArrowDown" || e.key === "ArrowRight") {
             const firstList = lists[0];
-            const firstCard = firstList?.querySelector(".card") as HTMLElement | null;
+            const firstCard = firstList?.querySelector<HTMLElement>(".card");
             if (firstCard) firstCard.focus();
-            else (firstList?.querySelector(".add-trigger") as HTMLElement | null)?.focus();
+            else firstList?.querySelector<HTMLElement>(".add-trigger")?.focus();
           } else {
             const lastList = lists[lists.length - 1];
-            const cards = lastList?.querySelectorAll(".card");
-            const lastCard = cards?.[cards.length - 1] as HTMLElement | null;
+            const cards = lastList?.querySelectorAll<HTMLElement>(".card");
+            const lastCard = cards?.[cards.length - 1];
             if (lastCard) lastCard.focus();
-            else (lastList?.querySelector(".add-trigger") as HTMLElement | null)?.focus();
+            else lastList?.querySelector<HTMLElement>(".add-trigger")?.focus();
           }
+        } else if (isCardListTrigger) {
+          // add-trigger focused: navigate between lists
+          const currentList = focused!.closest(".list") as HTMLElement;
+          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+            e.preventDefault();
+            const adj = (e.key === "ArrowLeft"
+              ? currentList.previousElementSibling
+              : currentList.nextElementSibling) as HTMLElement | null;
+            if (adj?.classList.contains("list")) {
+              if (e.key === "ArrowRight") {
+                const first = adj.querySelector<HTMLElement>(".card");
+                first ? first.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
+              } else {
+                const cards = adj.querySelectorAll<HTMLElement>(".card");
+                const last = cards[cards.length - 1];
+                last ? last.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
+              }
+            }
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const cards = currentList.querySelectorAll<HTMLElement>(".card");
+            cards[cards.length - 1]?.focus();
+          }
+          // ArrowDown: let browser handle (button click activates form via Enter/Space)
         }
       }
     };
@@ -181,12 +230,9 @@ export default function BoardPage() {
     targetListId: string,
     position: number
   ) => {
+    setPendingFocusCardId(cardId);
     await api.updateCard(cardId, { list_id: targetListId, position });
     refetch();
-    // Restore focus after refetch redraws
-    requestAnimationFrame(() => {
-      (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
-    });
   };
 
   const handleCardClick = (card: CardType) => {
@@ -340,11 +386,6 @@ export default function BoardPage() {
     await api.updateLabel(labelId, name);
     setEditingLabelId(null);
     refetch();
-  };
-
-  const drawerInputKeyDown = (e: KeyboardEvent, onEnter: () => void) => {
-    if (e.key === "Escape") { e.stopPropagation(); lc.close(); }
-    if (e.key === "Enter") { e.preventDefault(); onEnter(); }
   };
 
   const wrapSelection = (input: HTMLInputElement, marker: string) => {
@@ -542,7 +583,6 @@ export default function BoardPage() {
                   onInput={(e) => setNewLabelName(e.currentTarget.value)}
                   onKeyDown={(e) => {
                     labelInputKeyDown(e);
-                    drawerInputKeyDown(e, () => { /* submit via form */ });
                     if (e.key === "Escape") { e.stopPropagation(); lc.close(); }
                   }}
                   class="label-drawer-input"
