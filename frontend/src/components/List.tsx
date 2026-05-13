@@ -7,7 +7,7 @@ interface Props {
   list: ListWithCards;
   labels: Label[];
   onAddCard: (listId: string, title: string) => void;
-  onDeleteCard: (cardId: string) => void;
+  onArchiveCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
   onCardClick: (card: CardType) => void;
   onDropCard: (cardId: string, targetListId: string, position: number) => void;
@@ -120,7 +120,7 @@ export default function List(props: Props) {
             <Card
               card={card}
               labels={props.labels}
-              onDelete={props.onDeleteCard}
+              onArchive={props.onArchiveCard}
               onClick={props.onCardClick}
               onMove={props.onMoveCard}
             />

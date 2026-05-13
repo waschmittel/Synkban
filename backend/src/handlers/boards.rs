@@ -47,3 +47,11 @@ pub async fn delete_board(
     store::delete_board(&data_dir, &path.into_inner())?;
     Ok(HttpResponse::NoContent().finish())
 }
+
+pub async fn get_archived_cards(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let cards = store::get_archived_cards(&data_dir, &path.into_inner())?;
+    Ok(HttpResponse::Ok().json(cards))
+}

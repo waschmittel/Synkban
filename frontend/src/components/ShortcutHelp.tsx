@@ -77,7 +77,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Enter"]} desc="Open focused card" />
             <Row keys={["e"]} desc="Edit focused card" />
             <Row keys={["n"]} desc="Add card to current list" />
-            <Row keys={["Del"]} desc="Delete focused card" />
+            <Row keys={["Del"]} desc="Archive focused card (confirm)" />
           </Section>
           <Section title="Board">
             <Row keys={["l"]} desc="Add new list" />

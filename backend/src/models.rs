@@ -7,6 +7,15 @@ pub struct Label {
     pub color: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attachment {
+    pub id: String,
+    pub filename: String,
+    pub size: u64,
+    pub content_type: String,
+    pub created_at: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Board {
     pub id: String,
@@ -35,6 +44,10 @@ pub struct Card {
     pub created_at: String,
     #[serde(default)]
     pub label_ids: Vec<String>,
+    #[serde(default)]
+    pub archived: bool,
+    #[serde(default)]
+    pub attachments: Vec<Attachment>,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,6 +110,7 @@ pub struct UpdateCard {
     pub position: Option<f64>,
     pub list_id: Option<String>,
     pub label_ids: Option<Vec<String>>,
+    pub archived: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,4 +121,9 @@ pub struct CreateLabel {
 #[derive(Debug, Deserialize)]
 pub struct UpdateLabel {
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AttachmentQuery {
+    pub filename: String,
 }

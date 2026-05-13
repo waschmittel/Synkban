@@ -4,7 +4,7 @@ import type { Card as CardType, Label } from "../types";
 interface Props {
   card: CardType;
   labels: Label[];
-  onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
   onClick: (card: CardType) => void;
   onMove: (cardId: string, targetListId: string, position: number) => void;
 }
@@ -48,7 +48,7 @@ export default function Card(props: Props) {
     }
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      props.onDelete(props.card.id);
+      props.onArchive(props.card.id);
       return;
     }
 
@@ -58,11 +58,9 @@ export default function Card(props: Props) {
       // Move card
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        // Find next visible card sibling
         let next = el.nextElementSibling as HTMLElement | null;
         while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
         if (!next) return;
-        // Position: between next and next.next
         let afterNext = next.nextElementSibling as HTMLElement | null;
         while (afterNext && !afterNext.classList.contains("card")) afterNext = afterNext.nextElementSibling as HTMLElement | null;
         const p1 = parseFloat(next.dataset.cardPosition || "0");
@@ -138,6 +136,7 @@ export default function Card(props: Props) {
     props.labels.filter((l) => props.card.label_ids?.includes(l.id));
 
   const hasDescription = () => !!props.card.description;
+  const hasAttachments = () => (props.card.attachments?.length ?? 0) > 0;
 
   return (
     <div
@@ -168,44 +167,43 @@ export default function Card(props: Props) {
         </Show>
         <div class="card-content">
           <span class="card-title" innerHTML={renderTitle(props.card.title)} />
-          <Show when={hasDescription()}>
+          <Show when={hasDescription() || hasAttachments()}>
             <div class="card-badges">
-              <span class="card-badge" title="Has description">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="17" y1="10" x2="3" y2="10" />
-                  <line x1="21" y1="6" x2="3" y2="6" />
-                  <line x1="21" y1="14" x2="3" y2="14" />
-                  <line x1="17" y1="18" x2="3" y2="18" />
-                </svg>
-              </span>
+              <Show when={hasDescription()}>
+                <span class="card-badge" title="Has description">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="17" y1="10" x2="3" y2="10" />
+                    <line x1="21" y1="6" x2="3" y2="6" />
+                    <line x1="21" y1="14" x2="3" y2="14" />
+                    <line x1="17" y1="18" x2="3" y2="18" />
+                  </svg>
+                </span>
+              </Show>
+              <Show when={hasAttachments()}>
+                <span class="card-badge" title={`${props.card.attachments.length} attachment(s)`}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                  {props.card.attachments.length}
+                </span>
+              </Show>
             </div>
           </Show>
         </div>
       </div>
       <div class="card-actions">
         <button
-          class="card-edit"
+          class="card-archive"
           onClick={(e) => {
             e.stopPropagation();
-            props.onClick(props.card);
+            props.onArchive(props.card.id);
           }}
-          title="Edit card"
+          title="Archive card"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-          </svg>
-        </button>
-        <button
-          class="card-delete"
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onDelete(props.card.id);
-          }}
-          title="Delete card"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+            <polyline points="21 8 21 21 3 21 3 8" />
+            <rect x="1" y="3" width="22" height="5" />
+            <line x1="10" y1="12" x2="14" y2="12" />
           </svg>
         </button>
       </div>

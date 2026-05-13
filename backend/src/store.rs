@@ -41,6 +41,10 @@ fn cards_dir(data_dir: &Path, board_id: &str, list_id: &str) -> PathBuf {
     list_dir(data_dir, board_id, list_id).join("cards")
 }
 
+fn attachment_dir(data_dir: &Path, board_id: &str, card_id: &str) -> PathBuf {
+    board_dir(data_dir, board_id).join("attachments").join(card_id)
+}
+
 fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, AppError> {
     let data = fs::read_to_string(path)?;
     serde_json::from_str(&data).map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
@@ -216,7 +220,10 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
                             let card_entry = card_entry?;
                             let path = card_entry.path();
                             if path.extension().is_some_and(|e| e == "json") {
-                                cards.push(read_json::<Card>(&path)?);
+                                let card = read_json::<Card>(&path)?;
+                                if !card.archived {
+                                    cards.push(card);
+                                }
                             }
                         }
                     }
@@ -243,6 +250,41 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
         labels: bf.labels,
         lists: lists_with_cards,
     })
+}
+
+pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, AppError> {
+    let board_json = board_dir(data_dir, board_id).join("board.json");
+    if !board_json.exists() {
+        return Err(AppError::NotFound("Board not found".into()));
+    }
+    let mut archived = Vec::new();
+    let lists_path = lists_dir(data_dir, board_id);
+    if lists_path.exists() {
+        for entry in fs::read_dir(&lists_path)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                let list_json = entry.path().join("list.json");
+                if list_json.exists() {
+                    let list: List = read_json(&list_json)?;
+                    let cards_path = cards_dir(data_dir, board_id, &list.id);
+                    if cards_path.exists() {
+                        for card_entry in fs::read_dir(&cards_path)? {
+                            let card_entry = card_entry?;
+                            let path = card_entry.path();
+                            if path.extension().is_some_and(|e| e == "json") {
+                                let card = read_json::<Card>(&path)?;
+                                if card.archived {
+                                    archived.push(card);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    archived.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(archived)
 }
 
 pub fn update_board(data_dir: &Path, board_id: &str, title: &str, color: Option<&str>) -> Result<Board, AppError> {
@@ -486,6 +528,8 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         position: max_pos + 1.0,
         created_at: now_timestamp(),
         label_ids: Vec::new(),
+        archived: false,
+        attachments: Vec::new(),
     };
     write_json(&dir.join(format!("{id}.json")), &card)?;
     Ok(card)
@@ -517,6 +561,7 @@ pub fn update_card(
     position: Option<f64>,
     new_list_id: Option<&str>,
     label_ids: Option<&[String]>,
+    archived: Option<bool>,
 ) -> Result<Card, AppError> {
     let (board_id, old_list_id) = find_board_and_list_for_card(data_dir, card_id)?;
     let old_path = cards_dir(data_dir, &board_id, &old_list_id).join(format!("{card_id}.json"));
@@ -533,6 +578,9 @@ pub fn update_card(
     }
     if let Some(ids) = label_ids {
         card.label_ids = ids.to_vec();
+    }
+    if let Some(a) = archived {
+        card.archived = a;
     }
 
     if let Some(target_list_id) = new_list_id {
@@ -555,5 +603,72 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
     let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
     let path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
     fs::remove_file(&path)?;
+    Ok(())
+}
+
+// --- Attachments ---
+
+pub fn create_attachment(
+    data_dir: &Path,
+    card_id: &str,
+    filename: &str,
+    content_type: &str,
+    data: &[u8],
+) -> Result<Attachment, AppError> {
+    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
+    let att_id = uuid::Uuid::new_v4().to_string();
+
+    let att_dir = attachment_dir(data_dir, &board_id, card_id);
+    fs::create_dir_all(&att_dir)?;
+    fs::write(att_dir.join(&att_id), data)?;
+
+    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+    let mut card: Card = read_json(&card_path)?;
+    let att = Attachment {
+        id: att_id,
+        filename: filename.to_string(),
+        size: data.len() as u64,
+        content_type: content_type.to_string(),
+        created_at: now_timestamp(),
+    };
+    card.attachments.push(att.clone());
+    write_json(&card_path, &card)?;
+    Ok(att)
+}
+
+pub fn get_attachment_data(
+    data_dir: &Path,
+    card_id: &str,
+    att_id: &str,
+) -> Result<(Attachment, Vec<u8>), AppError> {
+    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
+    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+    let card: Card = read_json(&card_path)?;
+    let att = card
+        .attachments
+        .into_iter()
+        .find(|a| a.id == att_id)
+        .ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    let att_dir = attachment_dir(data_dir, &board_id, card_id);
+    let data = fs::read(att_dir.join(att_id))?;
+    Ok((att, data))
+}
+
+pub fn delete_attachment(
+    data_dir: &Path,
+    card_id: &str,
+    att_id: &str,
+) -> Result<(), AppError> {
+    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
+    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+    let mut card: Card = read_json(&card_path)?;
+    let before = card.attachments.len();
+    card.attachments.retain(|a| a.id != att_id);
+    if card.attachments.len() == before {
+        return Err(AppError::NotFound("Attachment not found".into()));
+    }
+    write_json(&card_path, &card)?;
+    let att_dir = attachment_dir(data_dir, &board_id, card_id);
+    let _ = fs::remove_file(att_dir.join(att_id));
     Ok(())
 }

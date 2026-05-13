@@ -4,6 +4,14 @@ export interface Label {
   color: string;
 }
 
+export interface Attachment {
+  id: string;
+  filename: string;
+  size: number;
+  content_type: string;
+  created_at: string;
+}
+
 export interface Board {
   id: string;
   title: string;
@@ -19,6 +27,8 @@ export interface Card {
   position: number;
   created_at: string;
   label_ids: string[];
+  archived: boolean;
+  attachments: Attachment[];
 }
 
 export interface ListWithCards {

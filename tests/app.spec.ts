@@ -140,14 +140,16 @@ test.describe("Cards", () => {
     await expect(page.locator(".card-title")).toHaveText("My Task");
   });
 
-  test("delete a card", async ({ page }) => {
+  test("archive a card", async ({ page }) => {
     await page.locator(".list .add-trigger").click();
     await page.locator(".list .add-form input").fill("Temp Card");
     await page.locator(".list .add-form input").press("Enter");
     await expect(page.locator(".card-title")).toHaveCount(1);
 
     await page.locator(".card").hover();
-    await page.locator(".card-delete").click();
+    await page.locator(".card-archive").click();
+    // Confirm the archive dialog
+    await page.locator(".unsaved-dialog .btn-primary").click();
     await expect(page.locator(".card-title")).toHaveCount(0);
   });
 
@@ -331,10 +333,12 @@ test.describe("Keyboard Navigation", () => {
     await expect(page.locator(".list").nth(0).locator(".card").nth(0)).toBeFocused();
   });
 
-  test("Delete removes focused card", async ({ page }) => {
+  test("Delete archives focused card after confirmation", async ({ page }) => {
     await page.locator(".list").nth(0).locator(".card").nth(0).focus();
     await expect(page.locator(".list").nth(0).locator(".card-title").nth(0)).toHaveText("Card 1");
     await page.keyboard.press("Delete");
+    // Confirm the archive dialog
+    await page.locator(".unsaved-dialog .btn-primary").click();
     await expect(page.locator(".card")).toHaveCount(3);
     await expect(page.locator(".list").nth(0).locator(".card-title").nth(0)).not.toHaveText("Card 1");
   });

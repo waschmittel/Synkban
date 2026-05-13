@@ -5,6 +5,7 @@ use std::fmt;
 pub enum AppError {
     NotFound(String),
     Io(std::io::Error),
+    TooLarge,
 }
 
 impl fmt::Display for AppError {
@@ -12,6 +13,7 @@ impl fmt::Display for AppError {
         match self {
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::Io(e) => write!(f, "IO error: {e}"),
+            AppError::TooLarge => write!(f, "Payload too large"),
         }
     }
 }
@@ -24,6 +26,10 @@ impl ResponseError for AppError {
             }
             AppError::Io(e) => {
                 HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()}))
+            }
+            AppError::TooLarge => {
+                HttpResponse::PayloadTooLarge()
+                    .json(serde_json::json!({"error": "File too large (max 50 MB)"}))
             }
         }
     }

@@ -16,6 +16,7 @@ import AddForm from "../components/AddForm";
 import CardDetail from "../components/CardDetail";
 import ShortcutHelp from "../components/ShortcutHelp";
 import { useLabelContext } from "../LabelContext";
+import { renderTitle } from "../components/Card";
 
 const BOARD_COLORS = [
   "#0079bf", "#026aa7", "#5ba4cf", "#29cce5",
@@ -33,7 +34,8 @@ function isInInput(target: EventTarget | null): boolean {
     el.contentEditable === "true" ||
     !!el.closest(".modal-overlay") ||
     !!el.closest(".label-drawer") ||
-    !!el.closest(".shortcut-help-overlay")
+    !!el.closest(".shortcut-help-overlay") ||
+    !!el.closest(".archive-overlay")
   );
 }
 
@@ -51,8 +53,17 @@ export default function BoardPage() {
   const [showColorPicker, setShowColorPicker] = createSignal(false);
   const [pendingFocusCardId, setPendingFocusCardId] = createSignal<string | null>(null);
 
+  // Archive state
+  const [confirmArchiveCardId, setConfirmArchiveCardId] = createSignal<string | null>(null);
+  const [showArchive, setShowArchive] = createSignal(false);
+  const [archivedCards, setArchivedCards] = createSignal<CardType[]>([]);
+  const [archiveLoading, setArchiveLoading] = createSignal(false);
+
+  // Board rename state
+  const [showRename, setShowRename] = createSignal(false);
+  const [renameValue, setRenameValue] = createSignal("");
+
   // Restore focus to a moved card after board resource re-renders.
-  // requestAnimationFrame runs after SolidJS flushes DOM updates for the new board() value.
   createEffect(() => {
     board(); // only dependency — fires after DOM update from refetch
     const cardId = untrack(pendingFocusCardId); // read without tracking
@@ -61,6 +72,12 @@ export default function BoardPage() {
     requestAnimationFrame(() => {
       (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
     });
+  });
+
+  // Sync --board-color CSS variable to header and body.
+  createEffect(() => {
+    const color = board()?.color ?? "#0079bf";
+    document.documentElement.style.setProperty("--board-color", color);
   });
 
   // Label panel state
@@ -77,6 +94,10 @@ export default function BoardPage() {
         const { mtime } = await api.checkChanges();
         if (mtime !== lastMtime) {
           lastMtime = mtime;
+          // Preserve focused card across refetch-triggered DOM recreation
+          const focused = document.activeElement as HTMLElement | null;
+          const cardId = focused?.dataset.cardId;
+          if (cardId) setPendingFocusCardId(cardId);
           refetch();
         }
       } catch { /* ignore */ }
@@ -84,6 +105,8 @@ export default function BoardPage() {
 
     const handleGlobalKey = (e: KeyboardEvent) => {
       if (isInInput(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // Block global shortcuts when confirm dialog is open
+      if (confirmArchiveCardId()) return;
 
       if (e.key === "?") {
         e.preventDefault();
@@ -91,6 +114,8 @@ export default function BoardPage() {
       } else if (e.key === "Escape") {
         if (showHelp()) {
           setShowHelp(false);
+        } else if (showArchive()) {
+          setShowArchive(false);
         } else if (showColorPicker()) {
           setShowColorPicker(false);
         } else {
@@ -123,14 +148,12 @@ export default function BoardPage() {
       } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key) && !e.shiftKey) {
         const focused = document.activeElement as HTMLElement | null;
         const isCard = focused?.classList.contains("card");
-        // add-trigger inside a .list (not the add-list-wrapper trigger)
         const isCardListTrigger =
           focused?.classList.contains("add-trigger") &&
           !!focused.closest(".list") &&
           !focused.closest(".add-list-wrapper");
 
         if (!isCard && !isCardListTrigger) {
-          // Nothing relevant focused — jump to first/last card
           e.preventDefault();
           const lists = document.querySelectorAll(".list");
           if (e.key === "ArrowDown" || e.key === "ArrowRight") {
@@ -146,7 +169,6 @@ export default function BoardPage() {
             else lastList?.querySelector<HTMLElement>(".add-trigger")?.focus();
           }
         } else if (isCardListTrigger) {
-          // add-trigger focused: navigate between lists
           const currentList = focused!.closest(".list") as HTMLElement;
           if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
             e.preventDefault();
@@ -168,7 +190,6 @@ export default function BoardPage() {
             const cards = currentList.querySelectorAll<HTMLElement>(".card");
             cards[cards.length - 1]?.focus();
           }
-          // ArrowDown: let browser handle (button click activates form via Enter/Space)
         }
       }
     };
@@ -190,8 +211,62 @@ export default function BoardPage() {
         "toggle-shortcuts",
         handleToggleShortcuts as EventListener
       );
+      document.documentElement.style.setProperty("--board-color", "#0079bf");
     });
   });
+
+  // --- Board rename ---
+
+  const startRename = () => {
+    setRenameValue(board()?.title ?? "");
+    setShowRename(true);
+  };
+
+  const commitRename = async () => {
+    const name = renameValue().trim();
+    const b = board();
+    if (name && b && name !== b.title) {
+      await api.updateBoard(b.id, name, b.color ?? null);
+      refetch();
+    }
+    setShowRename(false);
+  };
+
+  const cancelRename = () => setShowRename(false);
+
+  // --- Archive ---
+
+  const handleArchiveCard = (cardId: string) => {
+    setConfirmArchiveCardId(cardId);
+  };
+
+  const confirmArchive = async () => {
+    const id = confirmArchiveCardId();
+    if (!id) return;
+    await api.archiveCard(id);
+    if (lastFocusedCardId() === id) setLastFocusedCardId(null);
+    setConfirmArchiveCardId(null);
+    refetch();
+  };
+
+  const openArchive = async () => {
+    setArchiveLoading(true);
+    setShowArchive(true);
+    try {
+      const cards = await api.getArchivedCards(params.id);
+      setArchivedCards(cards);
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
+  const handleRestoreCard = async (cardId: string) => {
+    await api.restoreCard(cardId);
+    setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
+    refetch();
+  };
+
+  // --- List / Card actions ---
 
   const handleAddList = async (title: string) => {
     await api.createList(params.id, title);
@@ -200,12 +275,6 @@ export default function BoardPage() {
 
   const handleAddCard = async (listId: string, title: string) => {
     await api.createCard(listId, title);
-    refetch();
-  };
-
-  const handleDeleteCard = async (cardId: string) => {
-    await api.deleteCard(cardId);
-    if (lastFocusedCardId() === cardId) setLastFocusedCardId(null);
     refetch();
   };
 
@@ -266,6 +335,8 @@ export default function BoardPage() {
       });
     }
   };
+
+  // --- List drag ---
 
   const handleListDragOver = (e: DragEvent) => {
     if (!e.dataTransfer?.types.includes("application/list-id")) return;
@@ -419,14 +490,49 @@ export default function BoardPage() {
   return (
     <div
       class="board-page"
-      style={board()?.color ? { "background-color": board()!.color } : {}}
       onClick={() => showColorPicker() && setShowColorPicker(false)}
     >
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
         {(b) => (
           <>
             <div class="board-title-bar">
-              <h2>{b().title}</h2>
+              <Show
+                when={showRename()}
+                fallback={
+                  <h2
+                    class="board-title-text"
+                    onClick={startRename}
+                    title="Click to rename"
+                  >
+                    {b().title}
+                  </h2>
+                }
+              >
+                <input
+                  class="board-title-input"
+                  type="text"
+                  ref={(el) => requestAnimationFrame(() => { el.focus(); el.select(); })}
+                  value={renameValue()}
+                  onInput={(e) => setRenameValue(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                    if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
+                  }}
+                  onBlur={commitRename}
+                />
+              </Show>
+              <button
+                class="board-archive-btn"
+                onClick={openArchive}
+                title="View archived cards"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="21 8 21 21 3 21 3 8" />
+                  <rect x="1" y="3" width="22" height="5" />
+                  <line x1="10" y1="12" x2="14" y2="12" />
+                </svg>
+                Archive
+              </button>
               <div class="board-color-area" onClick={(e) => e.stopPropagation()}>
                 <button
                   class="board-color-btn"
@@ -480,7 +586,7 @@ export default function BoardPage() {
                     list={list}
                     labels={b().labels}
                     onAddCard={handleAddCard}
-                    onDeleteCard={handleDeleteCard}
+                    onArchiveCard={handleArchiveCard}
                     onDeleteList={handleDeleteList}
                     onCardClick={handleCardClick}
                     onDropCard={handleDropCard}
@@ -608,6 +714,87 @@ export default function BoardPage() {
             onClose={handleModalClose}
           />
         )}
+      </Show>
+
+      {/* Archive confirmation dialog */}
+      <Show when={confirmArchiveCardId()}>
+        <div
+          class="unsaved-overlay archive-overlay"
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Escape") { e.preventDefault(); setConfirmArchiveCardId(null); }
+            if (e.key === "Enter") { e.preventDefault(); (document.activeElement as HTMLElement | null)?.click(); }
+          }}
+        >
+          <div class="unsaved-dialog">
+            <p>Archive this card?</p>
+            <div class="unsaved-dialog-actions">
+              <button
+                ref={(el) => requestAnimationFrame(() => el.focus())}
+                class="btn btn-primary"
+                onClick={confirmArchive}
+              >
+                Archive
+              </button>
+              <button
+                class="btn btn-cancel"
+                onClick={() => setConfirmArchiveCardId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Archive view modal */}
+      <Show when={showArchive()}>
+        <div
+          class="archive-overlay archive-modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowArchive(false); }}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Escape") setShowArchive(false);
+          }}
+        >
+          <div class="archive-modal">
+            <div class="archive-modal-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="21 8 21 21 3 21 3 8" />
+                <rect x="1" y="3" width="22" height="5" />
+                <line x1="10" y1="12" x2="14" y2="12" />
+              </svg>
+              <span>Archived Cards</span>
+              <button class="modal-close" onClick={() => setShowArchive(false)} title="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div class="archive-modal-body">
+              <Show when={archiveLoading()}>
+                <p class="archive-empty">Loading…</p>
+              </Show>
+              <Show when={!archiveLoading() && archivedCards().length === 0}>
+                <p class="archive-empty">No archived cards.</p>
+              </Show>
+              <For each={archivedCards()}>
+                {(card) => (
+                  <div class="archive-card-item">
+                    <span class="archive-card-title" innerHTML={renderTitle(card.title)} />
+                    <button
+                      class="btn btn-primary btn-sm"
+                      onClick={() => handleRestoreCard(card.id)}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </div>
       </Show>
 
       <Show when={showHelp()}>

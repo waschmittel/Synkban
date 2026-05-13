@@ -9,8 +9,15 @@ import {
 import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
 import { exampleSetup } from "prosemirror-example-setup";
-import type { Card, Label } from "../types";
+import type { Attachment, Card, Label } from "../types";
 import { renderTitle } from "./Card";
+import { api } from "../api";
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const schema = new Schema({
   nodes: addListNodes(basicSchema.spec.nodes, "paragraph block*", "block"),
@@ -71,6 +78,8 @@ export default function CardDetail(props: Props) {
   const [dirty, setDirty] = createSignal(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = createSignal(false);
   const [showLabelPicker, setShowLabelPicker] = createSignal(false);
+  const [attachments, setAttachments] = createSignal<Attachment[]>(props.card.attachments ?? []);
+  const [uploading, setUploading] = createSignal(false);
 
   onMount(() => {
     const doc = docFromDescription(props.card.description);
@@ -98,6 +107,27 @@ export default function CardDetail(props: Props) {
       ids.includes(labelId) ? ids.filter((id) => id !== labelId) : [...ids, labelId]
     );
     setDirty(true);
+  };
+
+  const handleFileUpload = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    input.value = "";
+    setUploading(true);
+    try {
+      const att = await api.uploadAttachment(props.card.id, file);
+      setAttachments((prev) => [...prev, att]);
+    } catch (err) {
+      alert(`Upload failed: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attId: string) => {
+    await api.deleteAttachment(props.card.id, attId);
+    setAttachments((prev) => prev.filter((a) => a.id !== attId));
   };
 
   const handleSave = () => {
@@ -270,6 +300,53 @@ export default function CardDetail(props: Props) {
           <div class="editor-hint">
             <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save (title and description)
           </div>
+          <div class="modal-section-header" style={{ "margin-top": "16px" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+            <span class="modal-label">Attachments</span>
+          </div>
+          <div class="attachments-list">
+            <For each={attachments()}>
+              {(att) => (
+                <div class="attachment-item">
+                  <div class="attachment-info">
+                    <a
+                      class="attachment-filename"
+                      href={api.getAttachmentUrl(props.card.id, att.id)}
+                      download={att.filename}
+                      title={att.filename}
+                    >
+                      {att.filename}
+                    </a>
+                    <span class="attachment-size">{formatSize(att.size)}</span>
+                  </div>
+                  <button
+                    class="attachment-delete"
+                    title="Remove attachment"
+                    onClick={() => handleDeleteAttachment(att.id)}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </For>
+          </div>
+          <label class="attachment-upload" classList={{ "attachment-upload--busy": uploading() }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+            {uploading() ? "Uploading…" : "Add attachment"}
+            <input
+              type="file"
+              style={{ display: "none" }}
+              onChange={handleFileUpload}
+              disabled={uploading()}
+            />
+          </label>
         </div>
         <div class="modal-footer">
           <button class="btn btn-primary" onClick={handleSave}>

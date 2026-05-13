@@ -1,4 +1,4 @@
-import type { Board, BoardDetail, Card, Label, ListWithCards } from "./types";
+import type { Attachment, Board, BoardDetail, Card, Label, ListWithCards } from "./types";
 
 const BASE = "/api";
 
@@ -37,6 +37,9 @@ export const api = {
   deleteBoard: (id: string) =>
     request<void>(`/boards/${id}`, { method: "DELETE" }),
 
+  getArchivedCards: (boardId: string) =>
+    request<Card[]>(`/boards/${boardId}/archive`),
+
   createList: (boardId: string, title: string) =>
     request<ListWithCards>(`/boards/${boardId}/lists`, {
       method: "POST",
@@ -66,11 +69,24 @@ export const api = {
       position?: number;
       list_id?: string;
       label_ids?: string[];
+      archived?: boolean;
     }
   ) =>
     request<Card>(`/cards/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+
+  archiveCard: (id: string) =>
+    request<Card>(`/cards/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ archived: true }),
+    }),
+
+  restoreCard: (id: string) =>
+    request<Card>(`/cards/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ archived: false }),
     }),
 
   deleteCard: (id: string) =>
@@ -90,4 +106,26 @@ export const api = {
 
   deleteLabel: (id: string) =>
     request<void>(`/labels/${id}`, { method: "DELETE" }),
+
+  uploadAttachment: async (cardId: string, file: File): Promise<Attachment> => {
+    const res = await fetch(
+      `${BASE}/cards/${cardId}/attachments?filename=${encodeURIComponent(file.name)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+    return res.json();
+  },
+
+  getAttachmentUrl: (cardId: string, attId: string) =>
+    `${BASE}/cards/${cardId}/attachments/${attId}`,
+
+  deleteAttachment: (cardId: string, attId: string) =>
+    request<void>(`/cards/${cardId}/attachments/${attId}`, { method: "DELETE" }),
 };

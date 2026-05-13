@@ -36,7 +36,7 @@ After any code change:
 - **`store.rs`** is the only file that touches the filesystem for data. All handlers call `store::*` functions.
 - **Handlers** are thin — extract params, call store, return JSON. No business logic in handlers.
 - **Models** in `models.rs` — all data types and request/response DTOs live here.
-- **Errors** in `errors.rs` — `AppError` enum, implements `ResponseError`. Two variants: `NotFound`, `Io`.
+- **Errors** in `errors.rs` — `AppError` enum, implements `ResponseError`. Three variants: `NotFound`, `Io`, `TooLarge` (HTTP 413, used for attachment size enforcement).
 - **Static files** embedded via `include_dir!("$CARGO_MANIFEST_DIR/static")`. The `backend/static/` directory must exist at compile time (created by `build.sh`).
 - **No auth.** Single-user MVP. Don't add auth unless explicitly asked.
 
@@ -63,6 +63,8 @@ Cards  →  reference Labels by ID (label_ids: Vec<String>)
 - `position: f64` — fractional indexing. New items: `max + 1.0`. Reorder: midpoint between neighbors.
 - Card `description` — ProseMirror doc JSON string, or empty string `""`.
 - Card `label_ids` — array of label IDs (subset of board's labels). Uses `#[serde(default)]` so existing cards without the field deserialize as empty vec.
+- Card `archived: bool` — soft delete. `get_board` filters out archived cards. `GET /api/boards/:id/archive` returns archived cards. `PUT /api/cards/:id` with `{ archived: false }` restores.
+- Card `attachments: Vec<Attachment>` — stored in card JSON. Binary data at `data/boards/{bid}/attachments/{cid}/{att-id}`. Max 50 MB enforced in handler (`TooLarge` error → HTTP 413). Upload: `POST /api/cards/:id/attachments?filename=...` with raw body bytes (no multipart). Download: `GET /api/cards/:id/attachments/:att_id`.
 - Timestamps — `YYYY-MM-DD HH:MM:SS` UTC, generated in `store.rs` (no chrono crate).
 - **Labels** — stored in `board.json` as a `labels: Vec<Label>` array. Each label has `id`, `name`, `color`. Colors are auto-assigned from a 12-color pastel palette (evenly distributed hues) in interleaved order for max visual distinction. `board.json` is read/written via the private `BoardFile` struct in `store.rs`; the public `Board` response type omits labels (labels only appear in `BoardDetail`). No separate labels file.
 
@@ -77,6 +79,7 @@ data/boards/{board-id}/lists/{list-id}/cards/{card-id}.json
 - Deleting a board: `remove_dir_all` on its directory (cascades lists + cards).
 - Deleting a list: `remove_dir_all` on its directory (cascades cards).
 - Moving a card between lists: write to new location, delete from old location.
+- Attachment binaries: `data/boards/{bid}/attachments/{cid}/{att-id}` (no extension). Metadata lives in card JSON.
 - Finding a card/list requires scanning board directories (no index). Acceptable at MVP scale.
 
 ## API Endpoints
@@ -97,9 +100,15 @@ POST   /api/boards/:bid/lists {title}        → List (201)
 PUT    /api/lists/:id    {title?,pos?}       → List
 DELETE /api/lists/:id                        → 204
 
+GET    /api/boards/:bid/archive              → Card[] (archived cards, sorted by created_at desc)
+
 POST   /api/lists/:lid/cards {title}         → Card (201)
-PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?} → Card
+PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?,archived?} → Card
 DELETE /api/cards/:id                        → 204
+
+POST   /api/cards/:cid/attachments?filename=… → Attachment (201) — raw body bytes, Content-Type header
+GET    /api/cards/:cid/attachments/:att_id    → binary (Content-Disposition: attachment)
+DELETE /api/cards/:cid/attachments/:att_id    → 204
 ```
 
 ## Adding New Features
@@ -142,10 +151,13 @@ DELETE /api/cards/:id                        → 204
 - **LabelContext** — `LabelContext.tsx` exposes `{ isOpen, open, close, toggle, hasBoard, setHasBoard }` via SolidJS context. `App.tsx` wraps everything in `LabelProvider`. The `AppHeader` sub-component in `App.tsx` reads context to show/hide the Labels button. `Board.tsx` calls `lc.setHasBoard(true)` on mount and `lc.setHasBoard(false)` on cleanup. This pattern allows the header (outside the router outlet) to control drawer state owned by the board page.
 - **Keyboard navigation** — Cards have `tabindex="0"` and handle `↑↓` (move within list), `←→` (jump to adjacent list), `Shift+↑↓` (reorder card in list), `Shift+←→` (move card to adjacent list), `Enter`/`Space` (open card), `Delete`/`Backspace` (delete card), `e` (edit focused card). When no card is focused, any arrow key focuses the first/last card in the board. Navigating `←→` to an empty list focuses the list's `.add-trigger` button. When `.add-trigger` (card list) is focused: `←→` navigates to adjacent list, `↑` focuses last card in current list, `Enter`/`Space` opens the add-card form. Focus style via `.card:focus-visible`. Shortcuts hidden by default — press `?` to toggle `ShortcutHelp` modal, or click the `?` button in the app header. The header `?` button dispatches a `toggle-shortcuts` `CustomEvent` on `document`; `Board.tsx` listens for it in `onMount`. Global shortcuts: `l` (add list), `n`/`c` (add card to focused/first list), `e` (edit focused card), `g` (toggle label drawer), `?` (toggle help), `Escape` (close drawer/help/blur card). Home page: `n` (open new board form). CardDetail: `Ctrl+Enter` saves, `Escape` closes (with unsaved guard), title `Enter` focuses editor, `Ctrl+B`/`Ctrl+I` wraps selection in `**bold**`/`*italic*` markdown. Drawer inputs: `Escape` closes the entire drawer.
 - **Card title markdown** — titles support `**text**` (bold) and `*text*` (italic). `renderTitle(title)` in `Card.tsx` converts to `<strong>`/`<em>` HTML and is used via `innerHTML` in both card list view and CardDetail. Stored as-is (markdown string) in the title field. Ctrl+B/I in the title input in CardDetail wraps the selected text.
-- **`isInInput` guard** — `Board.tsx` defines `isInInput(target)` that returns true if the event target is an INPUT, TEXTAREA, contentEditable element, or inside `.modal-overlay`, `.label-drawer`, or `.shortcut-help-overlay`. All global keydown handlers check this before acting, so shortcuts don't fire while typing.
-- **Focus restoration** — `Board.tsx` tracks `lastFocusedCardId` signal. Set on card click/keyboard open. After modal closes (`handleCardSave`, `handleModalClose`), `restoreFocus()` uses `requestAnimationFrame` to `querySelector('[data-card-id="..."]').focus()`. Ensures keyboard user returns to the card they were on. After `handleMoveCard`, a `pendingFocusCardId` signal is set; a `createEffect` watches the `board` resource and restores focus after SolidJS finishes re-rendering — this ensures focus works for cross-list moves where the card element is destroyed and recreated.
+- **`isInInput` guard** — `Board.tsx` defines `isInInput(target)` that returns true if the event target is an INPUT, TEXTAREA, contentEditable element, or inside `.modal-overlay`, `.label-drawer`, `.shortcut-help-overlay`, or `.archive-overlay`. All global keydown handlers check this before acting, so shortcuts don't fire while typing or when a dialog is open.
+- **Focus restoration** — `Board.tsx` tracks `lastFocusedCardId` signal. Set on card click/keyboard open. After modal closes (`handleCardSave`, `handleModalClose`), `restoreFocus()` uses `requestAnimationFrame` to `querySelector('[data-card-id="..."]').focus()`. Ensures keyboard user returns to the card they were on. After `handleMoveCard`, a `pendingFocusCardId` signal is set; a `createEffect` watches the `board` resource and restores focus after SolidJS finishes re-rendering — this ensures focus works for cross-list moves where the card element is destroyed and recreated. During polling refetch, the currently focused card ID is also captured into `pendingFocusCardId` before `refetch()` so focus survives DOM recreation from auto-updates.
 - **ShortcutHelp** — `components/ShortcutHelp.tsx` renders a centered modal overlay with all shortcuts organized by section (Navigation, Move Card, Cards, Board, Card Detail, Global). Closes on `Escape`, `?`, or overlay click. Rendered via `<Show when={showHelp()}>` in `Board.tsx`.
-- **Board color** — `Board` and `BoardDetail` have an optional `color` field (`Option<String>` in Rust, `color?: string` in TS). Set via `PUT /api/boards/:id` with `{ title, color }`. Color picker in the board title bar shows 16 preset colors as swatches; selecting one sets `background-color` on `.board-page` via inline style (CSS transition). Home page board cards show their color as card background. `null` color resets to default blue.
+- **Board color** — `Board` and `BoardDetail` have an optional `color` field (`Option<String>` in Rust, `color?: string` in TS). Set via `PUT /api/boards/:id` with `{ title, color }`. `Board.tsx` syncs the value to `--board-color` CSS custom property on `:root` via `createEffect`. CSS uses `linear-gradient(rgba(0,0,0,0.2), ...), var(--board-color)` for the header (dark overlay for readability) and `color-mix(in srgb, var(--board-color) 50%, white)` for the board page background (muted/pastel). Color picker shows 16 preset swatches. `onCleanup` resets `--board-color` to `#0079bf`. Home page board cards show their color as card background via inline style.
+- **Board rename** — Clicking the board title `h2.board-title-text` activates an inline `input.board-title-input`. Blur or Enter commits (calls `api.updateBoard`); Escape cancels. State: `showRename` + `renameValue` signals in `Board.tsx`.
+- **Archive (soft delete)** — Cards have `archived: bool` field. The archive button (`.card-archive`) and `Delete`/`Backspace` key both show a confirmation dialog (`.archive-overlay` + `.unsaved-dialog`) before calling `api.archiveCard`. Archived cards are filtered out by `get_board` on the backend. "Archive" button in the board title bar opens an `.archive-modal-overlay` listing all archived cards with Restore buttons (calls `api.restoreCard` → `PUT /api/cards/:id` with `{ archived: false }`).
+- **Attachments** — Files up to 50 MB. Upload via `POST /api/cards/:id/attachments?filename=...` with raw body (no multipart). Backend stores binary at `data/boards/{bid}/attachments/{cid}/{att-id}`, metadata in card JSON. `CardDetail` shows an attachments section with download links and delete buttons. Local `attachments` signal keeps UI in sync without refetch. `api.uploadAttachment` uses a raw `fetch` (bypasses the JSON helper) with the file as body; `api.getAttachmentUrl` returns a direct URL for `<a download>` links.
 - **CardDetail label UX** — only assigned labels shown as chips in the detail modal. A small "+ Add label" button toggles an inline picker showing all board labels with checkmarks. Clicking an assigned chip removes it immediately. Picker hidden by default to reduce noise.
 - **Card layout** — `.card-main` wrapper (flex-column) contains `.card-labels` above `.card-content`, so labels never shrink the title. `.card-actions` remains as a flex-row sibling to `.card-main`.
 
