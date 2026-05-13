@@ -17,6 +17,7 @@ export default function Card(props: Props) {
 
   const handleDragEnd = (e: DragEvent) => {
     (e.target as HTMLElement).classList.remove("dragging");
+    document.querySelectorAll(".drop-placeholder").forEach((el) => el.remove());
   };
 
   const hasDescription = () => !!props.card.description;

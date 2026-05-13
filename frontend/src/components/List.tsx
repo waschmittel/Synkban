@@ -18,25 +18,27 @@ interface Props {
 
 export default function List(props: Props) {
   const handleDragOver = (e: DragEvent) => {
-    if (e.dataTransfer?.types.includes("application/card-id")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+    if (!e.dataTransfer?.types.includes("application/card-id")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
 
-      const container = e.currentTarget as HTMLElement;
-      const cardElements = container.querySelectorAll(
-        ".cards-container .card:not(.dragging)"
-      );
-      const afterElement = getDragAfterElement(cardElements, e.clientY);
-      const dragging = document.querySelector(".card.dragging");
+    const container = e.currentTarget as HTMLElement;
+    const cardsContainer = container.querySelector(".cards-container")!;
+    const cardElements = cardsContainer.querySelectorAll(
+      ".card:not(.dragging)"
+    );
+    const afterElement = getDragAfterElement(cardElements, e.clientY);
 
-      if (dragging) {
-        const cardsContainer = container.querySelector(".cards-container")!;
-        if (afterElement) {
-          cardsContainer.insertBefore(dragging, afterElement);
-        } else {
-          cardsContainer.appendChild(dragging);
-        }
-      }
+    let placeholder = document.querySelector(".drop-placeholder");
+    if (!placeholder) {
+      placeholder = document.createElement("div");
+      placeholder.className = "drop-placeholder";
+    }
+
+    if (afterElement) {
+      cardsContainer.insertBefore(placeholder, afterElement);
+    } else {
+      cardsContainer.appendChild(placeholder);
     }
   };
 
@@ -48,19 +50,28 @@ export default function List(props: Props) {
     const container = (e.currentTarget as HTMLElement).querySelector(
       ".cards-container"
     )!;
-    const cardElements = Array.from(
-      container.querySelectorAll(".card:not(.dragging)")
-    );
-    const dragging = container.querySelector(".card.dragging");
+    const placeholder = container.querySelector(".drop-placeholder");
+    if (!placeholder) return;
 
-    let position: number;
-    if (!dragging) return;
+    const allElements = Array.from(container.children);
+    const idx = allElements.indexOf(placeholder);
 
-    const allCards = Array.from(container.querySelectorAll(".card"));
-    const dragIndex = allCards.indexOf(dragging);
-
-    const prevCard = allCards[dragIndex - 1] as HTMLElement | undefined;
-    const nextCard = allCards[dragIndex + 1] as HTMLElement | undefined;
+    let prevCard: HTMLElement | null = null;
+    let nextCard: HTMLElement | null = null;
+    for (let i = idx - 1; i >= 0; i--) {
+      const el = allElements[i] as HTMLElement;
+      if (el.classList.contains("card") && !el.classList.contains("dragging")) {
+        prevCard = el;
+        break;
+      }
+    }
+    for (let i = idx + 1; i < allElements.length; i++) {
+      const el = allElements[i] as HTMLElement;
+      if (el.classList.contains("card") && !el.classList.contains("dragging")) {
+        nextCard = el;
+        break;
+      }
+    }
 
     const prevPos = prevCard
       ? parseFloat(prevCard.dataset.cardPosition || "0")
@@ -69,9 +80,8 @@ export default function List(props: Props) {
       ? parseFloat(nextCard.dataset.cardPosition || "0")
       : prevPos + 2;
 
-    position = (prevPos + nextPos) / 2;
-
-    props.onDropCard(cardId, props.list.id, position);
+    placeholder.remove();
+    props.onDropCard(cardId, props.list.id, (prevPos + nextPos) / 2);
   };
 
   const handleListDragStart = (e: DragEvent) => {

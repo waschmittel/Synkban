@@ -299,9 +299,19 @@ body {
 }
 
 .card.dragging {
-  opacity: 0.4;
-  background: #c8e6ff;
-  border-color: #0079bf;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.drop-placeholder {
+  height: 4px;
+  background: #0079bf;
+  border-radius: 2px;
+  margin: 4px 0;
 }
 
 .card-content {
