@@ -87,11 +87,13 @@ export default function List(props: Props) {
   const handleListDragStart = (e: DragEvent) => {
     e.dataTransfer!.setData("application/list-id", props.list.id);
     e.dataTransfer!.effectAllowed = "move";
-    (e.currentTarget as HTMLElement).classList.add("list-dragging");
+    const el = e.currentTarget as HTMLElement;
+    requestAnimationFrame(() => el.classList.add("list-dragging"));
   };
 
   const handleListDragEnd = (e: DragEvent) => {
     (e.currentTarget as HTMLElement).classList.remove("list-dragging");
+    document.querySelectorAll(".list-drop-placeholder").forEach((el) => el.remove());
   };
 
   return (

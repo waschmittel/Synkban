@@ -226,8 +226,16 @@ body {
 }
 
 .list.list-dragging {
-  opacity: 0.5;
-  transform: rotate(2deg);
+  opacity: 0.3;
+}
+
+.list-drop-placeholder {
+  width: 4px;
+  min-height: 100px;
+  background: #0079bf;
+  border-radius: 2px;
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 .list-header {

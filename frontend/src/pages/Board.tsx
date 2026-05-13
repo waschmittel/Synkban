@@ -68,9 +68,39 @@ export default function BoardPage() {
   };
 
   const handleListDragOver = (e: DragEvent) => {
-    if (e.dataTransfer?.types.includes("application/list-id")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+    if (!e.dataTransfer?.types.includes("application/list-id")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+
+    const container = e.currentTarget as HTMLElement;
+    const listElements = Array.from(
+      container.querySelectorAll(".list:not(.list-dragging)")
+    );
+
+    let insertBefore: Element | null = null;
+    for (const el of listElements) {
+      const box = el.getBoundingClientRect();
+      if (e.clientX < box.left + box.width / 2) {
+        insertBefore = el;
+        break;
+      }
+    }
+
+    let placeholder = document.querySelector(".list-drop-placeholder");
+    if (!placeholder) {
+      placeholder = document.createElement("div");
+      placeholder.className = "list-drop-placeholder";
+    }
+
+    if (insertBefore) {
+      container.insertBefore(placeholder, insertBefore);
+    } else {
+      const addWrapper = container.querySelector(".add-list-wrapper");
+      if (addWrapper) {
+        container.insertBefore(placeholder, addWrapper);
+      } else {
+        container.appendChild(placeholder);
+      }
     }
   };
 
@@ -78,6 +108,7 @@ export default function BoardPage() {
     const listId = e.dataTransfer?.getData("application/list-id");
     if (!listId) return;
     e.preventDefault();
+    document.querySelectorAll(".list-drop-placeholder").forEach((el) => el.remove());
 
     const container = e.currentTarget as HTMLElement;
     const listElements = Array.from(
