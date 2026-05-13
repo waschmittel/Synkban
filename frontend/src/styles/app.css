@@ -145,6 +145,7 @@ body {
   display: flex;
   align-items: flex-start;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  text-decoration: none;
 }
 
 .board-card:hover {
@@ -664,7 +665,7 @@ body {
 }
 
 .cards-container {
-  padding: 0 8px;
+  padding: 4px 8px 0;
   overflow-y: auto;
   flex: 1;
   min-height: 4px;

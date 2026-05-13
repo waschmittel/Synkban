@@ -90,16 +90,15 @@ export default function Home() {
         <div class="board-grid">
           <For each={boards()}>
             {(board) => (
-              <div
+              <A
+                href={`/board/${board.id}`}
                 class="board-card"
                 style={board.color ? { "background": board.color } : {}}
               >
-                <A href={`/board/${board.id}`} class="board-card-link">
-                  {board.title}
-                </A>
+                <span class="board-card-link">{board.title}</span>
                 <button
                   class="board-card-delete"
-                  onClick={() => handleDelete(board.id)}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(board.id); }}
                   title="Delete board"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -107,7 +106,7 @@ export default function Home() {
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </button>
-              </div>
+              </A>
             )}
           </For>
           <Show
