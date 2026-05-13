@@ -14,9 +14,10 @@ pub async fn create_card(
 ) -> Result<HttpResponse, AppError> {
     let list_id = path.into_inner();
     let card = store::create_card(&data_dir, &list_id, &body.title)?;
+    let ops = store::drain_file_ops(&data_dir);
     println!(
-        "[{}] CREATE card \"{}\" (id: {}) in list {} → .../cards/{}.json",
-        crate::log_timestamp(), card.title, card.id, list_id, card.id
+        "[{}] CREATE card \"{}\" (id: {}) in list {}\n{}",
+        crate::log_timestamp(), card.title, card.id, list_id, ops.join("\n")
     );
     Ok(HttpResponse::Created().json(card))
 }
@@ -55,6 +56,7 @@ pub async fn update_card(
         body.archived,
         due_date,
     )?;
+    let ops = store::drain_file_ops(&data_dir);
 
     let mut changes = Vec::new();
     if body.title.is_some() { changes.push("title"); }
@@ -68,8 +70,8 @@ pub async fn update_card(
     let fields = if changes.is_empty() { "no-op".to_string() } else { changes.join(", ") };
 
     println!(
-        "[{}] UPDATE card \"{}\" (id: {}) [{}] → .../cards/{}.json",
-        crate::log_timestamp(), card.title, card.id, fields, card.id
+        "[{}] UPDATE card \"{}\" (id: {}) [{}]\n{}",
+        crate::log_timestamp(), card.title, card.id, fields, ops.join("\n")
     );
     Ok(HttpResponse::Ok().json(card))
 }
@@ -79,11 +81,12 @@ pub async fn delete_card(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let card_id = path.into_inner();
-    println!(
-        "[{}] DELETE card (id: {}) → permanently removed card + attachments",
-        crate::log_timestamp(), card_id
-    );
     store::delete_card(&data_dir, &card_id)?;
+    let ops = store::drain_file_ops(&data_dir);
+    println!(
+        "[{}] DELETE card (id: {})\n{}",
+        crate::log_timestamp(), card_id, ops.join("\n")
+    );
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -111,9 +114,10 @@ pub async fn upload_attachment(
         &content_type,
         &body,
     )?;
+    let ops = store::drain_file_ops(&data_dir);
     println!(
-        "[{}] CREATE attachment \"{}\" ({}, {} bytes) on card {} → attachments/{}/{}",
-        crate::log_timestamp(), att.filename, att.content_type, att.size, card_id, card_id, att.id
+        "[{}] CREATE attachment \"{}\" ({}, {} bytes) on card {}\n{}",
+        crate::log_timestamp(), att.filename, att.content_type, att.size, card_id, ops.join("\n")
     );
     Ok(HttpResponse::Created().json(att))
 }
@@ -147,10 +151,11 @@ pub async fn delete_attachment(
     path: web::Path<(String, String)>,
 ) -> Result<HttpResponse, AppError> {
     let (card_id, att_id) = path.into_inner();
-    println!(
-        "[{}] DELETE attachment (id: {}) from card {} → removed file + updated card JSON",
-        crate::log_timestamp(), att_id, card_id
-    );
     store::delete_attachment(&data_dir, &card_id, &att_id)?;
+    let ops = store::drain_file_ops(&data_dir);
+    println!(
+        "[{}] DELETE attachment (id: {}) from card {}\n{}",
+        crate::log_timestamp(), att_id, card_id, ops.join("\n")
+    );
     Ok(HttpResponse::NoContent().finish())
 }

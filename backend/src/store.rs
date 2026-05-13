@@ -1,8 +1,29 @@
+use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::errors::AppError;
 use crate::models::*;
+
+thread_local! {
+    static FILE_OPS: RefCell<Vec<(&'static str, PathBuf)>> = RefCell::new(Vec::new());
+}
+
+fn track(op: &'static str, path: &Path) {
+    FILE_OPS.with(|ops| ops.borrow_mut().push((op, path.to_path_buf())));
+}
+
+pub fn drain_file_ops(data_dir: &Path) -> Vec<String> {
+    FILE_OPS.with(|ops| {
+        ops.borrow_mut()
+            .drain(..)
+            .map(|(op, path)| {
+                let rel = path.strip_prefix(data_dir).unwrap_or(&path);
+                format!("  {} {}", op, rel.display())
+            })
+            .collect()
+    })
+}
 
 // Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
 // Interleaved hues: 0°, 180°, 90°, 270°, 45°, 225°, 135°, 315°, 30°, 210°, 150°, 330°
@@ -53,6 +74,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, AppError>
 fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), AppError> {
     let data = serde_json::to_string_pretty(value)
         .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
+    track("wrote", path);
     fs::write(path, data)?;
     Ok(())
 }
@@ -316,6 +338,7 @@ pub fn delete_board(data_dir: &Path, board_id: &str) -> Result<(), AppError> {
     if !dir.exists() {
         return Err(AppError::NotFound("Board not found".into()));
     }
+    track("deleted dir", &dir);
     fs::remove_dir_all(&dir)?;
     Ok(())
 }
@@ -502,6 +525,7 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
             }
         }
     }
+    track("deleted dir", &dir);
     fs::remove_dir_all(&dir)?;
     Ok(())
 }
@@ -651,6 +675,7 @@ pub fn update_card(
         let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
         fs::create_dir_all(&new_dir)?;
         write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
+        track("deleted", &old_path);
         fs::remove_file(&old_path)?;
         return Ok(card);
     }
@@ -662,6 +687,7 @@ pub fn update_card(
             fs::create_dir_all(&new_dir)?;
             card.list_id = target_list_id.to_string();
             write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
+            track("deleted", &old_path);
             fs::remove_file(&old_path)?;
             return Ok(card);
         }
@@ -685,9 +711,11 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
     if !card.archived {
         return Err(AppError::BadRequest("only archived cards can be permanently deleted".into()));
     }
+    track("deleted", &path);
     fs::remove_file(&path)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     if att_dir.exists() {
+        track("deleted dir", &att_dir);
         let _ = fs::remove_dir_all(&att_dir);
     }
     Ok(())
@@ -707,7 +735,9 @@ pub fn create_attachment(
 
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     fs::create_dir_all(&att_dir)?;
-    fs::write(att_dir.join(&att_id), data)?;
+    let att_path = att_dir.join(&att_id);
+    track("wrote", &att_path);
+    fs::write(&att_path, data)?;
     if content_type.starts_with("image/") {
         create_thumbnail(&att_dir, &att_id, data);
     }
@@ -759,8 +789,16 @@ pub fn delete_attachment(
     }
     write_json(&card_path, &card)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
-    let _ = fs::remove_file(att_dir.join(att_id));
-    let _ = fs::remove_file(att_dir.join(format!("{att_id}_thumb")));
+    let att_file = att_dir.join(att_id);
+    let thumb_file = att_dir.join(format!("{att_id}_thumb"));
+    if att_file.exists() {
+        track("deleted", &att_file);
+    }
+    let _ = fs::remove_file(&att_file);
+    if thumb_file.exists() {
+        track("deleted", &thumb_file);
+    }
+    let _ = fs::remove_file(&thumb_file);
     Ok(())
 }
 
@@ -769,7 +807,9 @@ fn create_thumbnail(att_dir: &Path, att_id: &str, data: &[u8]) {
     let thumb = img.thumbnail(400, 400);
     let mut buf = std::io::Cursor::new(Vec::new());
     if thumb.write_to(&mut buf, image::ImageFormat::Jpeg).is_ok() {
-        let _ = fs::write(att_dir.join(format!("{att_id}_thumb")), buf.into_inner());
+        let thumb_path = att_dir.join(format!("{att_id}_thumb"));
+        track("wrote", &thumb_path);
+        let _ = fs::write(&thumb_path, buf.into_inner());
     }
 }
 

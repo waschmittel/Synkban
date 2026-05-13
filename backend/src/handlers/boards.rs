@@ -20,9 +20,10 @@ pub async fn create_board(
     body: web::Json<CreateBoard>,
 ) -> Result<HttpResponse, AppError> {
     let board = store::create_board(&data_dir, &body.title)?;
+    let ops = store::drain_file_ops(&data_dir);
     println!(
-        "[{}] CREATE board \"{}\" (id: {}) → boards/{}/board.json",
-        crate::log_timestamp(), board.title, board.id, board.id
+        "[{}] CREATE board \"{}\" (id: {})\n{}",
+        crate::log_timestamp(), board.title, board.id, ops.join("\n")
     );
     Ok(HttpResponse::Created().json(board))
 }
@@ -42,9 +43,10 @@ pub async fn update_board(
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
     let board = store::update_board(&data_dir, &board_id, &body.title, body.color.as_deref())?;
+    let ops = store::drain_file_ops(&data_dir);
     println!(
-        "[{}] UPDATE board \"{}\" (id: {}) → boards/{}/board.json",
-        crate::log_timestamp(), board.title, board.id, board.id
+        "[{}] UPDATE board \"{}\" (id: {})\n{}",
+        crate::log_timestamp(), board.title, board.id, ops.join("\n")
     );
     Ok(HttpResponse::Ok().json(board))
 }
@@ -54,11 +56,12 @@ pub async fn delete_board(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
-    println!(
-        "[{}] DELETE board (id: {}) → removed boards/{}/",
-        crate::log_timestamp(), board_id, board_id
-    );
     store::delete_board(&data_dir, &board_id)?;
+    let ops = store::drain_file_ops(&data_dir);
+    println!(
+        "[{}] DELETE board (id: {})\n{}",
+        crate::log_timestamp(), board_id, ops.join("\n")
+    );
     Ok(HttpResponse::NoContent().finish())
 }
 

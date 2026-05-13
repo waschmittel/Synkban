@@ -12,9 +12,10 @@ pub async fn create_label(
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
     let label = store::create_label(&data_dir, &board_id, &body.name)?;
+    let ops = store::drain_file_ops(&data_dir);
     println!(
-        "[{}] CREATE label \"{}\" (id: {}, color: {}) in board {} → boards/{}/board.json",
-        crate::log_timestamp(), label.name, label.id, label.color, board_id, board_id
+        "[{}] CREATE label \"{}\" (id: {}, color: {}) in board {}\n{}",
+        crate::log_timestamp(), label.name, label.id, label.color, board_id, ops.join("\n")
     );
     Ok(HttpResponse::Created().json(label))
 }
@@ -26,9 +27,10 @@ pub async fn update_label(
 ) -> Result<HttpResponse, AppError> {
     let label_id = path.into_inner();
     let label = store::update_label_by_id(&data_dir, &label_id, &body.name)?;
+    let ops = store::drain_file_ops(&data_dir);
     println!(
-        "[{}] UPDATE label \"{}\" (id: {}) → board.json updated",
-        crate::log_timestamp(), label.name, label.id
+        "[{}] UPDATE label \"{}\" (id: {})\n{}",
+        crate::log_timestamp(), label.name, label.id, ops.join("\n")
     );
     Ok(HttpResponse::Ok().json(label))
 }
@@ -38,10 +40,11 @@ pub async fn delete_label(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let label_id = path.into_inner();
-    println!(
-        "[{}] DELETE label (id: {}) → board.json updated",
-        crate::log_timestamp(), label_id
-    );
     store::delete_label_by_id(&data_dir, &label_id)?;
+    let ops = store::drain_file_ops(&data_dir);
+    println!(
+        "[{}] DELETE label (id: {})\n{}",
+        crate::log_timestamp(), label_id, ops.join("\n")
+    );
     Ok(HttpResponse::NoContent().finish())
 }
