@@ -34,7 +34,7 @@ After any code change:
 
 - **No database.** Storage is JSON files via `store.rs`. Never add SQLite, Postgres, or any DB dependency.
 - **`store.rs`** is the only file that touches the filesystem for data. All handlers call `store::*` functions.
-- **Handlers** are thin — extract params, call store, return JSON. No business logic in handlers.
+- **Handlers** are thin — extract params, call store, return JSON. No business logic in handlers. All mutating handlers (create/update/delete) log to stdout via `println!` with format `[HH:MM:SS] ACTION entity "name" (id: ...) → files affected`. Timestamp from `log_timestamp()` in `main.rs` (UTC HH:MM:SS).
 - **Models** in `models.rs` — all data types and request/response DTOs live here.
 - **Errors** in `errors.rs` — `AppError` enum, implements `ResponseError`. Four variants: `NotFound`, `Io`, `TooLarge` (HTTP 413, attachment size), `BadRequest` (HTTP 400, validation errors like invalid date format).
 - **Static files** embedded via `include_dir!("$CARGO_MANIFEST_DIR/static")`. The `backend/static/` directory must exist at compile time (created by `build.sh`).

@@ -8,6 +8,18 @@ use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
 use include_dir::{include_dir, Dir};
 use std::path::PathBuf;
 
+pub fn log_timestamp() -> String {
+    let d = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    let secs = d.as_secs();
+    let time_secs = secs % 86400;
+    let h = time_secs / 3600;
+    let m = (time_secs % 3600) / 60;
+    let s = time_secs % 60;
+    format!("{:02}:{:02}:{:02}", h, m, s)
+}
+
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
 async fn serve_embedded(req: HttpRequest) -> HttpResponse {
