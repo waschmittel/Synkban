@@ -1,4 +1,4 @@
-import { onMount, onCleanup, createSignal } from "solid-js";
+import { onMount, onCleanup, createSignal, Show } from "solid-js";
 import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import {
@@ -45,6 +45,7 @@ export default function CardDetail(props: Props) {
   let view: EditorView | undefined;
   const [title, setTitle] = createSignal(props.card.title);
   const [dirty, setDirty] = createSignal(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = createSignal(false);
 
   onMount(() => {
     const doc = docFromDescription(props.card.description);
@@ -76,8 +77,22 @@ export default function CardDetail(props: Props) {
   };
 
   const guardedClose = () => {
-    if (dirty() && !confirm("You have unsaved changes. Close anyway?")) return;
+    if (dirty()) {
+      setShowUnsavedDialog(true);
+      return;
+    }
     props.onClose();
+  };
+
+  const handleDialogKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowUnsavedDialog(false);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -145,6 +160,26 @@ export default function CardDetail(props: Props) {
           </button>
           {dirty() && <span class="unsaved-indicator">Unsaved changes</span>}
         </div>
+        <Show when={showUnsavedDialog()}>
+          <div class="unsaved-dialog" onKeyDown={handleDialogKeyDown}>
+            <p>You have unsaved changes.</p>
+            <div class="unsaved-dialog-actions">
+              <button
+                ref={(el) => requestAnimationFrame(() => el.focus())}
+                class="btn btn-primary"
+                onClick={handleSave}
+              >
+                Save
+              </button>
+              <button class="btn btn-danger" onClick={props.onClose}>
+                Discard
+              </button>
+              <button class="btn btn-cancel" onClick={() => setShowUnsavedDialog(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Show>
       </div>
     </div>
   );

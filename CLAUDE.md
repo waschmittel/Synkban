@@ -47,7 +47,7 @@ After any code change:
 - **API client:** `api.ts` — all backend calls go through this module. Typed fetch wrapper.
 - **Types:** `types.ts` — TypeScript interfaces matching backend models. Keep in sync with `models.rs`.
 - **ProseMirror** for rich text in card descriptions. Schema includes basic nodes + lists. Description stored as ProseMirror JSON string. No raw HTML ever.
-- **Drag-and-drop:** Native HTML5 API. No drag library. Position calculated via fractional indexing (midpoint between neighbors). Dragged card shows semi-transparent + slightly rotated at its original position; a `.drop-placeholder` line shows the insertion point. Card `dragstart` calls `stopPropagation()` to prevent list from also entering drag state. Placeholder is cleaned up on `dragend`.
+- **Drag-and-drop:** Native HTML5 API. No drag library. Position calculated via fractional indexing (midpoint between neighbors). Drag uses `requestAnimationFrame` trick: browser captures full-opacity ghost synchronously in `dragstart`, then next frame sets `.dragging` class (`display:none`) to hide the original. A `.drop-placeholder` line shows insertion point. Card `dragstart` calls `stopPropagation()` to prevent list from also entering drag state. Placeholder cleaned up on `dragend`.
 - **Auto-focus:** Input fields use `ref={(el) => requestAnimationFrame(() => el.focus())}`. Do not use `autofocus` attribute (doesn't work reliably with SolidJS `Show`).
 - **CSS:** All styles in `styles/app.css`. No CSS modules, no Tailwind, no CSS-in-JS.
 
@@ -127,7 +127,7 @@ DELETE /api/cards/:id                 → 204
 - **SolidJS reactivity** — don't destructure props (breaks reactivity). Access as `props.foo`. Use `createMemo` for derived values.
 - **Position gaps are fine.** Fractional indexing leaves gaps (1.0, 2.0, 1.5, 1.25...). This is by design. No need to normalize positions.
 - **Card description** is a JSON string, not a JSON object. It's `JSON.stringify(prosemirrorDoc)` on save, `JSON.parse(description)` on load.
-- **Unsaved changes confirmation** — CardDetail modal shows `confirm()` dialog when closing with dirty state. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded.
+- **Unsaved changes confirmation** — CardDetail modal shows custom Save/Discard/Cancel dialog when closing with dirty state. Enter defaults to Save, Escape dismisses dialog. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded via `guardedClose()`.
 - **Periodic polling** — Home and Board pages refetch data every 15s via `setInterval(refetch, 15000)`. This reflects external file changes (e.g., from rsync, git pull, Syncthing) without requiring page reload.
 
 ## Dependencies

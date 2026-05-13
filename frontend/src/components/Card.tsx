@@ -13,7 +13,8 @@ export default function Card(props: Props) {
     e.dataTransfer!.setData("application/card-id", props.card.id);
     e.dataTransfer!.setData("application/source-list", props.card.list_id);
     e.dataTransfer!.effectAllowed = "move";
-    (e.target as HTMLElement).classList.add("dragging");
+    const el = e.target as HTMLElement;
+    requestAnimationFrame(() => el.classList.add("dragging"));
   };
 
   const handleDragEnd = (e: DragEvent) => {

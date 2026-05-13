@@ -299,9 +299,7 @@ body {
 }
 
 .card.dragging {
-  opacity: 0.5;
-  transform: rotate(2deg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: none;
 }
 
 .drop-placeholder {
@@ -665,6 +663,44 @@ body {
   color: #b07d10;
   margin-left: auto;
   font-style: italic;
+}
+
+.unsaved-dialog {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fffbe6;
+  border-top: 2px solid #f2d600;
+  border-radius: 0 0 12px 12px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  animation: slideUp 0.15s ease;
+}
+
+.unsaved-dialog p {
+  font-size: 14px;
+  font-weight: 500;
+  color: #172b4d;
+  margin: 0;
+}
+
+.unsaved-dialog-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-danger {
+  background: #eb5a46;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #cf513d;
 }
 
 /* ═══ ProseMirror Editor ═══ */
