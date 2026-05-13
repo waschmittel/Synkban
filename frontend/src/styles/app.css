@@ -226,15 +226,16 @@ body {
 }
 
 .list.list-dragging {
-  opacity: 0.3;
+  display: none;
 }
 
 .list-drop-placeholder {
-  width: 4px;
+  min-width: 280px;
+  max-width: 280px;
   min-height: 100px;
-  background: #0079bf;
-  border-radius: 2px;
-  margin: 0 4px;
+  background: rgba(2, 106, 167, 0.15);
+  border: 2px dashed #026aa7;
+  border-radius: 12px;
   flex-shrink: 0;
 }
 
