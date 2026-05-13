@@ -84,10 +84,10 @@ export const api = {
       body: JSON.stringify({ archived: true }),
     }),
 
-  restoreCard: (id: string) =>
+  restoreCard: (id: string, listId?: string) =>
     request<Card>(`/cards/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ archived: false }),
+      body: JSON.stringify({ archived: false, ...(listId ? { list_id: listId } : {}) }),
     }),
 
   deleteCard: (id: string) =>

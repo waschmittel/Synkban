@@ -283,6 +283,17 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
             }
         }
     }
+    let orphan_dir = archived_cards_dir(data_dir, board_id);
+    if orphan_dir.exists() {
+        for entry in fs::read_dir(&orphan_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "json") {
+                let card = read_json::<Card>(&path)?;
+                archived.push(card);
+            }
+        }
+    }
     archived.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(archived)
 }
@@ -470,20 +481,24 @@ pub fn update_list(
     Ok(list)
 }
 
+fn archived_cards_dir(data_dir: &Path, board_id: &str) -> PathBuf {
+    board_dir(data_dir, board_id).join("archived_cards")
+}
+
 pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let dir = list_dir(data_dir, &board_id, list_id);
     let cdir = cards_dir(data_dir, &board_id, list_id);
     if cdir.exists() {
+        let archive_dir = archived_cards_dir(data_dir, &board_id);
         for entry in fs::read_dir(&cdir)? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json") {
-                let card_id = path.file_stem().unwrap().to_string_lossy().to_string();
-                let att_dir = attachment_dir(data_dir, &board_id, &card_id);
-                if att_dir.exists() {
-                    let _ = fs::remove_dir_all(&att_dir);
-                }
+                let mut card: Card = read_json(&path)?;
+                card.archived = true;
+                fs::create_dir_all(&archive_dir)?;
+                write_json(&archive_dir.join(format!("{}.json", card.id)), &card)?;
             }
         }
     }
@@ -493,7 +508,12 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
 
 // --- Cards ---
 
-fn find_board_and_list_for_card(data_dir: &Path, card_id: &str) -> Result<(String, String), AppError> {
+enum CardLocation {
+    InList { board_id: String, list_id: String },
+    Orphaned { board_id: String },
+}
+
+fn find_card_location(data_dir: &Path, card_id: &str) -> Result<CardLocation, AppError> {
     let boards = boards_dir(data_dir);
     if boards.exists() {
         for board_entry in fs::read_dir(&boards)? {
@@ -503,23 +523,33 @@ fn find_board_and_list_for_card(data_dir: &Path, card_id: &str) -> Result<(Strin
             }
             let board_id = board_entry.file_name().to_string_lossy().to_string();
             let lists_path = lists_dir(data_dir, &board_id);
-            if !lists_path.exists() {
-                continue;
+            if lists_path.exists() {
+                for list_entry in fs::read_dir(&lists_path)? {
+                    let list_entry = list_entry?;
+                    if !list_entry.file_type()?.is_dir() {
+                        continue;
+                    }
+                    let list_id = list_entry.file_name().to_string_lossy().to_string();
+                    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+                    if card_path.exists() {
+                        return Ok(CardLocation::InList { board_id, list_id });
+                    }
+                }
             }
-            for list_entry in fs::read_dir(&lists_path)? {
-                let list_entry = list_entry?;
-                if !list_entry.file_type()?.is_dir() {
-                    continue;
-                }
-                let list_id = list_entry.file_name().to_string_lossy().to_string();
-                let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-                if card_path.exists() {
-                    return Ok((board_id, list_id));
-                }
+            let orphan_path = archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
+            if orphan_path.exists() {
+                return Ok(CardLocation::Orphaned { board_id });
             }
         }
     }
     Err(AppError::NotFound("Card not found".into()))
+}
+
+fn find_board_and_list_for_card(data_dir: &Path, card_id: &str) -> Result<(String, String), AppError> {
+    match find_card_location(data_dir, card_id)? {
+        CardLocation::InList { board_id, list_id } => Ok((board_id, list_id)),
+        CardLocation::Orphaned { .. } => Err(AppError::NotFound("Card not found in any list".into())),
+    }
 }
 
 fn find_board_for_list_id(data_dir: &Path, list_id: &str) -> Result<String, AppError> {
@@ -579,8 +609,17 @@ pub fn update_card(
     archived: Option<bool>,
     due_date: Option<Option<&str>>,
 ) -> Result<Card, AppError> {
-    let (board_id, old_list_id) = find_board_and_list_for_card(data_dir, card_id)?;
-    let old_path = cards_dir(data_dir, &board_id, &old_list_id).join(format!("{card_id}.json"));
+    let loc = find_card_location(data_dir, card_id)?;
+    let (_board_id, old_list_id, old_path, is_orphaned) = match &loc {
+        CardLocation::InList { board_id, list_id } => {
+            let path = cards_dir(data_dir, board_id, list_id).join(format!("{card_id}.json"));
+            (board_id.clone(), list_id.clone(), path, false)
+        }
+        CardLocation::Orphaned { board_id } => {
+            let path = archived_cards_dir(data_dir, board_id).join(format!("{card_id}.json"));
+            (board_id.clone(), String::new(), path, true)
+        }
+    };
     let mut card: Card = read_json(&old_path)?;
 
     if let Some(t) = title {
@@ -602,6 +641,20 @@ pub fn update_card(
         card.due_date = dd.map(|s| s.to_string());
     }
 
+    if is_orphaned && !card.archived {
+        let target_list_id = new_list_id
+            .ok_or_else(|| AppError::BadRequest("list_id required when restoring orphaned card".into()))?;
+        let target_board_id = find_board_for_list_id(data_dir, target_list_id)?;
+        let max_pos = get_max_card_position(data_dir, &target_board_id, target_list_id)?;
+        card.list_id = target_list_id.to_string();
+        card.position = max_pos + 1.0;
+        let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
+        fs::create_dir_all(&new_dir)?;
+        write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
+        fs::remove_file(&old_path)?;
+        return Ok(card);
+    }
+
     if let Some(target_list_id) = new_list_id {
         if target_list_id != old_list_id {
             let target_board_id = find_board_for_list_id(data_dir, target_list_id)?;
@@ -619,8 +672,15 @@ pub fn update_card(
 }
 
 pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
-    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
-    let path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+    let loc = find_card_location(data_dir, card_id)?;
+    let (board_id, path) = match &loc {
+        CardLocation::InList { board_id, list_id } => {
+            (board_id.clone(), cards_dir(data_dir, board_id, list_id).join(format!("{card_id}.json")))
+        }
+        CardLocation::Orphaned { board_id } => {
+            (board_id.clone(), archived_cards_dir(data_dir, board_id).join(format!("{card_id}.json")))
+        }
+    };
     fs::remove_file(&path)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     if att_dir.exists() {

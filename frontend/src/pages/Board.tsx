@@ -60,6 +60,7 @@ export default function BoardPage() {
   const [archivedCards, setArchivedCards] = createSignal<CardType[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
   const [confirmDeleteCardId, setConfirmDeleteCardId] = createSignal<string | null>(null);
+  const [confirmDeleteListId, setConfirmDeleteListId] = createSignal<string | null>(null);
 
   // Board rename state
   const [showRename, setShowRename] = createSignal(false);
@@ -113,7 +114,7 @@ export default function BoardPage() {
     const handleGlobalKey = (e: KeyboardEvent) => {
       if (isInInput(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
       // Block global shortcuts when confirm dialog is open
-      if (confirmArchiveCardId()) return;
+      if (confirmArchiveCardId() || confirmDeleteListId()) return;
 
       if (e.key === "?") {
         e.preventDefault();
@@ -271,7 +272,8 @@ export default function BoardPage() {
   };
 
   const handleRestoreCard = async (cardId: string) => {
-    await api.restoreCard(cardId);
+    const firstListId = board()?.lists[0]?.id;
+    await api.restoreCard(cardId, firstListId);
     setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
     refetch();
   };
@@ -293,7 +295,18 @@ export default function BoardPage() {
     refetch();
   };
 
-  const handleDeleteList = async (listId: string) => {
+  const handleDeleteList = (listId: string) => {
+    const b = board();
+    const list = b?.lists.find((l) => l.id === listId);
+    if (list && list.cards.length > 0) {
+      setConfirmDeleteListId(listId);
+    } else {
+      doDeleteList(listId);
+    }
+  };
+
+  const doDeleteList = async (listId: string) => {
+    setConfirmDeleteListId(null);
     await api.deleteList(listId);
     refetch();
   };
@@ -858,6 +871,37 @@ export default function BoardPage() {
               <button
                 class="btn btn-cancel"
                 onClick={() => setConfirmArchiveCardId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* List delete confirmation */}
+      <Show when={confirmDeleteListId()}>
+        <div
+          class="unsaved-overlay archive-overlay"
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Escape") { e.preventDefault(); setConfirmDeleteListId(null); }
+            if (e.key === "Enter") { e.preventDefault(); (document.activeElement as HTMLElement | null)?.click(); }
+          }}
+        >
+          <div class="unsaved-dialog">
+            <p>Delete this list? Its cards will be archived.</p>
+            <div class="unsaved-dialog-actions">
+              <button
+                ref={(el) => requestAnimationFrame(() => el.focus())}
+                class="btn btn-primary"
+                onClick={() => doDeleteList(confirmDeleteListId()!)}
+              >
+                Delete list
+              </button>
+              <button
+                class="btn btn-cancel"
+                onClick={() => setConfirmDeleteListId(null)}
               >
                 Cancel
               </button>
