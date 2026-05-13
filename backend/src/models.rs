@@ -44,6 +44,11 @@ pub struct ListWithCards {
     pub cards: Vec<Card>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ChangeCheck {
+    pub mtime: u64,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateBoard {
     pub title: String,

@@ -50,6 +50,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .app_data(web::Data::new(data_dir.clone()))
+            .route("/api/changes", web::get().to(handlers::boards::check_changes))
             .route("/api/boards", web::get().to(handlers::boards::list_boards))
             .route("/api/boards", web::post().to(handlers::boards::create_board))
             .route("/api/boards/{id}", web::get().to(handlers::boards::get_board))

@@ -78,6 +78,7 @@ data/boards/{board-id}/lists/{list-id}/cards/{card-id}.json
 ## API Endpoints
 
 ```
+GET    /api/changes                   → { mtime: u64 } (newest file mtime, for poll efficiency)
 GET    /api/boards                    → Board[]
 POST   /api/boards          {title}   → Board (201)
 GET    /api/boards/:id                → BoardDetail (nested lists + cards)
@@ -128,7 +129,7 @@ DELETE /api/cards/:id                 → 204
 - **Position gaps are fine.** Fractional indexing leaves gaps (1.0, 2.0, 1.5, 1.25...). This is by design. No need to normalize positions.
 - **Card description** is a JSON string, not a JSON object. It's `JSON.stringify(prosemirrorDoc)` on save, `JSON.parse(description)` on load.
 - **Unsaved changes confirmation** — CardDetail modal shows custom Save/Discard/Cancel dialog when closing with dirty state. Enter defaults to Save, Escape dismisses dialog. All 4 close paths (ESC, overlay click, X button, Cancel) are guarded via `guardedClose()`.
-- **Periodic polling** — Home and Board pages refetch data every 15s via `setInterval(refetch, 15000)`. This reflects external file changes (e.g., from rsync, git pull, Syncthing) without requiring page reload.
+- **Periodic polling** — Home and Board pages poll `GET /api/changes` every 15s, which returns the newest file mtime from the data directory (cheap stat walk, no JSON parsing). Full refetch only happens when mtime changes. This efficiently reflects external file changes (rsync, git pull, Syncthing) without unnecessary data transfers.
 
 ## Dependencies
 

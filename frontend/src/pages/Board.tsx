@@ -14,8 +14,17 @@ export default function BoardPage() {
   );
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
 
+  let lastMtime = 0;
   onMount(() => {
-    const id = setInterval(refetch, 15000);
+    const id = setInterval(async () => {
+      try {
+        const { mtime } = await api.checkChanges();
+        if (mtime !== lastMtime) {
+          lastMtime = mtime;
+          refetch();
+        }
+      } catch { /* ignore poll errors */ }
+    }, 15000);
     onCleanup(() => clearInterval(id));
   });
 

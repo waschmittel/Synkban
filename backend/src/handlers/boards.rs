@@ -5,6 +5,11 @@ use crate::errors::AppError;
 use crate::models::*;
 use crate::store;
 
+pub async fn check_changes(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
+    let mtime = store::get_latest_mtime(&data_dir)?;
+    Ok(HttpResponse::Ok().json(crate::models::ChangeCheck { mtime }))
+}
+
 pub async fn list_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
     let boards = store::list_boards(&data_dir)?;
     Ok(HttpResponse::Ok().json(boards))

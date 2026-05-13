@@ -86,6 +86,40 @@ fn is_leap(y: i64) -> bool {
     (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
 
+// --- Change detection ---
+
+pub fn get_latest_mtime(data_dir: &Path) -> Result<u64, AppError> {
+    let dir = boards_dir(data_dir);
+    if !dir.exists() {
+        return Ok(0);
+    }
+    let mut latest = 0u64;
+    walk_mtime(&dir, &mut latest)?;
+    Ok(latest)
+}
+
+fn walk_mtime(dir: &Path, latest: &mut u64) -> Result<(), AppError> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let ft = entry.file_type()?;
+        if let Ok(meta) = entry.metadata() {
+            if let Ok(modified) = meta.modified() {
+                let millis = modified
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                if millis > *latest {
+                    *latest = millis;
+                }
+            }
+        }
+        if ft.is_dir() {
+            walk_mtime(&entry.path(), latest)?;
+        }
+    }
+    Ok(())
+}
+
 // --- Boards ---
 
 pub fn list_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
