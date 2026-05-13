@@ -2,6 +2,7 @@ import {
   createResource,
   createSignal,
   createEffect,
+  untrack,
   For,
   Show,
   onMount,
@@ -53,15 +54,12 @@ export default function BoardPage() {
   // Restore focus to a moved card after board resource re-renders.
   // requestAnimationFrame runs after SolidJS flushes DOM updates for the new board() value.
   createEffect(() => {
-    board(); // subscribe
-    const cardId = pendingFocusCardId();
+    board(); // only dependency — fires after DOM update from refetch
+    const cardId = untrack(pendingFocusCardId); // read without tracking
     if (!cardId) return;
+    setPendingFocusCardId(null);
     requestAnimationFrame(() => {
-      const el = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
-      if (el) {
-        setPendingFocusCardId(null);
-        el.focus();
-      }
+      (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
     });
   });
 
