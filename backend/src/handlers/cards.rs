@@ -16,11 +16,27 @@ pub async fn create_card(
     Ok(HttpResponse::Created().json(card))
 }
 
+fn is_valid_iso_date(s: &str) -> bool {
+    if s.len() != 10 { return false; }
+    let b = s.as_bytes();
+    if b[4] != b'-' || b[7] != b'-' { return false; }
+    let Ok(y) = s[0..4].parse::<u32>() else { return false };
+    let Ok(m) = s[5..7].parse::<u32>() else { return false };
+    let Ok(d) = s[8..10].parse::<u32>() else { return false };
+    if m < 1 || m > 12 || d < 1 || d > 31 || y < 1 { return false; }
+    true
+}
+
 pub async fn update_card(
     data_dir: web::Data<PathBuf>,
     path: web::Path<String>,
     body: web::Json<UpdateCard>,
 ) -> Result<HttpResponse, AppError> {
+    if let Some(Some(ref dd)) = body.due_date {
+        if !is_valid_iso_date(dd) {
+            return Err(AppError::BadRequest("due_date must be in YYYY-MM-DD format".to_string()));
+        }
+    }
     let due_date = body.due_date.as_ref().map(|dd| dd.as_deref());
     let card = store::update_card(
         &data_dir,

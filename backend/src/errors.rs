@@ -6,6 +6,7 @@ pub enum AppError {
     NotFound(String),
     Io(std::io::Error),
     TooLarge,
+    BadRequest(String),
 }
 
 impl fmt::Display for AppError {
@@ -14,6 +15,7 @@ impl fmt::Display for AppError {
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::Io(e) => write!(f, "IO error: {e}"),
             AppError::TooLarge => write!(f, "Payload too large"),
+            AppError::BadRequest(msg) => write!(f, "Bad request: {msg}"),
         }
     }
 }
@@ -30,6 +32,9 @@ impl ResponseError for AppError {
             AppError::TooLarge => {
                 HttpResponse::PayloadTooLarge()
                     .json(serde_json::json!({"error": "File too large (max 50 MB)"}))
+            }
+            AppError::BadRequest(msg) => {
+                HttpResponse::BadRequest().json(serde_json::json!({"error": msg}))
             }
         }
     }

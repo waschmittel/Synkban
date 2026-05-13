@@ -307,6 +307,35 @@ body {
   box-shadow: 0 0 0 1px #0079bf;
 }
 
+.board-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  color: #172b4d;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.board-filter-btn:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.board-filter-btn--active {
+  background: rgba(0, 121, 191, 0.15);
+  border-color: #0079bf;
+  color: #0079bf;
+}
+
+.board-filter-btn--active:hover {
+  background: rgba(0, 121, 191, 0.25);
+}
+
 .board-archive-btn {
   display: flex;
   align-items: center;
@@ -1274,13 +1303,40 @@ body {
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-dropdown {
-  padding: 4px 6px;
+  padding: 4px 20px 4px 6px;
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.1s;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid #dfe1e6;
+  font-weight: 500;
+  font-size: 13px;
+  color: #172b4d;
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-dropdown:hover {
+  background: #e4e6ea;
+  border-color: #c1c7d0;
+}
+
+.editor-wrapper .ProseMirror-menu-dropdown-menu {
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #dfe1e6;
+  padding: 4px;
+  min-width: 120px;
+}
+
+.editor-wrapper .ProseMirror-menu-dropdown-item button {
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 100%;
+  text-align: left;
+}
+
+.editor-wrapper .ProseMirror-menu-dropdown-item:hover,
+.editor-wrapper .ProseMirror-menu-dropdown-item:focus-within {
   background: #e4e6ea;
 }
 
@@ -1968,10 +2024,16 @@ body {
   flex-wrap: wrap;
 }
 
+.filter-input-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .filter-text-input {
   border: 2px solid rgba(0, 0, 0, 0.15);
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 5px 28px 5px 10px;
   font-size: 13px;
   outline: none;
   background: rgba(255, 255, 255, 0.9);
@@ -1982,6 +2044,28 @@ body {
 .filter-text-input:focus {
   border-color: #0079bf;
   background: white;
+}
+
+.filter-input-clear {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  color: #5e6c84;
+  padding: 0;
+  transition: background 0.1s;
+}
+
+.filter-input-clear:hover {
+  background: rgba(0, 0, 0, 0.2);
+  color: #172b4d;
 }
 
 .filter-labels {
@@ -2021,17 +2105,3 @@ body {
   flex-shrink: 0;
 }
 
-.filter-clear {
-  background: rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #172b4d;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-
-.filter-clear:hover {
-  background: rgba(0, 0, 0, 0.14);
-}

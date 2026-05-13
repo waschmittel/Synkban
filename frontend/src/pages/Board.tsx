@@ -559,6 +559,17 @@ export default function BoardPage() {
                 />
               </Show>
               <button
+                class="board-filter-btn"
+                classList={{ "board-filter-btn--active": showFilterBar() || isFiltering() }}
+                onClick={() => setShowFilterBar((v) => !v)}
+                title="Filter cards (F)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                Filter
+              </button>
+              <button
                 class="board-archive-btn"
                 onClick={openArchive}
                 title="View archived cards"
@@ -614,25 +625,39 @@ export default function BoardPage() {
             </div>
             <Show when={showFilterBar()}>
               <div class="filter-bar">
-                <input
-                  ref={(el) => requestAnimationFrame(() => el.focus())}
-                  class="filter-text-input"
-                  type="text"
-                  placeholder="Filter cards..."
-                  value={filterText()}
-                  onInput={(e) => setFilterText(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      e.stopPropagation();
-                      if (!filterText() && filterLabelIds().length === 0) {
-                        setShowFilterBar(false);
-                      } else {
-                        setFilterText("");
-                        setFilterLabelIds([]);
+                <div class="filter-input-wrapper">
+                  <input
+                    ref={(el) => requestAnimationFrame(() => el.focus())}
+                    class="filter-text-input"
+                    type="text"
+                    placeholder="Filter cards..."
+                    value={filterText()}
+                    onInput={(e) => setFilterText(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.stopPropagation();
+                        if (!filterText() && filterLabelIds().length === 0) {
+                          setShowFilterBar(false);
+                        } else {
+                          setFilterText("");
+                          setFilterLabelIds([]);
+                        }
                       }
-                    }
-                  }}
-                />
+                    }}
+                  />
+                  <Show when={isFiltering()}>
+                    <button
+                      class="filter-input-clear"
+                      onClick={() => { setFilterText(""); setFilterLabelIds([]); }}
+                      title="Clear all filters"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </Show>
+                </div>
                 <Show when={b().labels.length > 0}>
                   <div class="filter-labels">
                     <For each={b().labels}>
@@ -652,11 +677,6 @@ export default function BoardPage() {
                       }}
                     </For>
                   </div>
-                </Show>
-                <Show when={isFiltering()}>
-                  <button class="filter-clear" onClick={() => { setFilterText(""); setFilterLabelIds([]); }}>
-                    Clear
-                  </button>
                 </Show>
               </div>
             </Show>
