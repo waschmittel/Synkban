@@ -48,7 +48,7 @@ After any code change:
 - **API client:** `api.ts` — all backend calls go through this module. Typed fetch wrapper.
 - **Types:** `types.ts` — TypeScript interfaces matching backend models. Keep in sync with `models.rs`.
 - **ProseMirror** for rich text in card descriptions. Schema includes basic nodes + lists. Description stored as ProseMirror JSON string. No raw HTML ever.
-- **Drag-and-drop:** Native HTML5 API. No drag library. Position calculated via fractional indexing (midpoint between neighbors). Dragged card collapses to zero-height; a `.drop-placeholder` line shows the insertion point. Placeholder is cleaned up on `dragend`.
+- **Drag-and-drop:** Native HTML5 API. No drag library. Position calculated via fractional indexing (midpoint between neighbors). Dragged card shows semi-transparent + slightly rotated at its original position; a `.drop-placeholder` line shows the insertion point. Card `dragstart` calls `stopPropagation()` to prevent list from also entering drag state. Placeholder is cleaned up on `dragend`.
 - **Auto-focus:** Input fields use `ref={(el) => requestAnimationFrame(() => el.focus())}`. Do not use `autofocus` attribute (doesn't work reliably with SolidJS `Show`).
 - **CSS:** All styles in `styles/app.css`. No CSS modules, no Tailwind, no CSS-in-JS.
 

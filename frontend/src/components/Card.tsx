@@ -9,6 +9,7 @@ interface Props {
 
 export default function Card(props: Props) {
   const handleDragStart = (e: DragEvent) => {
+    e.stopPropagation();
     e.dataTransfer!.setData("application/card-id", props.card.id);
     e.dataTransfer!.setData("application/source-list", props.card.list_id);
     e.dataTransfer!.effectAllowed = "move";
