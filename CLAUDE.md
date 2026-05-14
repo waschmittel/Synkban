@@ -35,7 +35,7 @@ After any code change:
 
 ## Desktop Mode
 
-The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--features desktop` and run with `--desktop`, the binary starts the backend server in a background thread and opens a native WebView window pointing to `http://localhost:PORT`.
+The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--features desktop` and run with `--desktop`, the binary starts the backend server on a random free port (localhost-only), generates a one-time token for access control, and opens a native WebView window pointing to `http://127.0.0.1:PORT/?token=SECRET`.
 
 - `./build.sh` — web-only build (default, no Tauri dependency)
 - `./build.sh --desktop` — builds with Tauri v2 desktop support; on macOS also creates `Synkban.app` bundle
@@ -51,11 +51,13 @@ The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--fe
 
 ### Desktop Architecture
 
-- `lib.rs` exposes the server setup; `main.rs` is a thin CLI entry point
+- `lib.rs` exposes `run_server` (web mode) and `run_desktop_server` (desktop mode with token middleware + random port); `main.rs` is a thin CLI entry point
 - `desktop.rs` (cfg-gated behind `desktop` feature) creates a Tauri webview window pointing to the backend
+- **Token protection** — desktop mode generates a UUID token per launch. Actix middleware (`wrap_fn`) checks every request for a `synkban_token` cookie or `?token=` query param. Initial page load sets the cookie via query param; subsequent same-origin requests include the cookie automatically. Other local apps cannot access the UI.
+- **Random port** — desktop server binds to `127.0.0.1:0` (OS assigns free port). Port communicated to main thread via `mpsc` channel. Server readiness confirmed by actual HTTP request (not just TCP connect).
 - No Tauri IPC — all communication is HTTP via the embedded Actix server
 - No `@tauri-apps/cli` or `@tauri-apps/api` npm packages — frontend is unchanged
-- `tauri.conf.json` and `capabilities/` in `backend/` — Tauri v2 config and permissions
+- `tauri.conf.json` and `capabilities/` in `backend/` — Tauri v2 config and permissions. `build` section is empty (no `frontendDist`) since the Tauri webview loads from the backend's HTTP server via External URL.
 - `build.rs` conditionally calls `tauri_build::build()` when the `desktop` feature is enabled
 - **macOS app bundle** — `build.sh --desktop` creates `Synkban.app` with proper icon (`.icns`), `Info.plist`, and a launcher script that auto-passes `--desktop`. Icon is a kanban board design generated from `icons/icon.png` (1024x1024).
 - `Info.plist` in `backend/` — macOS bundle metadata (name, identifier, icon, version)

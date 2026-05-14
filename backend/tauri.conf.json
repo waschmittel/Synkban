@@ -2,9 +2,7 @@
   "productName": "Synkban",
   "version": "0.1.0",
   "identifier": "com.synkban.app",
-  "build": {
-    "frontendDist": "../frontend/dist"
-  },
+  "build": {},
   "app": {
     "windows": []
   },

@@ -21,7 +21,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 include_dir = "0.7"
 mime_guess = "2"
 image = "0.25"
-tauri = { version = "2", optional = true }
+tauri = { version = "2", optional = true, features = ["devtools"] }
 
 [build-dependencies]
 tauri-build = { version = "2", optional = true }

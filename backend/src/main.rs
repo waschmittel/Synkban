@@ -12,20 +12,7 @@ fn main() -> std::io::Result<()> {
     if desktop_mode {
         #[cfg(feature = "desktop")]
         {
-            let server_host = host.clone();
-            let server_data_dir = data_dir.clone();
-
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-                rt.block_on(synkban::run_server(&server_host, port, &server_data_dir))
-                    .expect("Server failed");
-            });
-
-            let bind = format!("{host}:{port}");
-            wait_for_server(&bind);
-
-            let url = format!("http://{bind}");
-            synkban::desktop::run(url);
+            run_desktop(data_dir);
             return Ok(());
         }
         #[cfg(not(feature = "desktop"))]
@@ -43,16 +30,57 @@ fn main() -> std::io::Result<()> {
 }
 
 #[cfg(feature = "desktop")]
-fn wait_for_server(bind: &str) {
+fn run_desktop(data_dir: String) {
+    let token = uuid::Uuid::new_v4().to_string().replace("-", "");
+    let (port_tx, port_rx) = std::sync::mpsc::channel();
+
+    let server_data_dir = data_dir.clone();
+    let server_token = token.clone();
+
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+        rt.block_on(synkban::run_desktop_server(
+            &server_data_dir,
+            &server_token,
+            port_tx,
+        ))
+        .expect("Server failed");
+    });
+
+    let port = port_rx.recv().expect("Failed to get server port");
+    wait_for_server(port, &token);
+
+    let url = format!("http://127.0.0.1:{port}/?token={token}");
+    synkban::desktop::run(url);
+}
+
+#[cfg(feature = "desktop")]
+fn wait_for_server(port: u16, token: &str) {
+    use std::io::{Read, Write};
     use std::net::TcpStream;
     use std::time::Duration;
 
-    let addr: std::net::SocketAddr = bind.parse().expect("Invalid bind address");
-    for _ in 0..50 {
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok() {
-            return;
+    let addr = format!("127.0.0.1:{port}");
+    let request = format!(
+        "GET /api/boards?token={token} HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n"
+    );
+
+    for _ in 0..100 {
+        if let Ok(mut stream) = TcpStream::connect_timeout(
+            &addr.parse().unwrap(),
+            Duration::from_millis(200),
+        ) {
+            stream.set_read_timeout(Some(Duration::from_millis(500))).ok();
+            if stream.write_all(request.as_bytes()).is_ok() {
+                let mut buf = [0u8; 32];
+                if let Ok(n) = stream.read(&mut buf) {
+                    if n > 0 && buf.starts_with(b"HTTP/") {
+                        return;
+                    }
+                }
+            }
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    eprintln!("Warning: server may not be ready after 5s");
+    eprintln!("Warning: server may not be ready after 10s");
 }
