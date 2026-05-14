@@ -111,7 +111,6 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["?"]} desc="Toggle shortcuts help" />
           </Section>
           <Section title="Attachments">
-            <Row keys={["Shift", "A"]} desc="Add attachment" />
             <Row keys={["Tab"]} desc="Navigate attachments" />
             <Row keys={["Del"]} desc="Delete focused attachment" />
             <Row keys={["Enter"]} desc="Preview/download attachment" />
