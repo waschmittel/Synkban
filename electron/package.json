@@ -15,6 +15,7 @@
   "build": {
     "appId": "com.synkban.app",
     "productName": "Synkban",
+    "npmRebuild": false,
     "extraResources": [
       {
         "from": "../backend/target/release/synkban",
