@@ -35,16 +35,9 @@ if [ "$DESKTOP" = true ]; then
         rm -rf "$APP"
         mkdir -p "$APP/Contents/MacOS"
         mkdir -p "$APP/Contents/Resources"
-        cp "$ROOT/backend/target/release/synkban" "$APP/Contents/MacOS/synkban-bin"
+        cp "$ROOT/backend/target/release/synkban" "$APP/Contents/MacOS/synkban"
         cp "$ROOT/backend/Info.plist" "$APP/Contents/Info.plist"
         cp "$ROOT/backend/icons/icon.icns" "$APP/Contents/Resources/icon.icns"
-        # Launcher script that always passes --desktop
-        cat > "$APP/Contents/MacOS/synkban" << 'LAUNCHER'
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$DIR/synkban-bin" --desktop "$@"
-LAUNCHER
-        chmod +x "$APP/Contents/MacOS/synkban"
         echo "  Created: $APP"
     fi
 else

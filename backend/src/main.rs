@@ -1,6 +1,13 @@
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
-    let desktop_mode = args.iter().any(|a| a == "--desktop");
+
+    // Auto-detect macOS .app bundle — binary lives inside Synkban.app/Contents/MacOS/
+    let in_app_bundle = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(|s| s.contains(".app/Contents/MacOS/")))
+        .unwrap_or(false);
+
+    let desktop_mode = args.iter().any(|a| a == "--desktop") || in_app_bundle;
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port: u16 = std::env::var("PORT")
