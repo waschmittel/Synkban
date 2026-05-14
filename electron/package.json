@@ -2,6 +2,7 @@
   "name": "synkban",
   "version": "0.1.0",
   "description": "Local-first kanban board — Electron desktop shell",
+  "author": "Synkban",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
