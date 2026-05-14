@@ -151,6 +151,7 @@ interface Props {
 export default function CardDetail(props: Props) {
   let editorRef!: HTMLDivElement;
   let titleInputRef!: HTMLInputElement;
+  let fileInputRef!: HTMLInputElement;
   let view: EditorView | undefined;
   const [title, setTitle] = createSignal(props.card.title);
   const [selectedLabelIds, setSelectedLabelIds] = createSignal<string[]>(
@@ -356,6 +357,11 @@ export default function CardDetail(props: Props) {
     const el = e.target as HTMLElement;
     const isTyping = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.contentEditable === "true";
     if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === "A" && e.shiftKey) {
+        e.preventDefault();
+        fileInputRef?.click();
+        return;
+      }
       if (e.key === "d") {
         e.preventDefault();
         dueDateRef?.focus();
@@ -662,6 +668,7 @@ export default function CardDetail(props: Props) {
             </svg>
             {uploading() ? "Uploading…" : "Add attachment"}
             <input
+              ref={fileInputRef!}
               type="file"
               style={{ display: "none" }}
               onChange={handleFileUpload}
