@@ -63,8 +63,16 @@ export default function Home() {
         setAdding(true);
       } else if (e.key === "a") {
         e.preventDefault();
-        setShowArchive(v => !v);
-        if (!showArchive()) refetchArchived();
+        if (showArchive()) {
+          setShowArchive(false);
+        } else {
+          setShowArchive(true);
+          refetchArchived();
+          requestAnimationFrame(() => {
+            const first = document.querySelector<HTMLElement>(".archive-board-item");
+            if (first) first.focus();
+          });
+        }
       } else if (e.key === "?") {
         e.preventDefault();
         setShowHelp((v) => !v);

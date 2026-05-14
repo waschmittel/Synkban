@@ -8,7 +8,7 @@ import {
   onMount,
   onCleanup,
 } from "solid-js";
-import { useParams } from "@solidjs/router";
+import { useParams, useNavigate } from "@solidjs/router";
 import { api } from "../api";
 import type { Card as CardType } from "../types";
 import List from "../components/List";
@@ -42,6 +42,7 @@ function isInInput(target: EventTarget | null): boolean {
 
 export default function BoardPage() {
   const params = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const lc = useLabelContext();
 
   const [board, { refetch }] = createResource(
@@ -62,9 +63,7 @@ export default function BoardPage() {
   const [confirmDeleteCardId, setConfirmDeleteCardId] = createSignal<string | null>(null);
   const [confirmDeleteListId, setConfirmDeleteListId] = createSignal<string | null>(null);
 
-  // Board rename state
-  const [showRename, setShowRename] = createSignal(false);
-  const [renameValue, setRenameValue] = createSignal("");
+  // Board rename — state lives in LabelContext, Board.tsx handles commit
 
   // Filter state
   const [showFilterBar, setShowFilterBar] = createSignal(false);
@@ -133,8 +132,8 @@ export default function BoardPage() {
           setShowColorPicker(false);
         } else if (selectedCard()) {
           handleModalClose();
-        } else if (showRename()) {
-          cancelRename();
+        } else if (lc.renaming()) {
+          lc.setRenaming(false);
         } else {
           lc.close();
           const focused = document.activeElement as HTMLElement | null;
@@ -175,6 +174,9 @@ export default function BoardPage() {
         } else {
           openArchive();
         }
+      } else if (e.key === "b") {
+        e.preventDefault();
+        navigate("/");
       } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key) && !e.shiftKey) {
         const focused = document.activeElement as HTMLElement | null;
         const isCard = focused?.classList.contains("card");
@@ -225,42 +227,37 @@ export default function BoardPage() {
     };
 
     const handleToggleShortcuts = () => setShowHelp((v) => !v);
-    const handleStartRename = () => startRename();
+    const handleCommitRename = () => commitRename();
 
     document.addEventListener("keydown", handleGlobalKey);
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
-    document.addEventListener("start-board-rename", handleStartRename as EventListener);
+    document.addEventListener("commit-board-rename", handleCommitRename as EventListener);
 
     onCleanup(() => {
       lc.setHasBoard(false);
       lc.setBoardTitle("");
+      lc.setRenaming(false);
       lc.close();
       clearInterval(pollId);
       document.removeEventListener("keydown", handleGlobalKey);
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
-      document.removeEventListener("start-board-rename", handleStartRename as EventListener);
+      document.removeEventListener("commit-board-rename", handleCommitRename as EventListener);
       document.documentElement.style.setProperty("--board-color", "#0079bf");
     });
   });
 
   // --- Board rename ---
 
-  const startRename = () => {
-    setRenameValue(board()?.title ?? "");
-    setShowRename(true);
-  };
-
   const commitRename = async () => {
-    const name = renameValue().trim();
+    if (!lc.renaming()) return;
+    const name = lc.renameValue().trim();
     const b = board();
+    lc.setRenaming(false);
     if (name && b && name !== b.title) {
       await api.updateBoard(b.id, { title: name });
       refetch();
     }
-    setShowRename(false);
   };
-
-  const cancelRename = () => setShowRename(false);
 
   // --- Archive ---
 
@@ -285,6 +282,11 @@ export default function BoardPage() {
       setArchivedCards(cards);
     } finally {
       setArchiveLoading(false);
+      requestAnimationFrame(() => {
+        const first = document.querySelector<HTMLElement>(".archive-card-item");
+        if (first) first.focus();
+        else document.querySelector<HTMLElement>(".archive-modal")?.focus();
+      });
     }
   };
 
@@ -582,20 +584,6 @@ export default function BoardPage() {
         {(b) => (
           <>
             <div class="board-title-bar">
-              <Show when={showRename()}>
-                <input
-                  class="board-title-input"
-                  type="text"
-                  ref={(el) => requestAnimationFrame(() => { el.focus(); el.select(); })}
-                  value={renameValue()}
-                  onInput={(e) => setRenameValue(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
-                    if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
-                  }}
-                  onBlur={commitRename}
-                />
-              </Show>
               <button
                 class="board-filter-btn"
                 classList={{ "board-filter-btn--active": showFilterBar() || isFiltering() }}
@@ -951,7 +939,7 @@ export default function BoardPage() {
             }
           }}
         >
-          <div class="archive-modal">
+          <div class="archive-modal" tabindex="-1">
             <div class="archive-modal-header">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="21 8 21 21 3 21 3 8" />

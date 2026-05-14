@@ -80,25 +80,28 @@ export default function Card(props: Props) {
         props.onMove(props.card.id, props.card.list_id, (p1 + p2) / 2);
         return;
       }
-      if (e.key === "ArrowRight") {
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
         e.preventDefault();
-        const nextList = currentList?.nextElementSibling as HTMLElement | null;
-        if (!nextList?.classList.contains("list")) return;
-        const targetListId = nextList.dataset.listId!;
-        const cards = nextList.querySelectorAll(".card");
-        const lastCard = cards[cards.length - 1] as HTMLElement | null;
-        const pos = lastCard ? parseFloat(lastCard.dataset.cardPosition || "0") + 1 : 1;
-        props.onMove(props.card.id, targetListId, pos);
-        return;
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        const prevList = currentList?.previousElementSibling as HTMLElement | null;
-        if (!prevList?.classList.contains("list")) return;
-        const targetListId = prevList.dataset.listId!;
-        const cards = prevList.querySelectorAll(".card");
-        const lastCard = cards[cards.length - 1] as HTMLElement | null;
-        const pos = lastCard ? parseFloat(lastCard.dataset.cardPosition || "0") + 1 : 1;
+        const adjList = (e.key === "ArrowRight"
+          ? currentList?.nextElementSibling
+          : currentList?.previousElementSibling) as HTMLElement | null;
+        if (!adjList?.classList.contains("list")) return;
+        const targetListId = adjList.dataset.listId!;
+        const curCards = Array.from(currentList!.querySelectorAll<HTMLElement>(".card"));
+        const curIdx = curCards.indexOf(el);
+        const adjCards = Array.from(adjList.querySelectorAll<HTMLElement>(".card"));
+        let pos: number;
+        if (adjCards.length === 0) {
+          pos = 1;
+        } else if (curIdx <= 0) {
+          pos = parseFloat(adjCards[0].dataset.cardPosition || "0") / 2;
+        } else if (curIdx >= adjCards.length) {
+          pos = parseFloat(adjCards[adjCards.length - 1].dataset.cardPosition || "0") + 1;
+        } else {
+          const before = parseFloat(adjCards[curIdx - 1].dataset.cardPosition || "0");
+          const after = parseFloat(adjCards[curIdx].dataset.cardPosition || "0");
+          pos = (before + after) / 2;
+        }
         props.onMove(props.card.id, targetListId, pos);
         return;
       }

@@ -17,13 +17,34 @@ function AppHeader() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </A>
-        <span
-          class="app-logo app-logo--board"
-          onClick={() => document.dispatchEvent(new CustomEvent("start-board-rename"))}
-          title="Click to rename"
+        <Show
+          when={lc.renaming()}
+          fallback={
+            <span
+              class="app-logo app-logo--board"
+              onClick={() => {
+                lc.setRenameValue(lc.boardTitle());
+                lc.setRenaming(true);
+              }}
+              title="Click to rename"
+            >
+              {lc.boardTitle()}
+            </span>
+          }
         >
-          {lc.boardTitle()}
-        </span>
+          <input
+            class="header-rename-input"
+            type="text"
+            ref={(el) => requestAnimationFrame(() => { el.focus(); el.select(); })}
+            value={lc.renameValue()}
+            onInput={(e) => lc.setRenameValue(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); document.dispatchEvent(new CustomEvent("commit-board-rename")); }
+              if (e.key === "Escape") { e.preventDefault(); lc.setRenaming(false); }
+            }}
+            onBlur={() => document.dispatchEvent(new CustomEvent("commit-board-rename"))}
+          />
+        </Show>
       </Show>
       <div class="app-header-actions">
         <Show when={lc.hasBoard()}>

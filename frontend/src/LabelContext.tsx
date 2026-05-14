@@ -10,6 +10,10 @@ interface LabelContextValue {
   setHasBoard: (v: boolean) => void;
   boardTitle: () => string;
   setBoardTitle: (title: string) => void;
+  renaming: () => boolean;
+  setRenaming: (v: boolean) => void;
+  renameValue: () => string;
+  setRenameValue: (v: string) => void;
 }
 
 const LabelContext = createContext<LabelContextValue>();
@@ -18,6 +22,8 @@ export function LabelProvider(props: ParentProps) {
   const [isOpen, setIsOpen] = createSignal(false);
   const [hasBoard, setHasBoard] = createSignal(false);
   const [boardTitle, setBoardTitle] = createSignal("");
+  const [renaming, setRenaming] = createSignal(false);
+  const [renameValue, setRenameValue] = createSignal("");
 
   return (
     <LabelContext.Provider
@@ -30,6 +36,10 @@ export function LabelProvider(props: ParentProps) {
         setHasBoard,
         boardTitle,
         setBoardTitle,
+        renaming,
+        setRenaming,
+        renameValue,
+        setRenameValue,
       }}
     >
       {props.children}

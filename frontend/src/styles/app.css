@@ -45,6 +45,25 @@ body {
   cursor: pointer;
 }
 
+.header-rename-input {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 2px 8px;
+  outline: none;
+  letter-spacing: -0.5px;
+  min-width: 140px;
+  transition: border-color 0.15s;
+}
+
+.header-rename-input:focus {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .app-logo-home {
   color: rgba(255, 255, 255, 0.6);
   display: flex;
