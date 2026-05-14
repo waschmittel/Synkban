@@ -270,9 +270,25 @@ export default function BoardPage() {
   const confirmArchive = async () => {
     const id = confirmArchiveCardId();
     if (!id) return;
+    const el = document.querySelector(`[data-card-id="${id}"]`) as HTMLElement | null;
+    let neighborId: string | null = null;
+    if (el) {
+      let sibling = el.nextElementSibling as HTMLElement | null;
+      while (sibling && !sibling.classList.contains("card")) sibling = sibling.nextElementSibling as HTMLElement | null;
+      if (!sibling) {
+        sibling = el.previousElementSibling as HTMLElement | null;
+        while (sibling && !sibling.classList.contains("card")) sibling = sibling.previousElementSibling as HTMLElement | null;
+      }
+      neighborId = sibling?.dataset.cardId ?? null;
+    }
     await api.archiveCard(id);
-    if (lastFocusedCardId() === id) setLastFocusedCardId(null);
     setConfirmArchiveCardId(null);
+    if (neighborId) {
+      setLastFocusedCardId(neighborId);
+      setPendingFocusCardId(neighborId);
+    } else {
+      setLastFocusedCardId(null);
+    }
     refetch();
   };
 
