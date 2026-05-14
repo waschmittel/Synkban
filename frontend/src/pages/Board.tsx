@@ -174,6 +174,8 @@ export default function BoardPage() {
         } else {
           openArchive();
         }
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
       } else if (e.key === "b") {
         e.preventDefault();
         navigate("/");
