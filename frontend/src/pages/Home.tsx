@@ -6,21 +6,43 @@ import ShortcutHelp from "../components/ShortcutHelp";
 
 export default function Home() {
   const [boards, { refetch }] = createResource(() => api.listBoards());
-  const [archivedBoards, { refetch: refetchArchived }] = createResource(() => api.listArchivedBoards());
+  const [archivedBoards, setArchivedBoards] = createSignal<Board[]>([]);
+  const [archiveLoading, setArchiveLoading] = createSignal(false);
   const [showHelp, setShowHelp] = createSignal(false);
   const [showArchive, setShowArchive] = createSignal(false);
   const [confirmArchiveId, setConfirmArchiveId] = createSignal<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = createSignal<string | null>(null);
   let lastMtime = 0;
 
+  const openArchive = async () => {
+    setShowArchive(true);
+    setArchiveLoading(true);
+    try {
+      const boards = await api.listArchivedBoards();
+      setArchivedBoards(boards);
+    } finally {
+      setArchiveLoading(false);
+      requestAnimationFrame(() => {
+        const first = document.querySelector<HTMLElement>(".archive-board-item");
+        if (first) first.focus();
+        else document.querySelector<HTMLElement>(".archive-modal")?.focus();
+      });
+    }
+  };
+
   onMount(() => {
+    api.listArchivedBoards().then(boards => setArchivedBoards(boards));
+
     const pollId = setInterval(async () => {
       try {
         const { mtime } = await api.checkChanges();
         if (mtime !== lastMtime) {
           lastMtime = mtime;
           refetch();
-          if (showArchive()) refetchArchived();
+          if (showArchive()) {
+            const boards = await api.listArchivedBoards();
+            setArchivedBoards(boards);
+          }
         }
       } catch { /* ignore poll errors */ }
     }, 15000);
@@ -35,28 +57,7 @@ export default function Home() {
         e.altKey
       ) return;
       if (target.closest?.(".shortcut-help-overlay")) return;
-      if (target.closest?.(".archive-modal-overlay")) {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setShowArchive(false);
-          setConfirmDeleteId(null);
-        } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault();
-          const items = Array.from(document.querySelectorAll<HTMLElement>(".archive-board-item"));
-          if (items.length === 0) return;
-          const curIdx = items.indexOf(document.activeElement as HTMLElement);
-          let nextIdx: number;
-          if (curIdx < 0) {
-            nextIdx = e.key === "ArrowDown" ? 0 : items.length - 1;
-          } else {
-            nextIdx = e.key === "ArrowDown"
-              ? Math.min(curIdx + 1, items.length - 1)
-              : Math.max(curIdx - 1, 0);
-          }
-          items[nextIdx]?.focus();
-        }
-        return;
-      }
+      if (target.closest?.(".archive-modal-overlay")) return;
 
       if (e.key === "n") {
         e.preventDefault();
@@ -66,18 +67,16 @@ export default function Home() {
         if (showArchive()) {
           setShowArchive(false);
         } else {
-          setShowArchive(true);
-          refetchArchived();
-          requestAnimationFrame(() => {
-            const first = document.querySelector<HTMLElement>(".archive-board-item");
-            if (first) first.focus();
-          });
+          openArchive();
         }
       } else if (e.key === "?") {
         e.preventDefault();
         setShowHelp((v) => !v);
       } else if (e.key === "Escape") {
-        if (confirmArchiveId()) {
+        if (showArchive()) {
+          setShowArchive(false);
+          setConfirmDeleteId(null);
+        } else if (confirmArchiveId()) {
           setConfirmArchiveId(null);
         } else if (showHelp()) {
           setShowHelp(false);
@@ -159,19 +158,20 @@ export default function Home() {
     await api.archiveBoard(id);
     setConfirmArchiveId(null);
     refetch();
-    if (showArchive()) refetchArchived();
+    const boards = await api.listArchivedBoards();
+    setArchivedBoards(boards);
   };
 
   const handleRestore = async (id: string) => {
     await api.restoreBoard(id);
-    refetchArchived();
+    setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
     refetch();
   };
 
   const handleDeleteArchived = async (id: string) => {
     await api.deleteBoard(id);
     setConfirmDeleteId(null);
-    refetchArchived();
+    setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -187,19 +187,20 @@ export default function Home() {
     <div class="home">
       <div class="home-header">
         <h2>Your Boards</h2>
-        <Show when={archivedBoards() && archivedBoards()!.length > 0}>
-          <button
-            class={`board-archive-toggle ${showArchive() ? "board-archive-toggle--active" : ""}`}
-            onClick={() => { setShowArchive(v => !v); if (!showArchive()) refetchArchived(); }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="21 8 21 21 3 21 3 8" />
-              <rect x="1" y="3" width="22" height="5" />
-              <line x1="10" y1="12" x2="14" y2="12" />
-            </svg>
-            Archive ({archivedBoards()!.length})
-          </button>
-        </Show>
+        <button
+          class={`board-archive-toggle ${showArchive() ? "board-archive-toggle--active" : ""}`}
+          onClick={() => { if (showArchive()) { setShowArchive(false); } else { openArchive(); } }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="21 8 21 21 3 21 3 8" />
+            <rect x="1" y="3" width="22" height="5" />
+            <line x1="10" y1="12" x2="14" y2="12" />
+          </svg>
+          Archive
+          <Show when={archivedBoards().length > 0}>
+            <span> ({archivedBoards().length})</span>
+          </Show>
+        </button>
       </div>
       <Show
         when={boards() && (boards()!.length > 0 || adding())}
@@ -298,8 +299,30 @@ export default function Home() {
 
       {/* Archived boards panel */}
       <Show when={showArchive()}>
-        <div class="archive-modal-overlay" onClick={() => { setShowArchive(false); setConfirmDeleteId(null); }} onKeyDown={(e) => { if (e.key === "Escape") { setShowArchive(false); setConfirmDeleteId(null); } }}>
-          <div class="archive-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          class="archive-modal-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowArchive(false); setConfirmDeleteId(null); } }}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Escape") { setShowArchive(false); setConfirmDeleteId(null); }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const items = Array.from(document.querySelectorAll<HTMLElement>(".archive-board-item"));
+              if (items.length === 0) return;
+              const curIdx = items.indexOf(document.activeElement as HTMLElement);
+              let nextIdx: number;
+              if (curIdx < 0) {
+                nextIdx = e.key === "ArrowDown" ? 0 : items.length - 1;
+              } else {
+                nextIdx = e.key === "ArrowDown"
+                  ? Math.min(curIdx + 1, items.length - 1)
+                  : Math.max(curIdx - 1, 0);
+              }
+              items[nextIdx]?.focus();
+            }
+          }}
+        >
+          <div class="archive-modal" tabindex="-1" onClick={(e) => e.stopPropagation()}>
             <div class="archive-modal-header">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="21 8 21 21 3 21 3 8" />
@@ -315,8 +338,13 @@ export default function Home() {
               </button>
             </div>
             <div class="archive-modal-body">
-              <Show when={archivedBoards() && archivedBoards()!.length > 0} fallback={<div class="archive-empty">No archived boards</div>}>
-                <For each={archivedBoards()}>
+              <Show when={archiveLoading()}>
+                <div class="archive-empty">Loading…</div>
+              </Show>
+              <Show when={!archiveLoading() && archivedBoards().length === 0}>
+                <div class="archive-empty">No archived boards</div>
+              </Show>
+              <For each={archivedBoards()}>
                   {(board) => (
                     <div class="archive-board-item" tabindex="0">
                       <div class="archive-board-color" style={board.color ? { background: board.color } : {}} />
@@ -336,7 +364,6 @@ export default function Home() {
                     </div>
                   )}
                 </For>
-              </Show>
             </div>
           </div>
         </div>
