@@ -1,0 +1,15 @@
+{
+  "productName": "Synkban",
+  "version": "0.1.0",
+  "identifier": "com.synkban.app",
+  "build": {
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": []
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.png"]
+  }
+}

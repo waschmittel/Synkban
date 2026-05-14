@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Default capability for Synkban desktop",
+  "windows": ["main"],
+  "permissions": []
+}

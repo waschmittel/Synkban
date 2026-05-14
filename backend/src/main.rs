@@ -1,92 +1,58 @@
-mod errors;
-mod handlers;
-mod models;
-mod store;
+fn main() -> std::io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    let desktop_mode = args.iter().any(|a| a == "--desktop");
 
-use actix_cors::Cors;
-use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
-use include_dir::{include_dir, Dir};
-use std::path::PathBuf;
-
-pub fn log_timestamp() -> String {
-    let d = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
-    let secs = d.as_secs();
-    let time_secs = secs % 86400;
-    let h = time_secs / 3600;
-    let m = (time_secs % 3600) / 60;
-    let s = time_secs % 60;
-    format!("{:02}:{:02}:{:02}", h, m, s)
-}
-
-static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
-
-async fn serve_embedded(req: HttpRequest) -> HttpResponse {
-    let path = req.path().trim_start_matches('/');
-
-    if let Some(file) = STATIC_DIR.get_file(path) {
-        let mime = mime_guess::from_path(path).first_or_octet_stream();
-        return HttpResponse::Ok()
-            .content_type(mime.as_ref())
-            .body(file.contents());
-    }
-
-    match STATIC_DIR.get_file("index.html") {
-        Some(file) => HttpResponse::Ok()
-            .content_type("text/html")
-            .body(file.contents()),
-        None => HttpResponse::NotFound().body("Not found"),
-    }
-}
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());
-    let bind = format!("{host}:{port}");
-    let data_dir = PathBuf::from(std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".into()));
+    let port: u16 = std::env::var("PORT")
+        .unwrap_or_else(|_| "8080".into())
+        .parse()
+        .expect("PORT must be a valid u16");
+    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".into());
 
-    std::fs::create_dir_all(&data_dir)?;
+    if desktop_mode {
+        #[cfg(feature = "desktop")]
+        {
+            let server_host = host.clone();
+            let server_data_dir = data_dir.clone();
 
-    println!("Server running at http://{bind}");
-    println!("Data directory: {}", data_dir.display());
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+                rt.block_on(synkban::run_server(&server_host, port, &server_data_dir))
+                    .expect("Server failed");
+            });
 
-    HttpServer::new(move || {
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .max_age(3600);
+            let bind = format!("{host}:{port}");
+            wait_for_server(&bind);
 
-        App::new()
-            .wrap(cors)
-            .app_data(web::Data::new(data_dir.clone()))
-            // Allow up to 52 MB request bodies (50 MB file + overhead)
-            .app_data(web::PayloadConfig::new(52 * 1024 * 1024))
-            .route("/api/changes", web::get().to(handlers::boards::check_changes))
-            .route("/api/boards", web::get().to(handlers::boards::list_boards))
-            .route("/api/boards", web::post().to(handlers::boards::create_board))
-            .route("/api/boards/{id}", web::get().to(handlers::boards::get_board))
-            .route("/api/boards/{id}", web::put().to(handlers::boards::update_board))
-            .route("/api/boards/{id}", web::delete().to(handlers::boards::delete_board))
-            .route("/api/boards/{board_id}/archive", web::get().to(handlers::boards::get_archived_cards))
-            .route("/api/boards/{board_id}/lists", web::post().to(handlers::lists::create_list))
-            .route("/api/lists/{id}", web::put().to(handlers::lists::update_list))
-            .route("/api/lists/{id}", web::delete().to(handlers::lists::delete_list))
-            .route("/api/boards/{board_id}/labels", web::post().to(handlers::labels::create_label))
-            .route("/api/labels/{id}", web::put().to(handlers::labels::update_label))
-            .route("/api/labels/{id}", web::delete().to(handlers::labels::delete_label))
-            .route("/api/lists/{list_id}/cards", web::post().to(handlers::cards::create_card))
-            .route("/api/cards/{id}", web::put().to(handlers::cards::update_card))
-            .route("/api/cards/{id}", web::delete().to(handlers::cards::delete_card))
-            .route("/api/cards/{card_id}/attachments", web::post().to(handlers::cards::upload_attachment))
-            .route("/api/cards/{card_id}/attachments/{att_id}", web::get().to(handlers::cards::download_attachment))
-            .route("/api/cards/{card_id}/attachments/{att_id}/thumb", web::get().to(handlers::cards::download_thumbnail))
-            .route("/api/cards/{card_id}/attachments/{att_id}", web::delete().to(handlers::cards::delete_attachment))
-            .default_service(web::get().to(serve_embedded))
-    })
-    .bind(&bind)?
-    .run()
-    .await
+            let url = format!("http://{bind}");
+            synkban::desktop::run(url);
+            return Ok(());
+        }
+        #[cfg(not(feature = "desktop"))]
+        {
+            eprintln!(
+                "Error: --desktop requires the 'desktop' feature.\n\
+                 Rebuild with: cargo build --features desktop"
+            );
+            std::process::exit(1);
+        }
+    }
+
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(synkban::run_server(&host, port, &data_dir))
+}
+
+#[cfg(feature = "desktop")]
+fn wait_for_server(bind: &str) {
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let addr: std::net::SocketAddr = bind.parse().expect("Invalid bind address");
+    for _ in 0..50 {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(100)).is_ok() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    eprintln!("Warning: server may not be ready after 5s");
 }

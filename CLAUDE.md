@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, file-based JSON storage. Single binary with embedded frontend.
+Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, file-based JSON storage. Single binary with embedded frontend. Optional Tauri v2 desktop mode wraps the web UI in a native window.
 
 ## Build & Run
 
@@ -13,6 +13,10 @@ Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, 
 # Run
 ./backend/target/release/synkban
 # → http://localhost:8080
+
+# Desktop mode build (native window via Tauri v2)
+./build.sh --desktop
+./backend/target/release/synkban --desktop
 
 # Development (two terminals)
 cd backend && cargo run          # :8080
@@ -27,6 +31,31 @@ After any code change:
 2. **Frontend changes:** `cd frontend && npx vite build` — must build cleanly
 3. **Full build:** `./build.sh` — frontend must build before backend (assets embedded at compile time)
 4. **Smoke test:** Start server, `curl http://localhost:8080/api/boards` should return `[]` on fresh data dir
+5. **Desktop build:** `cd backend && cargo build --features desktop` — must compile (requires system WebView libs)
+
+## Desktop Mode
+
+The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--features desktop` and run with `--desktop`, the binary starts the backend server in a background thread and opens a native WebView window pointing to `http://localhost:PORT`.
+
+- `./build.sh` — web-only build (default, no Tauri dependency)
+- `./build.sh --desktop` — builds with Tauri v2 desktop support
+- `./backend/target/release/synkban` — web server mode (unchanged)
+- `./backend/target/release/synkban --desktop` — desktop mode (native window)
+
+### System Dependencies for Desktop Build
+
+- **macOS:** Xcode Command Line Tools
+- **Linux:** `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, `libssl-dev`
+- **Windows:** WebView2 runtime (pre-installed on Windows 10+), Visual Studio Build Tools
+
+### Desktop Architecture
+
+- `lib.rs` exposes the server setup; `main.rs` is a thin CLI entry point
+- `desktop.rs` (cfg-gated behind `desktop` feature) creates a Tauri webview window pointing to the backend
+- No Tauri IPC — all communication is HTTP via the embedded Actix server
+- No `@tauri-apps/cli` or `@tauri-apps/api` npm packages — frontend is unchanged
+- `tauri.conf.json` and `capabilities/` in `backend/` — Tauri v2 config and permissions
+- `build.rs` conditionally calls `tauri_build::build()` when the `desktop` feature is enabled
 
 ## Architecture Rules
 
@@ -34,7 +63,7 @@ After any code change:
 
 - **No database.** Storage is JSON files via `store.rs`. Never add SQLite, Postgres, or any DB dependency.
 - **`store.rs`** is the only file that touches the filesystem for data. All handlers call `store::*` functions.
-- **Handlers** are thin — extract params, call store, return JSON. No business logic in handlers. All mutating handlers (create/update/delete) log to stdout with action summary + explicit file list. `store.rs` tracks every file write/delete via thread-local `FILE_OPS`; handlers drain via `store::drain_file_ops(&data_dir)` after each store call. Format: `[HH:MM:SS] ACTION entity "name" (id: ...)` header, then indented lines like `wrote boards/{bid}/board.json` or `deleted dir boards/{bid}/lists/{lid}`. Timestamp from `log_timestamp()` in `main.rs` (UTC HH:MM:SS).
+- **Handlers** are thin — extract params, call store, return JSON. No business logic in handlers. All mutating handlers (create/update/delete) log to stdout with action summary + explicit file list. `store.rs` tracks every file write/delete via thread-local `FILE_OPS`; handlers drain via `store::drain_file_ops(&data_dir)` after each store call. Format: `[HH:MM:SS] ACTION entity "name" (id: ...)` header, then indented lines like `wrote boards/{bid}/board.json` or `deleted dir boards/{bid}/lists/{lid}`. Timestamp from `log_timestamp()` in `lib.rs` (UTC HH:MM:SS).
 - **Models** in `models.rs` — all data types and request/response DTOs live here.
 - **Errors** in `errors.rs` — `AppError` enum, implements `ResponseError`. Four variants: `NotFound`, `Io`, `TooLarge` (HTTP 413, attachment size), `BadRequest` (HTTP 400, validation errors like invalid date format).
 - **Static files** embedded via `include_dir!("$CARGO_MANIFEST_DIR/static")`. The `backend/static/` directory must exist at compile time (created by `build.sh`).
@@ -179,6 +208,10 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 - `include_dir` — embed static files in binary
 - `mime_guess` — MIME type detection for static files
 - `image` — server-side thumbnail generation for image attachments
+
+### Desktop-only (optional, behind `desktop` Cargo feature)
+- `tauri` v2 — native WebView window
+- `tauri-build` v2 — build-time code generation (build-dep)
 
 ### Frontend (package.json)
 - `solid-js` + `@solidjs/router` — UI framework + routing
