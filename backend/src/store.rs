@@ -147,11 +147,13 @@ struct BoardFile {
     labels: Vec<Label>,
     #[serde(skip_serializing_if = "Option::is_none")]
     color: Option<String>,
+    #[serde(default)]
+    archived: bool,
 }
 
 impl From<BoardFile> for Board {
     fn from(b: BoardFile) -> Self {
-        Board { id: b.id, title: b.title, created_at: b.created_at, color: b.color }
+        Board { id: b.id, title: b.title, created_at: b.created_at, color: b.color, archived: b.archived }
     }
 }
 
@@ -203,7 +205,31 @@ pub fn list_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
             let board_json = entry.path().join("board.json");
             if board_json.exists() {
                 let bf: BoardFile = read_json(&board_json)?;
-                boards.push(Board::from(bf));
+                if !bf.archived {
+                    boards.push(Board::from(bf));
+                }
+            }
+        }
+    }
+    boards.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(boards)
+}
+
+pub fn list_archived_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
+    let dir = boards_dir(data_dir);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut boards = Vec::new();
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            let board_json = entry.path().join("board.json");
+            if board_json.exists() {
+                let bf: BoardFile = read_json(&board_json)?;
+                if bf.archived {
+                    boards.push(Board::from(bf));
+                }
             }
         }
     }
@@ -222,9 +248,10 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
         created_at: now_timestamp(),
         labels: Vec::new(),
         color: None,
+        archived: false,
     };
     write_json(&dir.join("board.json"), &bf)?;
-    Ok(Board { id, title: bf.title, created_at: bf.created_at, color: None })
+    Ok(Board::from(bf))
 }
 
 pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppError> {
@@ -329,23 +356,41 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
     Ok(archived)
 }
 
-pub fn update_board(data_dir: &Path, board_id: &str, title: &str, color: Option<&str>) -> Result<Board, AppError> {
+pub fn update_board(
+    data_dir: &Path,
+    board_id: &str,
+    title: Option<&str>,
+    color: Option<&str>,
+    archived: Option<bool>,
+) -> Result<Board, AppError> {
     let dir = board_dir(data_dir, board_id);
     let board_json = dir.join("board.json");
     if !board_json.exists() {
         return Err(AppError::NotFound("Board not found".into()));
     }
     let mut bf: BoardFile = read_json(&board_json)?;
-    bf.title = title.to_string();
-    bf.color = color.map(|s| s.to_string());
+    if let Some(t) = title {
+        bf.title = t.to_string();
+    }
+    if let Some(c) = color {
+        bf.color = Some(c.to_string());
+    }
+    if let Some(a) = archived {
+        bf.archived = a;
+    }
     write_json(&board_json, &bf)?;
-    Ok(Board { id: bf.id, title: bf.title, created_at: bf.created_at, color: bf.color })
+    Ok(Board::from(bf))
 }
 
 pub fn delete_board(data_dir: &Path, board_id: &str) -> Result<(), AppError> {
     let dir = board_dir(data_dir, board_id);
-    if !dir.exists() {
+    let board_json = dir.join("board.json");
+    if !board_json.exists() {
         return Err(AppError::NotFound("Board not found".into()));
+    }
+    let bf: BoardFile = read_json(&board_json)?;
+    if !bf.archived {
+        return Err(AppError::BadRequest("Cannot delete non-archived board".into()));
     }
     track("deleted dir", &dir);
     fs::remove_dir_all(&dir)?;
@@ -954,7 +999,7 @@ mod tests {
     fn update_board_title() {
         let d = tmp();
         let b = create_board(d.path(), "Old").unwrap();
-        let updated = update_board(d.path(), &b.id, "New", None).unwrap();
+        let updated = update_board(d.path(), &b.id, Some("New"), None, None).unwrap();
         assert_eq!(updated.title, "New");
         let detail = get_board(d.path(), &b.id).unwrap();
         assert_eq!(detail.title, "New");
@@ -964,24 +1009,44 @@ mod tests {
     fn update_board_color() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let updated = update_board(d.path(), &b.id, "Board", Some("#ff0000")).unwrap();
+        let updated = update_board(d.path(), &b.id, None, Some("#ff0000"), None).unwrap();
         assert_eq!(updated.color, Some("#ff0000".into()));
-        // clear color
-        let updated = update_board(d.path(), &b.id, "Board", None).unwrap();
-        assert!(updated.color.is_none());
     }
 
     #[test]
     fn update_board_not_found() {
         let d = tmp();
-        let err = update_board(d.path(), "fake", "X", None).unwrap_err();
+        let err = update_board(d.path(), "fake", Some("X"), None, None).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn archive_board() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        assert!(!b.archived);
+        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        assert!(list_boards(d.path()).unwrap().is_empty());
+        assert_eq!(list_archived_boards(d.path()).unwrap().len(), 1);
+        // restore
+        update_board(d.path(), &b.id, None, None, Some(false)).unwrap();
+        assert_eq!(list_boards(d.path()).unwrap().len(), 1);
+        assert!(list_archived_boards(d.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_board_requires_archived() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let err = delete_board(d.path(), &b.id).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
     }
 
     #[test]
     fn delete_board_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
         delete_board(d.path(), &b.id).unwrap();
         assert!(!board_dir(d.path(), &b.id).exists());
         assert!(list_boards(d.path()).unwrap().is_empty());
@@ -1000,6 +1065,7 @@ mod tests {
         let b = create_board(d.path(), "Board").unwrap();
         let l = create_list(d.path(), &b.id, "List").unwrap();
         create_card(d.path(), &l.id, "Card").unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
         delete_board(d.path(), &b.id).unwrap();
         assert!(!board_dir(d.path(), &b.id).exists());
     }

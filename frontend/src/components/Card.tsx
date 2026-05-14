@@ -115,19 +115,20 @@ export default function Card(props: Props) {
       let prev = el.previousElementSibling as HTMLElement | null;
       while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
       prev?.focus();
-    } else if (e.key === "ArrowRight") {
+    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
-      const nextList = currentList?.nextElementSibling as HTMLElement | null;
-      if (nextList?.classList.contains("list")) {
-        const firstCard = nextList.querySelector(".card") as HTMLElement | null;
-        firstCard ? firstCard.focus() : focusAddTrigger(nextList);
-      }
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      const prevList = currentList?.previousElementSibling as HTMLElement | null;
-      if (prevList?.classList.contains("list")) {
-        const firstCard = prevList.querySelector(".card") as HTMLElement | null;
-        firstCard ? firstCard.focus() : focusAddTrigger(prevList);
+      const adjList = (e.key === "ArrowRight"
+        ? currentList?.nextElementSibling
+        : currentList?.previousElementSibling) as HTMLElement | null;
+      if (adjList?.classList.contains("list")) {
+        const curCards = Array.from(currentList!.querySelectorAll<HTMLElement>(".card"));
+        const curIdx = curCards.indexOf(el);
+        const adjCards = adjList.querySelectorAll<HTMLElement>(".card");
+        if (adjCards.length > 0) {
+          adjCards[Math.min(curIdx, adjCards.length - 1)].focus();
+        } else {
+          focusAddTrigger(adjList);
+        }
       }
     }
   };

@@ -28,14 +28,28 @@ export const api = {
 
   getBoard: (id: string) => request<BoardDetail>(`/boards/${id}`),
 
-  updateBoard: (id: string, title: string, color?: string | null) =>
+  updateBoard: (id: string, data: { title?: string; color?: string | null; archived?: boolean }) =>
     request<Board>(`/boards/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ title, color }),
+      body: JSON.stringify(data),
+    }),
+
+  archiveBoard: (id: string) =>
+    request<Board>(`/boards/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ archived: true }),
+    }),
+
+  restoreBoard: (id: string) =>
+    request<Board>(`/boards/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ archived: false }),
     }),
 
   deleteBoard: (id: string) =>
     request<void>(`/boards/${id}`, { method: "DELETE" }),
+
+  listArchivedBoards: () => request<Board[]>("/boards/archive"),
 
   getArchivedCards: (boardId: string) =>
     request<Card[]>(`/boards/${boardId}/archive`),

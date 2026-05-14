@@ -67,8 +67,9 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["↑", "↓", "←", "→"]} desc="Navigate between boards" />
             <Row keys={["Enter"]} desc="Open board" />
             <Row keys={["n"]} desc="Create new board" />
-            <Row keys={["Del"]} desc="Delete focused board" />
-            <Row keys={["Esc"]} desc="Close new board form" />
+            <Row keys={["Del"]} desc="Archive focused board" />
+            <Row keys={["a"]} desc="Toggle archived boards" />
+            <Row keys={["Esc"]} desc="Close form / archive" />
           </Section>
           <Section title="Navigation">
             <Row keys={["↑", "↓"]} desc="Move between cards" />

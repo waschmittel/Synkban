@@ -15,6 +15,11 @@ pub async fn list_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, A
     Ok(HttpResponse::Ok().json(boards))
 }
 
+pub async fn list_archived_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
+    let boards = store::list_archived_boards(&data_dir)?;
+    Ok(HttpResponse::Ok().json(boards))
+}
+
 pub async fn create_board(
     data_dir: web::Data<PathBuf>,
     body: web::Json<CreateBoard>,
@@ -42,7 +47,13 @@ pub async fn update_board(
     body: web::Json<UpdateBoard>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
-    let board = store::update_board(&data_dir, &board_id, &body.title, body.color.as_deref())?;
+    let board = store::update_board(
+        &data_dir,
+        &board_id,
+        body.title.as_deref(),
+        body.color.as_deref(),
+        body.archived,
+    )?;
     let ops = store::drain_file_ops(&data_dir);
     println!(
         "[{}] UPDATE board \"{}\" (id: {})\n{}",

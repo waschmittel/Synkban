@@ -86,7 +86,7 @@ describe("board operations", () => {
 
   it("updateBoard sends PUT with color", async () => {
     const fn = mockFetch({});
-    await api.updateBoard("id", "Title", "#ff0000");
+    await api.updateBoard("id", { title: "Title", color: "#ff0000" });
     expect(fn).toHaveBeenCalledWith(
       "/api/boards/id",
       expect.objectContaining({
@@ -98,7 +98,7 @@ describe("board operations", () => {
 
   it("updateBoard sends null color to clear", async () => {
     const fn = mockFetch({});
-    await api.updateBoard("id", "Title", null);
+    await api.updateBoard("id", { title: "Title", color: null });
     expect(fn).toHaveBeenCalledWith(
       "/api/boards/id",
       expect.objectContaining({

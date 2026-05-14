@@ -254,7 +254,7 @@ export default function BoardPage() {
     const name = renameValue().trim();
     const b = board();
     if (name && b && name !== b.title) {
-      await api.updateBoard(b.id, name, b.color ?? null);
+      await api.updateBoard(b.id, { title: name });
       refetch();
     }
     setShowRename(false);
@@ -467,7 +467,7 @@ export default function BoardPage() {
   const handleSetBoardColor = async (color: string | null) => {
     const b = board();
     if (!b) return;
-    await api.updateBoard(b.id, b.title, color);
+    await api.updateBoard(b.id, { color });
     refetch();
     setShowColorPicker(false);
   };

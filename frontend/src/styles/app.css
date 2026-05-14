@@ -135,13 +135,44 @@ body {
   margin: 0 auto;
 }
 
+.home-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
 .home-header h2 {
   color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 20px;
   font-size: 16px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.board-archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.board-archive-toggle:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.board-archive-toggle--active {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
 }
 
 .board-grid {
@@ -1750,6 +1781,32 @@ body {
   color: #eb5a46;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.archive-board-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.archive-board-item:last-child {
+  border-bottom: none;
+}
+
+.archive-board-item:focus-visible {
+  outline: 2px solid #0079bf;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.archive-board-color {
+  width: 24px;
+  height: 16px;
+  border-radius: 3px;
+  background: #0079bf;
+  flex-shrink: 0;
 }
 
 .archive-empty {

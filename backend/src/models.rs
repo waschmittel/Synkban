@@ -23,6 +23,8 @@ pub struct Board {
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    #[serde(default)]
+    pub archived: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,8 +87,9 @@ pub struct CreateBoard {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateBoard {
-    pub title: String,
+    pub title: Option<String>,
     pub color: Option<String>,
+    pub archived: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
