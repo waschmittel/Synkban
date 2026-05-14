@@ -59,7 +59,7 @@ The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--fe
 - No `@tauri-apps/cli` or `@tauri-apps/api` npm packages — frontend is unchanged
 - `tauri.conf.json` and `capabilities/` in `backend/` — Tauri v2 config and permissions. `build` section is empty (no `frontendDist`) since the Tauri webview loads from the backend's HTTP server via External URL.
 - `build.rs` conditionally calls `tauri_build::build()` when the `desktop` feature is enabled
-- **macOS app bundle** — `build.sh --desktop` creates `Synkban.app` with proper icon (`.icns`), `Info.plist`, and the binary copied directly as `CFBundleExecutable`. The binary auto-detects when running inside `.app/Contents/MacOS/` and activates desktop mode without a shell script wrapper (shell scripts as bundle executables are blocked by modern macOS). Icon is a kanban board design generated from `icons/icon.png` (1024x1024).
+- **macOS app bundle** — `build.sh --desktop` creates `Synkban.app` with proper icon (`.icns`), `Info.plist`, and the binary copied directly as `CFBundleExecutable`. The binary auto-detects when running inside `.app/Contents/MacOS/` and activates desktop mode without a shell script wrapper (shell scripts as bundle executables are blocked by modern macOS). Icon is a kanban board design generated from `icons/icon.png` (1024x1024). macOS Launch Services starts .app bundles with CWD=`/`, so the default data directory is `~/Library/Application Support/Synkban/` (overridable via `DATA_DIR` env var). The CLI `--desktop` flag still defaults to `./data`.
 - `Info.plist` in `backend/` — macOS bundle metadata (name, identifier, icon, version)
 
 ## Architecture Rules

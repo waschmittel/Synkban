@@ -14,7 +14,14 @@ fn main() -> std::io::Result<()> {
         .unwrap_or_else(|_| "8080".into())
         .parse()
         .expect("PORT must be a valid u16");
-    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "./data".into());
+    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| {
+        if in_app_bundle {
+            let home = std::env::var("HOME").expect("HOME not set");
+            format!("{home}/Library/Application Support/Synkban")
+        } else {
+            "./data".into()
+        }
+    });
 
     if desktop_mode {
         #[cfg(feature = "desktop")]
