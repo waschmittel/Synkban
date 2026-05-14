@@ -103,6 +103,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Ctrl", "B"]} desc="Bold selection (title)" />
             <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
+            <Row keys={["Ctrl", "Shift"]} desc="Toggle title / editor focus" />
             <Row keys={["Enter"]} desc="Title → focus editor" />
             <Row keys={["l"]} desc="Toggle label picker" />
             <Row keys={["d"]} desc="Focus due date input" />

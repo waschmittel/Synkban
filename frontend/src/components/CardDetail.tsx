@@ -150,6 +150,7 @@ interface Props {
 
 export default function CardDetail(props: Props) {
   let editorRef!: HTMLDivElement;
+  let titleInputRef!: HTMLInputElement;
   let view: EditorView | undefined;
   const [title, setTitle] = createSignal(props.card.title);
   const [selectedLabelIds, setSelectedLabelIds] = createSignal<string[]>(
@@ -342,6 +343,16 @@ export default function CardDetail(props: Props) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       handleSave();
     }
+    if (e.key === "Shift" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const inEditor = editorRef?.contains(e.target as Node);
+      if (inEditor) {
+        titleInputRef?.focus();
+      } else {
+        view?.focus();
+      }
+      return;
+    }
     const el = e.target as HTMLElement;
     const isTyping = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.contentEditable === "true";
     if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -419,7 +430,7 @@ export default function CardDetail(props: Props) {
             </svg>
           </div>
           <input
-            ref={(el) => requestAnimationFrame(() => el.focus())}
+            ref={(el) => { titleInputRef = el; requestAnimationFrame(() => el.focus()); }}
             class="modal-title-input"
             type="text"
             value={title()}

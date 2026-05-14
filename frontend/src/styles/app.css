@@ -274,8 +274,8 @@ body {
   color: white;
 }
 
-.board-card:focus-visible,
-.add-board:focus-visible {
+.board-card:focus,
+.add-board:focus {
   outline: 2px solid rgba(255, 255, 255, 0.8);
   outline-offset: 2px;
 }
@@ -1481,7 +1481,7 @@ body {
 }
 
 /* ═══ Card keyboard focus ═══ */
-.card:focus-visible {
+.card:focus {
   outline: 2px solid #0079bf;
   outline-offset: 1px;
   background: #f0f6fd;
@@ -1774,7 +1774,7 @@ body {
   border-bottom: none;
 }
 
-.archive-card-item:focus-visible {
+.archive-card-item:focus {
   outline: 2px solid #0079bf;
   outline-offset: -2px;
   border-radius: 4px;
@@ -1814,7 +1814,7 @@ body {
   border-bottom: none;
 }
 
-.archive-board-item:focus-visible {
+.archive-board-item:focus {
   outline: 2px solid #0079bf;
   outline-offset: -2px;
   border-radius: 4px;
@@ -1929,7 +1929,7 @@ body {
   flex-wrap: wrap;
 }
 
-.attachment-item:focus-visible {
+.attachment-item:focus {
   outline: 2px solid #0079bf;
   outline-offset: 1px;
 }
