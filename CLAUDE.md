@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, file-based JSON storage. Single binary with embedded frontend. Optional Tauri v2 desktop mode wraps the web UI in a native window.
+Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, file-based JSON storage. Single binary with embedded frontend. Optional Electron desktop shell wraps the web UI in a native window.
 
 ## Build & Run
 
@@ -14,9 +14,12 @@ Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, 
 ./backend/target/release/synkban
 # → http://localhost:8080
 
-# Desktop mode build (native window via Tauri v2)
+# Desktop mode build (Electron app — packages Rust binary + Electron shell)
 ./build.sh --desktop
-./backend/target/release/synkban --desktop
+# → electron/dist/
+
+# Desktop mode dev (Electron loads pre-built Rust binary)
+cd electron && npm ci && npm start
 
 # Development (two terminals)
 cd backend && cargo run          # :8080
@@ -31,36 +34,33 @@ After any code change:
 2. **Frontend changes:** `cd frontend && npx vite build` — must build cleanly
 3. **Full build:** `./build.sh` — frontend must build before backend (assets embedded at compile time)
 4. **Smoke test:** Start server, `curl http://localhost:8080/api/boards` should return `[]` on fresh data dir
-5. **Desktop build:** `cd backend && cargo build --features desktop` — must compile (requires system WebView libs)
 
 ## Desktop Mode
 
-The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--features desktop` and run with `--desktop`, the binary starts the backend server on a random free port (localhost-only), generates a one-time token for access control, and opens a native WebView window pointing to `http://127.0.0.1:PORT/?token=SECRET`.
+Electron is the desktop shell. It spawns the Rust binary as a child process with token auth, then opens a `BrowserWindow` pointing to the backend's local HTTP server.
 
-- `./build.sh` — web-only build (default, no Tauri dependency)
-- `./build.sh --desktop` — builds with Tauri v2 desktop support; on macOS also creates `Synkban.app` bundle
-- `./backend/target/release/synkban` — web server mode (unchanged)
-- `./backend/target/release/synkban --desktop` — desktop mode (native window)
-- `open backend/target/release/Synkban.app` — launch macOS app (double-clickable, auto-detects bundle context)
+- `./build.sh` — web-only build (default)
+- `./build.sh --desktop` — builds backend + packages Electron app via `electron-builder` → `electron/dist/`
+- `cd electron && npm start` — dev mode (requires pre-built Rust binary at `backend/target/release/synkban`)
+- `./backend/target/release/synkban` — web server mode (standalone, unchanged)
 
 ### System Dependencies for Desktop Build
 
+- **All platforms:** Node.js 18+ (for Electron packaging)
 - **macOS:** Xcode Command Line Tools
-- **Linux:** `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, `libssl-dev`
-- **Windows:** WebView2 runtime (pre-installed on Windows 10+), Visual Studio Build Tools
+- **Linux:** `libgtk-3-dev`, `libxss1`, `libnss3`
+- **Windows:** Visual Studio Build Tools
 
 ### Desktop Architecture
 
-- `lib.rs` exposes `run_server` (web mode) and `run_desktop_server` (desktop mode with token middleware + random port); `main.rs` is a thin CLI entry point
-- `desktop.rs` (cfg-gated behind `desktop` feature) creates a Tauri webview window pointing to the backend
-- **Token protection** — desktop mode generates a UUID token per launch. Actix middleware (`wrap_fn`) checks every request for a `synkban_token` cookie or `?token=` query param. Initial page load sets the cookie via query param; subsequent same-origin requests include the cookie automatically. Other local apps cannot access the UI.
-- **Random port** — desktop server binds to `127.0.0.1:0` (OS assigns free port). Port communicated to main thread via `mpsc` channel. Server readiness confirmed by actual HTTP request (not just TCP connect).
-- No Tauri IPC — all communication is HTTP via the embedded Actix server
-- No `@tauri-apps/cli` or `@tauri-apps/api` npm packages — frontend is unchanged
-- `tauri.conf.json` and `capabilities/` in `backend/` — Tauri v2 config and permissions. `build` section is empty (no `frontendDist`) since the Tauri webview loads from the backend's HTTP server via External URL.
-- `build.rs` conditionally calls `tauri_build::build()` when the `desktop` feature is enabled
-- **macOS app bundle** — `build.sh --desktop` creates `Synkban.app` with proper icon (`.icns`), `Info.plist`, and the binary copied directly as `CFBundleExecutable`. The binary auto-detects when running inside `.app/Contents/MacOS/` and activates desktop mode without a shell script wrapper (shell scripts as bundle executables are blocked by modern macOS). Icon is a kanban board design generated from `icons/icon.png` (1024x1024). macOS Launch Services starts .app bundles with CWD=`/`, so the default data directory is `~/Library/Application Support/Synkban/` (overridable via `DATA_DIR` env var). The CLI `--desktop` flag still defaults to `./data`.
-- `Info.plist` in `backend/` — macOS bundle metadata (name, identifier, icon, version)
+- `electron/main.js` — Electron main process. Generates a UUID token, spawns the Rust binary with `DESKTOP_TOKEN=<token>` and `DATA_DIR=<userData>` env vars, reads `DESKTOP_PORT=<port>` from stdout, then opens `BrowserWindow` at `http://127.0.0.1:<port>/?token=<token>`.
+- `electron/package.json` — `electron-builder` config. Bundles Rust binary as `extraResources` alongside the Electron app. Icons from `backend/icons/`.
+- `lib.rs` exposes `run_server` (web mode) and `run_desktop_server` (desktop mode with token middleware + random port); `main.rs` is a thin entry point.
+- **Token protection** — Electron generates a UUID token per launch and passes it to the Rust binary via `DESKTOP_TOKEN`. Actix middleware (`wrap_fn`) checks every request for a `synkban_token` cookie or `?token=` query param. Initial page load sets the cookie via query param; subsequent same-origin requests include the cookie automatically. Other local apps cannot access the UI.
+- **Random port** — desktop server binds to `127.0.0.1:0` (OS assigns free port). Rust prints `DESKTOP_PORT=<port>` to stdout; Electron reads it before opening the window.
+- **Data directory** — Electron passes `DATA_DIR=app.getPath('userData')` (platform-specific user data dir) to the Rust binary. Overridable via env var.
+- No Electron IPC — all communication is HTTP via the embedded Actix server. Frontend is unchanged.
+- `build.rs` is a no-op (`fn main() {}`). No Tauri build-time codegen.
 
 ## Architecture Rules
 
@@ -216,9 +216,9 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 - `mime_guess` — MIME type detection for static files
 - `image` — server-side thumbnail generation for image attachments
 
-### Desktop-only (optional, behind `desktop` Cargo feature)
-- `tauri` v2 — native WebView window
-- `tauri-build` v2 — build-time code generation (build-dep)
+### Desktop shell (`electron/package.json`)
+- `electron` v34 — Chromium-based desktop window
+- `electron-builder` v25 — cross-platform packaging (bundles Rust binary as extraResource)
 
 ### Frontend (package.json)
 - `solid-js` + `@solidjs/router` — UI framework + routing

@@ -1,0 +1,37 @@
+{
+  "name": "synkban",
+  "version": "0.1.0",
+  "description": "Local-first kanban board — Electron desktop shell",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.synkban.app",
+    "productName": "Synkban",
+    "extraResources": [
+      {
+        "from": "../backend/target/release/synkban",
+        "to": "synkban",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "../backend/icons/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "../backend/icons/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "../backend/icons/icon.png"
+    }
+  }
+}

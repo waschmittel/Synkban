@@ -3,9 +3,6 @@ pub mod handlers;
 pub mod models;
 pub mod store;
 
-#[cfg(feature = "desktop")]
-pub mod desktop;
-
 use actix_cors::Cors;
 use actix_web::dev::Service;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
