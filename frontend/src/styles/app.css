@@ -41,6 +41,23 @@ body {
   color: white;
 }
 
+.app-logo--board {
+  cursor: pointer;
+}
+
+.app-logo-home {
+  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: color 0.15s;
+  margin-right: 4px;
+}
+
+.app-logo-home:hover {
+  color: white;
+}
+
 .app-header-actions {
   margin-left: auto;
   display: flex;
@@ -207,6 +224,12 @@ body {
   color: white;
 }
 
+.board-card:focus-visible,
+.add-board:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 2px;
+}
+
 .add-board-form {
   display: flex;
   flex-direction: column;
@@ -266,6 +289,10 @@ body {
   flex-direction: column;
   background: color-mix(in srgb, var(--board-color) 50%, white);
   transition: background 0.3s ease;
+}
+
+.board-page:focus {
+  outline: none;
 }
 
 .board-title-bar {
@@ -1695,6 +1722,12 @@ body {
 
 .archive-card-item:last-child {
   border-bottom: none;
+}
+
+.archive-card-item:focus-visible {
+  outline: 2px solid #0079bf;
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .archive-card-title {

@@ -8,9 +8,23 @@ function AppHeader() {
 
   return (
     <header class="app-header">
-      <A href="/" class="app-logo">
-        Synkban
-      </A>
+      <Show
+        when={lc.hasBoard()}
+        fallback={<A href="/" class="app-logo">Synkban</A>}
+      >
+        <A href="/" class="app-logo-home" title="Back to boards">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </A>
+        <span
+          class="app-logo app-logo--board"
+          onClick={() => document.dispatchEvent(new CustomEvent("start-board-rename"))}
+          title="Click to rename"
+        >
+          {lc.boardTitle()}
+        </span>
+      </Show>
       <div class="app-header-actions">
         <Show when={lc.hasBoard()}>
           <button

@@ -88,6 +88,11 @@ export default function BoardPage() {
     document.documentElement.style.setProperty("--board-color", color);
   });
 
+  createEffect(() => {
+    const b = board();
+    if (b) lc.setBoardTitle(b.title);
+  });
+
   // Label panel state
   const [newLabelName, setNewLabelName] = createSignal("");
   const [editingLabelId, setEditingLabelId] = createSignal<string | null>(null);
@@ -126,10 +131,17 @@ export default function BoardPage() {
           setShowArchive(false);
         } else if (showColorPicker()) {
           setShowColorPicker(false);
+        } else if (selectedCard()) {
+          handleModalClose();
+        } else if (showRename()) {
+          cancelRename();
         } else {
           lc.close();
           const focused = document.activeElement as HTMLElement | null;
-          if (focused?.classList.contains("card")) focused.blur();
+          if (focused?.classList.contains("card")) {
+            const boardEl = document.querySelector(".board-page") as HTMLElement | null;
+            boardEl?.focus();
+          }
         }
       } else if (e.key === "f") {
         e.preventDefault();
@@ -155,6 +167,13 @@ export default function BoardPage() {
         if (focused?.classList.contains("card")) {
           e.preventDefault();
           (focused as HTMLElement).click();
+        }
+      } else if (e.key === "a") {
+        e.preventDefault();
+        if (showArchive()) {
+          setShowArchive(false);
+        } else {
+          openArchive();
         }
       } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key) && !e.shiftKey) {
         const focused = document.activeElement as HTMLElement | null;
@@ -206,22 +225,20 @@ export default function BoardPage() {
     };
 
     const handleToggleShortcuts = () => setShowHelp((v) => !v);
+    const handleStartRename = () => startRename();
 
     document.addEventListener("keydown", handleGlobalKey);
-    document.addEventListener(
-      "toggle-shortcuts",
-      handleToggleShortcuts as EventListener
-    );
+    document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
+    document.addEventListener("start-board-rename", handleStartRename as EventListener);
 
     onCleanup(() => {
       lc.setHasBoard(false);
+      lc.setBoardTitle("");
       lc.close();
       clearInterval(pollId);
       document.removeEventListener("keydown", handleGlobalKey);
-      document.removeEventListener(
-        "toggle-shortcuts",
-        handleToggleShortcuts as EventListener
-      );
+      document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
+      document.removeEventListener("start-board-rename", handleStartRename as EventListener);
       document.documentElement.style.setProperty("--board-color", "#0079bf");
     });
   });
@@ -291,7 +308,8 @@ export default function BoardPage() {
   };
 
   const handleAddCard = async (listId: string, title: string) => {
-    await api.createCard(listId, title);
+    const card = await api.createCard(listId, title);
+    setPendingFocusCardId(card.id);
     refetch();
   };
 
@@ -546,24 +564,25 @@ export default function BoardPage() {
   return (
     <div
       class="board-page"
-      onClick={() => showColorPicker() && setShowColorPicker(false)}
+      tabindex="-1"
+      onClick={(e) => {
+        if (showColorPicker()) setShowColorPicker(false);
+        const target = e.target as HTMLElement;
+        if (target === e.currentTarget || target.classList.contains("lists-container") || target.classList.contains("board-title-bar")) {
+          const cardId = lastFocusedCardId();
+          if (cardId) {
+            const card = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
+            if (card) { card.focus(); return; }
+          }
+          (e.currentTarget as HTMLElement).focus();
+        }
+      }}
     >
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
         {(b) => (
           <>
             <div class="board-title-bar">
-              <Show
-                when={showRename()}
-                fallback={
-                  <h2
-                    class="board-title-text"
-                    onClick={startRename}
-                    title="Click to rename"
-                  >
-                    {b().title}
-                  </h2>
-                }
-              >
+              <Show when={showRename()}>
                 <input
                   class="board-title-input"
                   type="text"
@@ -918,6 +937,18 @@ export default function BoardPage() {
           onKeyDown={(e) => {
             e.stopPropagation();
             if (e.key === "Escape") setShowArchive(false);
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const items = Array.from(
+                (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(".archive-card-item")
+              );
+              if (items.length === 0) return;
+              const idx = items.indexOf((document.activeElement?.closest(".archive-card-item") ?? null) as HTMLElement);
+              const next = e.key === "ArrowDown"
+                ? (idx < 0 ? 0 : Math.min(idx + 1, items.length - 1))
+                : (idx < 0 ? items.length - 1 : Math.max(idx - 1, 0));
+              items[next].focus();
+            }
           }}
         >
           <div class="archive-modal">
@@ -944,7 +975,7 @@ export default function BoardPage() {
               </Show>
               <For each={archivedCards()}>
                 {(card) => (
-                  <div class="archive-card-item">
+                  <div class="archive-card-item" tabindex="0">
                     <span class="archive-card-title" innerHTML={renderTitle(card.title)} />
                     <div class="archive-card-actions">
                       <Show

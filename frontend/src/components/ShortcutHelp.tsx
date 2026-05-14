@@ -63,6 +63,13 @@ export default function ShortcutHelp(props: Props) {
           </button>
         </div>
         <div class="shortcut-help-body">
+          <Section title="Home">
+            <Row keys={["↑", "↓", "←", "→"]} desc="Navigate between boards" />
+            <Row keys={["Enter"]} desc="Open board" />
+            <Row keys={["n"]} desc="Create new board" />
+            <Row keys={["Del"]} desc="Delete focused board" />
+            <Row keys={["Esc"]} desc="Close new board form" />
+          </Section>
           <Section title="Navigation">
             <Row keys={["↑", "↓"]} desc="Move between cards" />
             <Row keys={["←", "→"]} desc="Jump to adjacent list" />
@@ -83,6 +90,11 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["l"]} desc="Add new list" />
             <Row keys={["g"]} desc="Toggle label panel" />
             <Row keys={["f"]} desc="Toggle filter bar" />
+            <Row keys={["a"]} desc="Toggle archive panel" />
+          </Section>
+          <Section title="Archive">
+            <Row keys={["↑", "↓"]} desc="Navigate archived cards" />
+            <Row keys={["Esc"]} desc="Close archive" />
           </Section>
           <Section title="Card Detail">
             <Row keys={["Ctrl", "Enter"]} desc="Save" />

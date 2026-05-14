@@ -1,9 +1,11 @@
 import { createSignal, createResource, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
 import { api } from "../api";
+import ShortcutHelp from "../components/ShortcutHelp";
 
 export default function Home() {
   const [boards, { refetch }] = createResource(() => api.listBoards());
+  const [showHelp, setShowHelp] = createSignal(false);
   let lastMtime = 0;
   onMount(() => {
     const pollId = setInterval(async () => {
@@ -25,15 +27,66 @@ export default function Home() {
         e.ctrlKey ||
         e.altKey
       ) return;
+      if (target.closest?.(".shortcut-help-overlay")) return;
+
       if (e.key === "n") {
         e.preventDefault();
         setAdding(true);
+      } else if (e.key === "?") {
+        e.preventDefault();
+        setShowHelp((v) => !v);
+      } else if (e.key === "Escape") {
+        if (showHelp()) {
+          setShowHelp(false);
+        } else if (adding()) {
+          close();
+        }
+      } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        const cards = Array.from(document.querySelectorAll<HTMLElement>(".board-card, .add-board, .add-board-form"));
+        if (cards.length === 0) return;
+        const currentIdx = cards.indexOf(document.activeElement as HTMLElement);
+
+        const grid = document.querySelector(".board-grid") as HTMLElement | null;
+        let cols = 1;
+        if (grid) {
+          cols = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+        }
+
+        let nextIdx: number;
+        if (currentIdx < 0) {
+          nextIdx = (e.key === "ArrowUp" || e.key === "ArrowLeft") ? cards.length - 1 : 0;
+        } else {
+          switch (e.key) {
+            case "ArrowRight": nextIdx = Math.min(currentIdx + 1, cards.length - 1); break;
+            case "ArrowLeft": nextIdx = Math.max(currentIdx - 1, 0); break;
+            case "ArrowDown": nextIdx = Math.min(currentIdx + cols, cards.length - 1); break;
+            case "ArrowUp": nextIdx = Math.max(currentIdx - cols, 0); break;
+            default: return;
+          }
+        }
+        cards[nextIdx]?.focus();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        const focused = document.activeElement as HTMLElement;
+        if (focused?.classList.contains("board-card")) {
+          const href = focused.getAttribute("href");
+          const boardId = href?.replace("/board/", "");
+          if (boardId) {
+            e.preventDefault();
+            handleDelete(boardId);
+          }
+        }
       }
     };
+
+    const handleToggleShortcuts = () => setShowHelp((v) => !v);
+
     document.addEventListener("keydown", handleKey);
+    document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     onCleanup(() => {
       clearInterval(pollId);
       document.removeEventListener("keydown", handleKey);
+      document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     });
   });
 
@@ -93,6 +146,7 @@ export default function Home() {
               <A
                 href={`/board/${board.id}`}
                 class="board-card"
+                data-board-id={board.id}
                 style={board.color ? { "background": board.color } : {}}
               >
                 <span class="board-card-link">{board.title}</span>
@@ -140,6 +194,10 @@ export default function Home() {
             </form>
           </Show>
         </div>
+      </Show>
+
+      <Show when={showHelp()}>
+        <ShortcutHelp onClose={() => setShowHelp(false)} />
       </Show>
     </div>
   );
