@@ -38,9 +38,10 @@ After any code change:
 The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--features desktop` and run with `--desktop`, the binary starts the backend server in a background thread and opens a native WebView window pointing to `http://localhost:PORT`.
 
 - `./build.sh` — web-only build (default, no Tauri dependency)
-- `./build.sh --desktop` — builds with Tauri v2 desktop support
+- `./build.sh --desktop` — builds with Tauri v2 desktop support; on macOS also creates `Synkban.app` bundle
 - `./backend/target/release/synkban` — web server mode (unchanged)
 - `./backend/target/release/synkban --desktop` — desktop mode (native window)
+- `open backend/target/release/Synkban.app` — launch macOS app (double-clickable, auto-passes `--desktop`)
 
 ### System Dependencies for Desktop Build
 
@@ -56,6 +57,8 @@ The `desktop` Cargo feature enables Tauri v2 desktop mode. When built with `--fe
 - No `@tauri-apps/cli` or `@tauri-apps/api` npm packages — frontend is unchanged
 - `tauri.conf.json` and `capabilities/` in `backend/` — Tauri v2 config and permissions
 - `build.rs` conditionally calls `tauri_build::build()` when the `desktop` feature is enabled
+- **macOS app bundle** — `build.sh --desktop` creates `Synkban.app` with proper icon (`.icns`), `Info.plist`, and a launcher script that auto-passes `--desktop`. Icon is a kanban board design generated from `icons/icon.png` (1024x1024).
+- `Info.plist` in `backend/` — macOS bundle metadata (name, identifier, icon, version)
 
 ## Architecture Rules
 
