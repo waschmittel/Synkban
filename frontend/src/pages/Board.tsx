@@ -440,23 +440,21 @@ export default function BoardPage() {
   ) => {
     await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate });
     setSelectedCard(null);
-    restoreFocus();
+    // Refetch recreates card DOM; use pending mechanism so the createEffect
+    // restores focus after the resource resolves.
+    setPendingFocusCardId(id);
     refetch();
   };
 
   const handleModalClose = () => {
-    setSelectedCard(null);
-    restoreFocus();
-  };
-
-  const restoreFocus = () => {
     const cardId = lastFocusedCardId();
+    setSelectedCard(null);
+    // No refetch here, but the polling interval might fire between close
+    // and focus, so use the pending mechanism as well.
     if (cardId) {
+      setPendingFocusCardId(cardId);
       requestAnimationFrame(() => {
-        const el = document.querySelector(
-          `[data-card-id="${cardId}"]`
-        ) as HTMLElement | null;
-        el?.focus();
+        (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
       });
     }
   };

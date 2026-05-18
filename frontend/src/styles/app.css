@@ -28,6 +28,30 @@ body {
   transition: background 0.3s ease;
 }
 
+/* Electron seamless titlebar:
+   The window has no native title bar; the colored .app-header doubles as
+   the drag region. macOS traffic lights overlay the top-left, so reserve
+   ~76px on that side. Windows/Linux use titleBarOverlay (top-right), so
+   reserve room on the right via .app-header-actions margin. */
+html.electron .app-header {
+  -webkit-app-region: drag;
+}
+
+html.electron .app-header button,
+html.electron .app-header a,
+html.electron .app-header input,
+html.electron .header-rename-input {
+  -webkit-app-region: no-drag;
+}
+
+html.electron--mac .app-header {
+  padding-left: 84px;
+}
+
+html.electron:not(.electron--mac) .app-header-actions {
+  margin-right: 140px;
+}
+
 .app-logo {
   color: rgba(255, 255, 255, 0.9);
   font-size: 20px;

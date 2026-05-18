@@ -47,10 +47,19 @@ async function createWindow() {
   const dataDir = app.getPath('userData');
   const port = await startBackend(token, dataDir);
 
+  const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: 'Synkban',
+    // Seamless titlebar: macOS gets traffic-light overlay (hiddenInset),
+    // Windows/Linux get an overlay that paints native controls over the
+    // app's own header so content can extend to the very top edge.
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    titleBarOverlay: isMac
+      ? undefined
+      : { color: '#00000000', symbolColor: '#ffffff', height: 36 },
+    trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

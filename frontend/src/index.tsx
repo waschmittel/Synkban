@@ -7,6 +7,17 @@ import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
 import "./styles/app.css";
 
+// Mark the document so CSS can adapt the title bar for the Electron shell.
+// Electron's UA includes "Electron/<version>"; on macOS the traffic lights
+// are overlaid via `titleBarStyle: 'hiddenInset'`, so the header reserves
+// extra left padding only there.
+if (typeof navigator !== "undefined" && /Electron\//.test(navigator.userAgent)) {
+  document.documentElement.classList.add("electron");
+  if (navigator.platform.startsWith("Mac")) {
+    document.documentElement.classList.add("electron--mac");
+  }
+}
+
 render(
   () => (
     <Router root={App}>
