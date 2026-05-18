@@ -236,3 +236,12 @@ Multi-stage Dockerfile:
 3. `debian:bookworm-slim` — runtime (just the binary)
 
 Persistent data: mount volume at `/app/data`.
+
+## Release CI (GitHub Actions)
+
+`.github/workflows/release.yml` builds the Electron desktop app for macOS, Linux, and Windows and publishes a GitHub Release whenever a tag matching `v*` is pushed. Workflow can also be run manually via `workflow_dispatch` (artifacts are uploaded but no Release is created unless the run was triggered by a tag).
+
+- **Matrix** — `macos-latest`, `ubuntu-latest`, `windows-latest`. Each runner runs `./build.sh --desktop`. Linux job installs `libgtk-3-dev libxss1 libnss3` first; Windows uses Git Bash via `shell: bash`. Cargo registry + target dir are cached per-OS keyed on `Cargo.lock` + `backend/src/**`.
+- **electron-builder targets** — declared in `electron/package.json` per-platform: macOS `dmg` + `zip` (native arch of the runner — currently arm64 on `macos-latest`), Linux `AppImage` + `deb`, Windows `nsis`. `extraResources` is now per-platform too because the Windows binary is `synkban.exe`. `CSC_IDENTITY_AUTO_DISCOVERY=false` is set in the job env so unsigned builds work without an installed cert.
+- **Release job** — depends on the build matrix, runs only when the trigger is a tag, downloads all artifacts and creates a GitHub Release via `softprops/action-gh-release@v2` with auto-generated notes.
+- **Cutting a release** — `git tag v0.2.0 && git push origin v0.2.0`. The workflow builds all three OSes in parallel and attaches the installers/zips to a new Release at that tag.

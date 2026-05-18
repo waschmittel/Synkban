@@ -16,24 +16,27 @@
     "appId": "com.synkban.app",
     "productName": "Synkban",
     "npmRebuild": false,
-    "extraResources": [
-      {
-        "from": "../backend/target/release/synkban",
-        "to": "synkban",
-        "filter": ["**/*"]
-      }
-    ],
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "../backend/icons/icon.icns"
+      "icon": "../backend/icons/icon.icns",
+      "target": ["dmg", "zip"],
+      "extraResources": [
+        { "from": "../backend/target/release/synkban", "to": "synkban" }
+      ]
     },
     "win": {
       "target": "nsis",
-      "icon": "../backend/icons/icon.png"
+      "icon": "../backend/icons/icon.png",
+      "extraResources": [
+        { "from": "../backend/target/release/synkban.exe", "to": "synkban.exe" }
+      ]
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "../backend/icons/icon.png"
+      "target": ["AppImage", "deb"],
+      "icon": "../backend/icons/icon.png",
+      "extraResources": [
+        { "from": "../backend/target/release/synkban", "to": "synkban" }
+      ]
     }
   }
 }
