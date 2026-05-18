@@ -7,7 +7,7 @@
     "test": "playwright test"
   },
   "keywords": [],
-  "author": "",
+  "author": "Daniel Flassak <daniel-synkban@flubba.de>",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
