@@ -8,9 +8,10 @@ import {
   MarkType,
 } from "prosemirror-model";
 import { schema as basicSchema } from "prosemirror-schema-basic";
-import { addListNodes } from "prosemirror-schema-list";
+import { addListNodes, sinkListItem, liftListItem } from "prosemirror-schema-list";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { toggleMark } from "prosemirror-commands";
+import { keymap } from "prosemirror-keymap";
 import { MenuItem, Dropdown, blockTypeItem, icons, undoItem, redoItem } from "prosemirror-menu";
 import type { Attachment, Card, Label } from "../types";
 import { renderTitle } from "./Card";
@@ -211,9 +212,15 @@ export default function CardDetail(props: Props) {
       .concat([[undoItem, redoItem]])
       .concat(menuItems.blockMenu);
 
+    const listItem = schema.nodes.list_item;
+    const listKeymap = keymap({
+      "Tab": sinkListItem(listItem),
+      "Shift-Tab": liftListItem(listItem),
+    });
+
     const state = EditorState.create({
       doc,
-      plugins: exampleSetup({ schema, menuBar: true, menuContent }),
+      plugins: [listKeymap, ...exampleSetup({ schema, menuBar: true, menuContent })],
     });
     view = new EditorView(editorRef, {
       state,
@@ -446,49 +453,56 @@ export default function CardDetail(props: Props) {
           </button>
         </div>
         <div class="modal-body">
-          <Show when={hasLabels()}>
-            <div class="modal-section-header">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                <line x1="7" y1="7" x2="7.01" y2="7" />
-              </svg>
-              <span class="modal-label">Labels</span>
-            </div>
-            <div class="label-assigned-area">
-              <div class="label-assigned-chips">
-                <For each={assignedLabels()}>
-                  {(label) => (
-                    <span
-                      class="label-assigned-chip"
-                      style={{ "background-color": label.color }}
+          <div class="modal-section-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+              <line x1="7" y1="7" x2="7.01" y2="7" />
+            </svg>
+            <span class="modal-label">Labels</span>
+          </div>
+          <div class="label-assigned-area">
+            <div class="label-assigned-chips">
+              <For each={assignedLabels()}>
+                {(label) => (
+                  <span
+                    class="label-assigned-chip"
+                    style={{ "background-color": label.color }}
+                  >
+                    <span innerHTML={renderTitle(label.name)} />
+                    <button
+                      class="label-chip-remove"
+                      title={`Remove "${label.name}"`}
+                      onClick={() => toggleLabel(label.id)}
                     >
-                      <span innerHTML={renderTitle(label.name)} />
-                      <button
-                        class="label-chip-remove"
-                        title={`Remove "${label.name}"`}
-                        onClick={() => toggleLabel(label.id)}
-                      >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </span>
-                  )}
-                </For>
-                <button
-                  class="label-add-btn"
-                  onClick={() => setShowLabelPicker((v) => !v)}
-                  title={showLabelPicker() ? "Hide label picker" : "Add/remove labels"}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  {showLabelPicker() ? "Done" : "Add label"}
-                </button>
-              </div>
-              <Show when={showLabelPicker()}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+              </For>
+              <button
+                class="label-add-btn"
+                onClick={() => setShowLabelPicker((v) => !v)}
+                title={showLabelPicker() ? "Hide label picker (L)" : "Add/remove labels (L)"}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                {showLabelPicker() ? "Done" : "Add label"}
+              </button>
+            </div>
+            <Show when={showLabelPicker()}>
+              <Show
+                when={hasLabels()}
+                fallback={
+                  <div class="label-picker-empty">
+                    No labels on this board yet. Press <kbd>G</kbd> to open the label drawer and create some.
+                  </div>
+                }
+              >
                 <div class="label-picker">
                   <For each={props.boardLabels}>
                     {(label) => {
@@ -514,8 +528,8 @@ export default function CardDetail(props: Props) {
                   </For>
                 </div>
               </Show>
-            </div>
-          </Show>
+            </Show>
+          </div>
           <div class="due-date-area">
             <div class="modal-section-header">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -580,7 +594,7 @@ export default function CardDetail(props: Props) {
           </div>
           <div class="editor-wrapper" ref={editorRef!} />
           <div class="editor-hint">
-            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save (title and description)
+            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save
           </div>
           <div class="modal-section-header" style={{ "margin-top": "16px" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

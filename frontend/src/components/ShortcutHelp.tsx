@@ -110,6 +110,13 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["f"]} desc="Toggle filter bar" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
           </Section>
+          <Section title="Description Editor">
+            <Row keys={["Tab"]} desc="Nest list item (indent)" />
+            <Row keys={["Shift", "Tab"]} desc="Outdent list item" />
+            <Row keys={["Ctrl", "]"]} desc="Nest list item (alt)" />
+            <Row keys={["Ctrl", "["]} desc="Outdent list item (alt)" />
+            <Row keys={["Enter"]} desc="Split list item" />
+          </Section>
           <Section title="Attachments">
             <Row keys={["Tab"]} desc="Navigate attachments" />
             <Row keys={["Del"]} desc="Delete focused attachment" />
