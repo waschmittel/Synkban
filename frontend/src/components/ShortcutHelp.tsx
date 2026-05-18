@@ -65,6 +65,7 @@ export default function ShortcutHelp(props: Props) {
         <div class="shortcut-help-body">
           <Section title="Home">
             <Row keys={["↑", "↓", "←", "→"]} desc="Navigate between boards" />
+            <Row keys={["Shift", "↑↓←→"]} desc="Reorder focused board" />
             <Row keys={["Enter"]} desc="Open board" />
             <Row keys={["n"]} desc="Create new board" />
             <Row keys={["Del"]} desc="Archive focused board" />
@@ -80,6 +81,11 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Shift", "↓"]} desc="Move card down" />
             <Row keys={["Shift", "←"]} desc="Move card to prev list" />
             <Row keys={["Shift", "→"]} desc="Move card to next list" />
+          </Section>
+          <Section title="Move / Rename List">
+            <Row keys={["Shift", "Alt", "←"]} desc="Move list left" />
+            <Row keys={["Shift", "Alt", "→"]} desc="Move list right" />
+            <Row keys={["r"]} desc="Rename focused list" />
           </Section>
           <Section title="Cards">
             <Row keys={["Enter"]} desc="Open focused card" />

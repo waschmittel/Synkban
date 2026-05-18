@@ -1,4 +1,4 @@
-import { createSignal, createResource, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createResource, createEffect, untrack, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
 import { api } from "../api";
 import type { Board } from "../types";
@@ -12,7 +12,51 @@ export default function Home() {
   const [showArchive, setShowArchive] = createSignal(false);
   const [confirmArchiveId, setConfirmArchiveId] = createSignal<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = createSignal<string | null>(null);
+  const [pendingFocusBoardId, setPendingFocusBoardId] = createSignal<string | null>(null);
   let lastMtime = 0;
+
+  // Restore focus to a reordered board after the resource re-renders.
+  createEffect(() => {
+    boards();
+    const id = untrack(pendingFocusBoardId);
+    if (!id) return;
+    setPendingFocusBoardId(null);
+    requestAnimationFrame(() => {
+      (document.querySelector(`[data-board-id="${id}"]`) as HTMLElement | null)?.focus();
+    });
+  });
+
+  const reorderBoardByKey = async (key: string) => {
+    const focused = document.activeElement as HTMLElement | null;
+    if (!focused?.classList.contains("board-card")) return false;
+    const boardId = focused.getAttribute("data-board-id");
+    const list = boards();
+    if (!boardId || !list) return false;
+    const idx = list.findIndex((b) => b.id === boardId);
+    if (idx < 0) return false;
+
+    const grid = document.querySelector(".board-grid") as HTMLElement | null;
+    let cols = 1;
+    if (grid) cols = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+
+    let newIdx = idx;
+    switch (key) {
+      case "ArrowRight": newIdx = Math.min(idx + 1, list.length - 1); break;
+      case "ArrowLeft":  newIdx = Math.max(idx - 1, 0); break;
+      case "ArrowDown":  newIdx = Math.min(idx + cols, list.length - 1); break;
+      case "ArrowUp":    newIdx = Math.max(idx - cols, 0); break;
+      default: return false;
+    }
+    if (newIdx === idx) return true;
+
+    const reordered = [...list];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(newIdx, 0, moved);
+    setPendingFocusBoardId(boardId);
+    await api.reorderBoards(reordered.map((b) => b.id));
+    refetch();
+    return true;
+  };
 
   const openArchive = async () => {
     setShowArchive(true);
@@ -83,6 +127,9 @@ export default function Home() {
         } else if (adding()) {
           close();
         }
+      } else if (e.shiftKey && ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        reorderBoardByKey(e.key);
       } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         const cards = Array.from(document.querySelectorAll<HTMLElement>(".board-card, .add-board, .add-board-form"));

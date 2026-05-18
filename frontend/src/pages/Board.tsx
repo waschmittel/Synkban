@@ -17,6 +17,8 @@ import CardDetail from "../components/CardDetail";
 import ShortcutHelp from "../components/ShortcutHelp";
 import { useLabelContext } from "../LabelContext";
 import { renderTitle } from "../components/Card";
+import { listDropPosition } from "../positions";
+import { cardMatchesFilter as filterCard } from "../filter";
 
 const BOARD_COLORS = [
   "#0079bf", "#026aa7", "#5ba4cf", "#29cce5",
@@ -70,6 +72,9 @@ export default function BoardPage() {
   const [filterText, setFilterText] = createSignal("");
   const [filterLabelIds, setFilterLabelIds] = createSignal<string[]>([]);
 
+  // List rename state
+  const [renamingListId, setRenamingListId] = createSignal<string | null>(null);
+
   // Restore focus to a moved card after board resource re-renders.
   createEffect(() => {
     board(); // only dependency — fires after DOM update from refetch
@@ -116,9 +121,23 @@ export default function BoardPage() {
     }, 15000);
 
     const handleGlobalKey = (e: KeyboardEvent) => {
-      if (isInInput(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isInInput(e.target)) return;
       // Block global shortcuts when confirm dialog is open
       if (confirmArchiveCardId() || confirmDeleteListId()) return;
+
+      // Shift+Alt+Left/Right: reorder list from focused add-trigger.
+      // Card.tsx handles the same shortcut for focused cards (with stopPropagation).
+      if (e.shiftKey && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        const focused = document.activeElement as HTMLElement | null;
+        const list = focused?.closest?.(".list") as HTMLElement | null;
+        if (list) {
+          e.preventDefault();
+          moveListByKey(list.dataset.listId!, e.key === "ArrowLeft" ? "left" : "right");
+        }
+        return;
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       if (e.key === "?") {
         e.preventDefault();
@@ -132,6 +151,8 @@ export default function BoardPage() {
           setShowColorPicker(false);
         } else if (selectedCard()) {
           handleModalClose();
+        } else if (renamingListId()) {
+          setRenamingListId(null);
         } else if (lc.renaming()) {
           lc.setRenaming(false);
         } else {
@@ -166,6 +187,13 @@ export default function BoardPage() {
         if (focused?.classList.contains("card")) {
           e.preventDefault();
           (focused as HTMLElement).click();
+        }
+      } else if (e.key === "r") {
+        const focused = document.activeElement as HTMLElement | null;
+        const list = focused?.closest?.(".list") as HTMLElement | null;
+        if (list) {
+          e.preventDefault();
+          setRenamingListId(list.dataset.listId ?? null);
         }
       } else if (e.key === "a") {
         e.preventDefault();
@@ -327,6 +355,36 @@ export default function BoardPage() {
     refetch();
   };
 
+  const handleRenameList = async (listId: string, title: string) => {
+    setRenamingListId(null);
+    const b = board();
+    const list = b?.lists.find((l) => l.id === listId);
+    const trimmed = title.trim();
+    if (!list || !trimmed || trimmed === list.title) return;
+    await api.updateList(listId, { title: trimmed });
+    refetch();
+  };
+
+  const handleMoveList = async (listId: string, position: number) => {
+    await api.updateList(listId, { position });
+    refetch();
+  };
+
+  const moveListByKey = (listId: string, direction: "left" | "right") => {
+    const container = document.querySelector(".lists-container");
+    if (!container) return;
+    const lists = Array.from(container.querySelectorAll<HTMLElement>(".list"));
+    const idx = lists.findIndex((el) => el.dataset.listId === listId);
+    if (idx < 0) return;
+    if (direction === "left" && idx <= 0) return;
+    if (direction === "right" && idx >= lists.length - 1) return;
+    const otherPositions = lists
+      .filter((_, i) => i !== idx)
+      .map((l) => parseFloat(l.dataset.listPosition || "0"));
+    const insertAt = direction === "left" ? idx - 1 : idx + 1;
+    handleMoveList(listId, listDropPosition(otherPositions, insertAt));
+  };
+
   const handleAddCard = async (listId: string, title: string) => {
     const card = await api.createCard(listId, title);
     setPendingFocusCardId(card.id);
@@ -468,15 +526,7 @@ export default function BoardPage() {
     const positions = listElements.map(
       (el) => parseFloat((el as HTMLElement).dataset.listPosition || "0")
     );
-
-    let position: number;
-    if (insertIndex === 0) {
-      position = (positions[0] ?? 1) / 2;
-    } else if (insertIndex >= positions.length) {
-      position = (positions[positions.length - 1] ?? 0) + 1;
-    } else {
-      position = (positions[insertIndex - 1] + positions[insertIndex]) / 2;
-    }
+    const position = listDropPosition(positions, insertIndex);
 
     await api.updateList(listId, { position });
     refetch();
@@ -560,25 +610,11 @@ export default function BoardPage() {
     );
   };
 
-  const cardMatchesFilter = (card: CardType): boolean => {
-    const text = filterText().toLowerCase();
-    const labelIds = filterLabelIds();
-    if (text) {
-      const titleMatch = card.title.toLowerCase().includes(text);
-      const descMatch = card.description.toLowerCase().includes(text);
-      if (!titleMatch && !descMatch) return false;
-    }
-    if (labelIds.length > 0) {
-      if (!card.label_ids?.some((id) => labelIds.includes(id))) return false;
-    }
-    return true;
-  };
-
   const isFiltering = () => !!filterText() || filterLabelIds().length > 0;
 
   const filteredCards = (cards: CardType[]) => {
     if (!isFiltering()) return cards;
-    return cards.filter(cardMatchesFilter);
+    return cards.filter((c) => filterCard(c, filterText(), filterLabelIds()));
   };
 
   return (
@@ -739,12 +775,16 @@ export default function BoardPage() {
                     <List
                       list={filtered()}
                       labels={b().labels}
+                      renamingListId={renamingListId()}
                       onAddCard={handleAddCard}
                       onArchiveCard={handleArchiveCard}
                       onDeleteList={handleDeleteList}
                       onCardClick={handleCardClick}
                       onDropCard={handleDropCard}
                       onMoveCard={handleMoveCard}
+                      onMoveList={handleMoveList}
+                      onRequestRename={setRenamingListId}
+                      onRenameList={handleRenameList}
                     />
                   );
                 }}

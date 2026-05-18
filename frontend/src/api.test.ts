@@ -131,6 +131,18 @@ describe("board operations", () => {
       expect.anything()
     );
   });
+
+  it("reorderBoards sends PUT with ordered ids", async () => {
+    const fn = mockFetch({ status: 204 });
+    await api.reorderBoards(["c", "a", "b"]);
+    expect(fn).toHaveBeenCalledWith(
+      "/api/boards/order",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ ids: ["c", "a", "b"] }),
+      })
+    );
+  });
 });
 
 describe("list operations", () => {
@@ -279,5 +291,65 @@ describe("attachment operations", () => {
       "/api/cards/card-1/attachments/att-1",
       expect.objectContaining({ method: "DELETE" })
     );
+  });
+
+  it("uploadAttachment posts file as raw body with filename query + content-type header", async () => {
+    const att = { id: "att-1", filename: "doc.pdf", size: 4, content_type: "application/pdf", created_at: "x" };
+    const fn = mockFetch({ status: 201, json: () => Promise.resolve(att) });
+    const file = new File(["data"], "doc.pdf", { type: "application/pdf" });
+    const result = await api.uploadAttachment("card-1", file);
+    expect(result).toEqual(att);
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/attachments?filename=doc.pdf",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/pdf" },
+        body: file,
+      })
+    );
+  });
+
+  it("uploadAttachment URL-encodes filename with spaces", async () => {
+    const fn = mockFetch({ status: 201, json: () => Promise.resolve({}) });
+    const file = new File(["x"], "my file.txt", { type: "text/plain" });
+    await api.uploadAttachment("card-1", file);
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/attachments?filename=my%20file.txt",
+      expect.anything()
+    );
+  });
+
+  it("uploadAttachment falls back to application/octet-stream when file.type is empty", async () => {
+    const fn = mockFetch({ status: 201, json: () => Promise.resolve({}) });
+    const file = new File(["x"], "raw.bin", { type: "" });
+    await api.uploadAttachment("card-1", file);
+    expect(fn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: { "Content-Type": "application/octet-stream" },
+      })
+    );
+  });
+
+  it("uploadAttachment throws on non-ok response with error message", async () => {
+    mockFetch({
+      ok: false,
+      status: 413,
+      statusText: "Payload Too Large",
+      json: () => Promise.resolve({ error: "File too large (max 50 MB)" }),
+    });
+    const file = new File(["big"], "big.bin", { type: "application/octet-stream" });
+    await expect(api.uploadAttachment("card-1", file)).rejects.toThrow("File too large");
+  });
+
+  it("uploadAttachment falls back to statusText when error JSON fails", async () => {
+    mockFetch({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: () => Promise.reject(new Error("nope")),
+    });
+    const file = new File(["x"], "f.txt", { type: "text/plain" });
+    await expect(api.uploadAttachment("card-1", file)).rejects.toThrow("Internal Server Error");
   });
 });

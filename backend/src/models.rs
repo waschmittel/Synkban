@@ -1,4 +1,14 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Distinguishes "field absent" (None) from "field is null" (Some(None)) during deserialization.
+/// Plain `Option<Option<T>>` collapses both to None, so we wrap the inner Option in Some(_) here.
+fn deserialize_double_option<'de, T, D>(d: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Option::<T>::deserialize(d).map(Some)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Label {
@@ -25,6 +35,8 @@ pub struct Board {
     pub color: Option<String>,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default)]
+    pub position: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,7 +128,7 @@ pub struct UpdateCard {
     pub list_id: Option<String>,
     pub label_ids: Option<Vec<String>>,
     pub archived: Option<bool>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_double_option")]
     pub due_date: Option<Option<String>>,
 }
 
@@ -133,4 +145,9 @@ pub struct UpdateLabel {
 #[derive(Debug, Deserialize)]
 pub struct AttachmentQuery {
     pub filename: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReorderBoards {
+    pub ids: Vec<String>,
 }

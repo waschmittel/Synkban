@@ -149,11 +149,13 @@ struct BoardFile {
     color: Option<String>,
     #[serde(default)]
     archived: bool,
+    #[serde(default)]
+    position: f64,
 }
 
 impl From<BoardFile> for Board {
     fn from(b: BoardFile) -> Self {
-        Board { id: b.id, title: b.title, created_at: b.created_at, color: b.color, archived: b.archived }
+        Board { id: b.id, title: b.title, created_at: b.created_at, color: b.color, archived: b.archived, position: b.position }
     }
 }
 
@@ -211,7 +213,13 @@ pub fn list_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
             }
         }
     }
-    boards.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    // Sort by position ascending; created_at desc breaks ties (legacy rows have position 0).
+    boards.sort_by(|a, b| {
+        a.position
+            .partial_cmp(&b.position)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(b.created_at.cmp(&a.created_at))
+    });
     Ok(boards)
 }
 
@@ -242,6 +250,7 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
     let dir = board_dir(data_dir, &id);
     fs::create_dir_all(dir.join("lists"))?;
 
+    let max_pos = get_max_board_position(data_dir)?;
     let bf = BoardFile {
         id: id.clone(),
         title: title.to_string(),
@@ -249,9 +258,52 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
         labels: Vec::new(),
         color: None,
         archived: false,
+        position: max_pos + 1.0,
     };
     write_json(&dir.join("board.json"), &bf)?;
     Ok(Board::from(bf))
+}
+
+fn get_max_board_position(data_dir: &Path) -> Result<f64, AppError> {
+    let dir = boards_dir(data_dir);
+    if !dir.exists() {
+        return Ok(0.0);
+    }
+    let mut max = 0.0f64;
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            let board_json = entry.path().join("board.json");
+            if board_json.exists() {
+                let bf: BoardFile = read_json(&board_json)?;
+                if !bf.archived && bf.position > max {
+                    max = bf.position;
+                }
+            }
+        }
+    }
+    Ok(max)
+}
+
+/// Renumbers active boards to positions 1.0, 2.0, … in the order given.
+/// IDs missing or pointing to archived boards are skipped.
+pub fn reorder_boards(data_dir: &Path, ids: &[String]) -> Result<(), AppError> {
+    let mut pos = 1.0f64;
+    for id in ids {
+        let dir = board_dir(data_dir, id);
+        let board_json = dir.join("board.json");
+        if !board_json.exists() {
+            continue;
+        }
+        let mut bf: BoardFile = read_json(&board_json)?;
+        if bf.archived {
+            continue;
+        }
+        bf.position = pos;
+        write_json(&board_json, &bf)?;
+        pos += 1.0;
+    }
+    Ok(())
 }
 
 pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppError> {
@@ -1021,6 +1073,43 @@ mod tests {
     }
 
     #[test]
+    fn reorder_boards_renumbers_positions() {
+        let d = tmp();
+        let a = create_board(d.path(), "A").unwrap();
+        let b = create_board(d.path(), "B").unwrap();
+        let c = create_board(d.path(), "C").unwrap();
+        // Reverse order: C, B, A
+        reorder_boards(d.path(), &[c.id.clone(), b.id.clone(), a.id.clone()]).unwrap();
+        let boards = list_boards(d.path()).unwrap();
+        let titles: Vec<&str> = boards.iter().map(|b| b.title.as_str()).collect();
+        assert_eq!(titles, vec!["C", "B", "A"]);
+        assert_eq!(boards[0].position, 1.0);
+        assert_eq!(boards[1].position, 2.0);
+        assert_eq!(boards[2].position, 3.0);
+    }
+
+    #[test]
+    fn reorder_boards_skips_archived() {
+        let d = tmp();
+        let a = create_board(d.path(), "A").unwrap();
+        let b = create_board(d.path(), "B").unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        // archived b should be ignored; reorder still works with just a
+        reorder_boards(d.path(), &[b.id.clone(), a.id.clone()]).unwrap();
+        let active = list_boards(d.path()).unwrap();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].position, 1.0);
+    }
+
+    #[test]
+    fn create_board_assigns_increasing_position() {
+        let d = tmp();
+        let a = create_board(d.path(), "A").unwrap();
+        let b = create_board(d.path(), "B").unwrap();
+        assert!(b.position > a.position);
+    }
+
+    #[test]
     fn archive_board() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
@@ -1671,5 +1760,126 @@ mod tests {
         assert!(!is_leap(1900));  // divisible by 100 but not 400
         assert!(is_leap(2024));   // divisible by 4
         assert!(!is_leap(2023)); // not divisible by 4
+    }
+
+    // -- Empty-dir cleanup --
+
+    #[test]
+    fn delete_last_attachment_removes_card_attachment_dir() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "f.txt", "text/plain", b"x").unwrap();
+
+        let att_dir = attachment_dir(d.path(), &b.id, &c.id);
+        assert!(att_dir.exists());
+
+        delete_attachment(d.path(), &c.id, &att.id).unwrap();
+        assert!(!att_dir.exists(), "card-scoped attachment dir should be cleaned up");
+    }
+
+    #[test]
+    fn delete_last_attachment_removes_board_attachments_parent_dir() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "f.txt", "text/plain", b"x").unwrap();
+
+        let attachments_parent = board_dir(d.path(), &b.id).join("attachments");
+        assert!(attachments_parent.exists());
+
+        delete_attachment(d.path(), &c.id, &att.id).unwrap();
+        assert!(!attachments_parent.exists(), "board attachments/ parent should be cleaned up when empty");
+    }
+
+    #[test]
+    fn attachments_parent_kept_when_other_cards_have_attachments() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c1 = create_card(d.path(), &l.id, "C1").unwrap();
+        let c2 = create_card(d.path(), &l.id, "C2").unwrap();
+        let att1 = create_attachment(d.path(), &c1.id, "a.txt", "text/plain", b"x").unwrap();
+        create_attachment(d.path(), &c2.id, "b.txt", "text/plain", b"y").unwrap();
+
+        delete_attachment(d.path(), &c1.id, &att1.id).unwrap();
+        let attachments_parent = board_dir(d.path(), &b.id).join("attachments");
+        assert!(attachments_parent.exists(), "parent kept while c2's attachments exist");
+        assert!(!attachment_dir(d.path(), &b.id, &c1.id).exists());
+        assert!(attachment_dir(d.path(), &b.id, &c2.id).exists());
+    }
+
+    #[test]
+    fn delete_orphaned_card_removes_archived_cards_dir() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        delete_list(d.path(), &l.id).unwrap(); // orphans c
+
+        let arch_dir = archived_cards_dir(d.path(), &b.id);
+        assert!(arch_dir.exists());
+
+        delete_card(d.path(), &c.id).unwrap();
+        assert!(!arch_dir.exists(), "archived_cards/ should be cleaned up when last orphan deleted");
+    }
+
+    #[test]
+    fn archived_cards_dir_kept_with_remaining_orphans() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c1 = create_card(d.path(), &l.id, "C1").unwrap();
+        let _c2 = create_card(d.path(), &l.id, "C2").unwrap();
+        delete_list(d.path(), &l.id).unwrap(); // orphans both
+
+        let arch_dir = archived_cards_dir(d.path(), &b.id);
+        assert!(arch_dir.exists());
+
+        delete_card(d.path(), &c1.id).unwrap();
+        assert!(arch_dir.exists(), "kept while c2 remains orphaned");
+    }
+
+    #[test]
+    fn delete_last_list_removes_lists_parent_dir() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+
+        let lists_parent = lists_dir(d.path(), &b.id);
+        assert!(lists_parent.exists());
+
+        delete_list(d.path(), &l.id).unwrap();
+        assert!(!lists_parent.exists(), "lists/ parent should be cleaned up when empty");
+    }
+
+    #[test]
+    fn lists_parent_kept_with_remaining_lists() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l1 = create_list(d.path(), &b.id, "L1").unwrap();
+        let _l2 = create_list(d.path(), &b.id, "L2").unwrap();
+
+        delete_list(d.path(), &l1.id).unwrap();
+        let lists_parent = lists_dir(d.path(), &b.id);
+        assert!(lists_parent.exists(), "lists/ kept while l2 remains");
+    }
+
+    #[test]
+    fn restore_orphaned_card_removes_archived_cards_dir() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        delete_list(d.path(), &l.id).unwrap();
+        let l2 = create_list(d.path(), &b.id, "L2").unwrap();
+
+        let arch_dir = archived_cards_dir(d.path(), &b.id);
+        assert!(arch_dir.exists());
+
+        update_card(d.path(), &c.id, None, None, None, Some(&l2.id), None, Some(false), None).unwrap();
+        assert!(!arch_dir.exists(), "archived_cards/ cleaned up after restoring last orphan");
     }
 }

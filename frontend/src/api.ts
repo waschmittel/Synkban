@@ -51,6 +51,12 @@ export const api = {
 
   listArchivedBoards: () => request<Board[]>("/boards/archive"),
 
+  reorderBoards: (ids: string[]) =>
+    request<void>("/boards/order", {
+      method: "PUT",
+      body: JSON.stringify({ ids }),
+    }),
+
   getArchivedCards: (boardId: string) =>
     request<Card[]>(`/boards/${boardId}/archive`),
 

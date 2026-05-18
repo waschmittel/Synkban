@@ -745,6 +745,31 @@ body {
   font-size: 14px;
   font-weight: 600;
   color: #172b4d;
+  flex: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 0;
+  outline: none;
+}
+
+.list-title:hover,
+.list-title:focus {
+  background: rgba(9, 30, 66, 0.08);
+}
+
+.list-title-input {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #172b4d;
+  padding: 2px 4px;
+  border: 1px solid #0079bf;
+  border-radius: 4px;
+  background: #fff;
+  outline: none;
+  box-shadow: 0 0 0 1px #0079bf;
+  font-family: inherit;
 }
 
 .list-delete {

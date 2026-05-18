@@ -98,6 +98,7 @@ Cards  →  reference Labels by ID (label_ids: Vec<String>)
 - Card `description` — ProseMirror doc JSON string, or empty string `""`.
 - Card `label_ids` — array of label IDs (subset of board's labels). Uses `#[serde(default)]` so existing cards without the field deserialize as empty vec.
 - Board `archived: bool` — soft delete for boards. `list_boards` filters out archived boards. `GET /api/boards/archive` returns archived boards. `PUT /api/boards/:id` with `{ archived: true }` archives; `{ archived: false }` restores. `DELETE /api/boards/:id` rejects non-archived boards (400) — must archive first. Home page X button archives (with confirmation), archived boards panel has Restore and Delete (permanent, with confirmation). Uses `#[serde(default)]` for backward compatibility.
+- Board `position: f64` — fractional indexing for board ordering. New boards get `max + 1.0`. Sort uses `(position ASC, created_at DESC)` so legacy boards (default `position = 0.0`) fall back to newest-first within ties. `PUT /api/boards/order` with `{ ids: string[] }` renumbers all active boards sequentially (`1.0, 2.0, …`) in the given order — this is what the Home-page Shift+Arrow keyboard reorder uses. Archived boards are skipped. `#[serde(default)]` keeps legacy `board.json` files readable.
 - Card `archived: bool` — soft delete. `get_board` filters out archived cards. `GET /api/boards/:id/archive` returns archived cards (from both list dirs and `archived_cards/`). `PUT /api/cards/:id` with `{ archived: false }` restores. Orphaned cards (from deleted lists, in `archived_cards/`) require `list_id` in the restore request to specify target list. `DELETE /api/cards/:id` permanently deletes (including attachment files).
 - Card `due_date: Option<String>` — optional due date in `YYYY-MM-DD` ISO format (validated server-side, returns 400 on invalid format). `UpdateCard` uses double-Option (`Option<Option<String>>`) so `null` clears the date vs absent leaves it unchanged. Displayed as color-coded badge in list view (overdue/today/tomorrow/future).
 - Card `attachments: Vec<Attachment>` — stored in card JSON. Binary data at `data/boards/{bid}/attachments/{cid}/{att-id}`. Max 50 MB enforced in handler (`TooLarge` error → HTTP 413). Upload: `POST /api/cards/:id/attachments?filename=...` with raw body bytes (no multipart). Download: `GET /api/cards/:id/attachments/:att_id`. Image attachments get a JPEG thumbnail (`{att-id}_thumb`, max 400px) generated server-side via the `image` crate. Thumbnail served at `GET /api/cards/:cid/attachments/:att_id/thumb`.
@@ -129,6 +130,7 @@ GET    /api/boards/archive                   → Board[] (archived boards only)
 POST   /api/boards          {title}          → Board (201)
 GET    /api/boards/:id                       → BoardDetail (nested lists + cards + labels)
 PUT    /api/boards/:id       {title?,color?,archived?} → Board
+PUT    /api/boards/order     {ids: string[]} → 204 — renumber active boards 1.0, 2.0, … in given order
 DELETE /api/boards/:id                       → 204 (must be archived first, else 400)
 
 POST   /api/boards/:bid/labels  {name}       → Label (201) — auto-assigns pastel color

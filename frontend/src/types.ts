@@ -18,6 +18,7 @@ export interface Board {
   created_at: string;
   color?: string;
   archived: boolean;
+  position: number;
 }
 
 export interface Card {

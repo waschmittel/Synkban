@@ -83,3 +83,16 @@ pub async fn get_archived_cards(
     let cards = store::get_archived_cards(&data_dir, &path.into_inner())?;
     Ok(HttpResponse::Ok().json(cards))
 }
+
+pub async fn reorder_boards(
+    data_dir: web::Data<PathBuf>,
+    body: web::Json<ReorderBoards>,
+) -> Result<HttpResponse, AppError> {
+    store::reorder_boards(&data_dir, &body.ids)?;
+    let ops = store::drain_file_ops(&data_dir);
+    println!(
+        "[{}] REORDER boards ({} ids)\n{}",
+        crate::log_timestamp(), body.ids.len(), ops.join("\n")
+    );
+    Ok(HttpResponse::NoContent().finish())
+}

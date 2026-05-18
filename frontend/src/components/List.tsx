@@ -1,4 +1,4 @@
-import { For } from "solid-js";
+import { For, Show } from "solid-js";
 import type { Card as CardType, Label, ListWithCards } from "../types";
 import Card from "./Card";
 import AddForm from "./AddForm";
@@ -6,12 +6,16 @@ import AddForm from "./AddForm";
 interface Props {
   list: ListWithCards;
   labels: Label[];
+  renamingListId: string | null;
   onAddCard: (listId: string, title: string) => void;
   onArchiveCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
   onCardClick: (card: CardType) => void;
   onDropCard: (cardId: string, targetListId: string, position: number) => void;
   onMoveCard: (cardId: string, targetListId: string, position: number) => void;
+  onMoveList: (listId: string, position: number) => void;
+  onRequestRename: (listId: string | null) => void;
+  onRenameList: (listId: string, title: string) => void;
 }
 
 export default function List(props: Props) {
@@ -106,7 +110,44 @@ export default function List(props: Props) {
       data-list-position={props.list.position}
     >
       <div class="list-header">
-        <h3 class="list-title">{props.list.title}</h3>
+        <Show
+          when={props.renamingListId === props.list.id}
+          fallback={
+            <h3
+              class="list-title"
+              tabindex="0"
+              onClick={() => props.onRequestRename(props.list.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "F2" || e.key === "r") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  props.onRequestRename(props.list.id);
+                }
+              }}
+              title="Click or press Enter to rename"
+            >
+              {props.list.title}
+            </h3>
+          }
+        >
+          <input
+            ref={(el) => requestAnimationFrame(() => { el.focus(); el.select(); })}
+            class="list-title-input"
+            type="text"
+            value={props.list.title}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                props.onRenameList(props.list.id, e.currentTarget.value);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                props.onRequestRename(null);
+              }
+            }}
+            onBlur={(e) => props.onRenameList(props.list.id, e.currentTarget.value)}
+          />
+        </Show>
         <button
           class="list-delete"
           onClick={() => props.onDeleteList(props.list.id)}
@@ -123,6 +164,7 @@ export default function List(props: Props) {
               onArchive={props.onArchiveCard}
               onClick={props.onCardClick}
               onMove={props.onMoveCard}
+              onMoveList={props.onMoveList}
             />
           )}
         </For>
