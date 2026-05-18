@@ -1,6 +1,7 @@
 {
   "name": "synkban",
   "version": "0.1.0",
+  "homepage": "https://www.flubba.de","
   "description": "Local-first kanban board — Electron desktop shell",
   "author": "Daniel Flassak <daniel-synkban@flubba.de>",
   "main": "main.js",
