@@ -52,6 +52,9 @@ test.describe("Home / Boards", () => {
     const card = page.locator(".board-card").filter({ has: page.locator(".board-card-link") });
     await card.hover();
     await card.locator(".board-card-delete").click();
+    // Archive confirmation dialog
+    await expect(page.locator(".unsaved-dialog")).toBeVisible();
+    await page.locator(".unsaved-dialog .btn-primary").click();
     await expect(page.locator(".board-card-link")).toHaveCount(0);
   });
 
@@ -69,7 +72,7 @@ test.describe("Home / Boards", () => {
     await page.locator(".add-board-form input").fill("My Board");
     await page.locator(".add-board-form input").press("Enter");
     await page.locator(".board-card-link").click();
-    await expect(page.locator(".board-title-bar h2")).toHaveText("My Board");
+    await expect(page.locator(".app-logo--board")).toHaveText("My Board");
   });
 });
 
@@ -80,7 +83,7 @@ test.describe("Lists", () => {
     await page.locator(".add-board-form input").fill("Board");
     await page.locator(".add-board-form input").press("Enter");
     await page.locator(".board-card-link").click();
-    await expect(page.locator(".board-title-bar h2")).toHaveText("Board");
+    await expect(page.locator(".app-logo--board")).toHaveText("Board");
   });
 
   test("add a list", async ({ page }) => {
@@ -259,7 +262,7 @@ async function setupBoardWithCards(page: import("@playwright/test").Page) {
   await page.locator(".add-board-form input").fill("Board");
   await page.locator(".add-board-form input").press("Enter");
   await page.locator(".board-card-link").click();
-  await expect(page.locator(".board-title-bar h2")).toHaveText("Board");
+  await expect(page.locator(".app-logo--board")).toHaveText("Board");
 
   // List A with 3 cards
   await page.getByText("Add list").click();
@@ -494,5 +497,272 @@ test.describe("Home Keyboard", () => {
     await page.keyboard.press("Escape"); // blur
     await page.keyboard.press("n");
     await expect(page.locator(".add-board-form input")).toBeVisible();
+  });
+});
+
+// --- Drag and drop ---
+
+test.describe("Drag and drop", () => {
+  test.beforeEach(async ({ page }) => {
+    await setupBoardWithCards(page);
+  });
+
+  test("Shift+ArrowDown reorders card within list", async ({ page }) => {
+    const firstList = page.locator(".list").nth(0);
+    // Initial order: Card 1, Card 2, Card 3
+    await expect(firstList.locator(".card-title").nth(0)).toHaveText("Card 1");
+    await firstList.locator(".card").nth(0).focus();
+    await page.keyboard.press("Shift+ArrowDown");
+    // After Shift+ArrowDown on Card 1: order should become Card 2, Card 1, Card 3
+    await expect(firstList.locator(".card-title").nth(0)).toHaveText("Card 2");
+    await expect(firstList.locator(".card-title").nth(1)).toHaveText("Card 1");
+  });
+
+  test("Shift+ArrowRight moves card to next list at same index", async ({ page }) => {
+    const listA = page.locator(".list").nth(0);
+    const listB = page.locator(".list").nth(1);
+    await expect(listA.locator(".card")).toHaveCount(3);
+    await expect(listB.locator(".card")).toHaveCount(1);
+
+    await listA.locator(".card").nth(0).focus(); // Card 1 in List A
+    await page.keyboard.press("Shift+ArrowRight");
+
+    await expect(listA.locator(".card")).toHaveCount(2);
+    await expect(listB.locator(".card")).toHaveCount(2);
+    // Card 1 now in List B
+    await expect(listB.locator(".card-title").filter({ hasText: "Card 1" })).toHaveCount(1);
+  });
+
+  test("drag and drop card reorders within list", async ({ page }) => {
+    const firstList = page.locator(".list").nth(0);
+    await firstList.locator(".card").nth(0).dragTo(firstList.locator(".card").nth(2));
+    // Verify a reorder occurred (Card 1 is no longer first OR a known order results)
+    const titles = await firstList.locator(".card-title").allTextContents();
+    expect(titles[0]).not.toBe("Card 1");
+  });
+});
+
+// --- Due date in CardDetail ---
+
+test.describe("Due date", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.getByText("Create your first board").click();
+    await page.locator(".add-board-form input").fill("Board");
+    await page.locator(".add-board-form input").press("Enter");
+    await page.locator(".board-card-link").click();
+    await page.getByText("Add list").click();
+    await page.locator(".add-list-wrapper .add-form input").fill("List");
+    await page.locator(".add-list-wrapper .add-form input").press("Enter");
+    await page.locator(".list .add-trigger").click();
+    await page.locator(".list .add-form input").fill("Task");
+    await page.locator(".list .add-form input").press("Enter");
+  });
+
+  test("set due date via text input and save", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".due-date-input").fill("2026-12-31");
+    await page.locator(".btn-primary", { hasText: "Save" }).click();
+    await expect(page.locator(".modal-overlay")).not.toBeVisible();
+    // Badge should appear on card
+    await expect(page.locator(".due-badge")).toBeVisible();
+    // Reopen, verify persisted
+    await page.locator(".card").click();
+    await expect(page.locator(".due-date-input")).toHaveValue("2026-12-31");
+  });
+
+  test("clear due date with X button", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".due-date-input").fill("2026-06-15");
+    await page.locator(".btn-primary", { hasText: "Save" }).click();
+    await expect(page.locator(".due-badge")).toBeVisible();
+
+    // Reopen and clear
+    await page.locator(".card").click();
+    await expect(page.locator(".due-date-clear")).toBeVisible();
+    await page.locator(".due-date-clear").click();
+    await expect(page.locator(".due-date-input")).toHaveValue("");
+    await page.locator(".btn-primary", { hasText: "Save" }).click();
+    await expect(page.locator(".modal-overlay")).not.toBeVisible();
+    await expect(page.locator(".due-badge")).not.toBeVisible();
+  });
+
+  test("d shortcut focuses due date input", async ({ page }) => {
+    await page.locator(".card").click();
+    // Move focus off any input/contenteditable — Save button is a safe focusable target inside the modal
+    await page.locator(".modal-footer .btn-primary").focus();
+    await page.keyboard.press("d");
+    await expect(page.locator(".due-date-input")).toBeFocused();
+  });
+});
+
+// --- Attachment upload ---
+
+test.describe("Attachments", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.getByText("Create your first board").click();
+    await page.locator(".add-board-form input").fill("Board");
+    await page.locator(".add-board-form input").press("Enter");
+    await page.locator(".board-card-link").click();
+    await page.getByText("Add list").click();
+    await page.locator(".add-list-wrapper .add-form input").fill("List");
+    await page.locator(".add-list-wrapper .add-form input").press("Enter");
+    await page.locator(".list .add-trigger").click();
+    await page.locator(".list .add-form input").fill("Task");
+    await page.locator(".list .add-form input").press("Enter");
+  });
+
+  test("upload a file via file input", async ({ page }) => {
+    await page.locator(".card").click();
+    // Set file on the hidden input nested in .attachment-upload
+    const fileInput = page.locator(".attachment-upload input[type=file]");
+    await fileInput.setInputFiles({
+      name: "hello.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("hello world"),
+    });
+    await expect(page.locator(".attachment-item")).toBeVisible();
+    await expect(page.locator(".attachment-filename")).toHaveText("hello.txt");
+    await expect(page.locator(".attachment-size")).toContainText("B");
+  });
+
+  test("delete an uploaded attachment", async ({ page }) => {
+    await page.locator(".card").click();
+    const fileInput = page.locator(".attachment-upload input[type=file]");
+    await fileInput.setInputFiles({
+      name: "doomed.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("x"),
+    });
+    await expect(page.locator(".attachment-item")).toHaveCount(1);
+    await page.locator(".attachment-delete").click();
+    await expect(page.locator(".attachment-item")).toHaveCount(0);
+  });
+});
+
+// --- Unsaved changes dialog ---
+
+test.describe("Unsaved changes dialog", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.getByText("Create your first board").click();
+    await page.locator(".add-board-form input").fill("Board");
+    await page.locator(".add-board-form input").press("Enter");
+    await page.locator(".board-card-link").click();
+    await page.getByText("Add list").click();
+    await page.locator(".add-list-wrapper .add-form input").fill("List");
+    await page.locator(".add-list-wrapper .add-form input").press("Enter");
+    await page.locator(".list .add-trigger").click();
+    await page.locator(".list .add-form input").fill("Card");
+    await page.locator(".list .add-form input").press("Enter");
+  });
+
+  test("Escape with dirty state shows unsaved dialog", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".modal-title-input").fill("Edited Title");
+    await expect(page.locator(".unsaved-indicator")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".unsaved-dialog")).toBeVisible();
+    await expect(page.locator(".unsaved-dialog .btn-primary")).toHaveText("Save");
+    await expect(page.locator(".unsaved-dialog .btn-danger")).toHaveText("Discard");
+  });
+
+  test("Save button in unsaved dialog persists changes", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".modal-title-input").fill("Saved Edit");
+    await page.keyboard.press("Escape");
+    await page.locator(".unsaved-dialog .btn-primary").click();
+    await expect(page.locator(".modal-overlay")).not.toBeVisible();
+    await expect(page.locator(".card-title")).toHaveText("Saved Edit");
+  });
+
+  test("Discard button drops changes", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".modal-title-input").fill("Discarded Edit");
+    await page.keyboard.press("Escape");
+    await page.locator(".unsaved-dialog .btn-danger").click();
+    await expect(page.locator(".modal-overlay")).not.toBeVisible();
+    await expect(page.locator(".card-title")).toHaveText("Card");
+  });
+
+  test("Cancel button keeps modal open with dirty state", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".modal-title-input").fill("Still Editing");
+    await page.keyboard.press("Escape");
+    await page.locator(".unsaved-dialog .btn-cancel").click();
+    await expect(page.locator(".unsaved-dialog")).not.toBeVisible();
+    await expect(page.locator(".modal-overlay")).toBeVisible();
+    await expect(page.locator(".modal-title-input")).toHaveValue("Still Editing");
+    await expect(page.locator(".unsaved-indicator")).toBeVisible();
+  });
+
+  test("close X with clean state does not show dialog", async ({ page }) => {
+    await page.locator(".card").click();
+    await page.locator(".modal-close").click();
+    await expect(page.locator(".unsaved-dialog")).not.toBeVisible();
+    await expect(page.locator(".modal-overlay")).not.toBeVisible();
+  });
+});
+
+// --- List delete with cards confirmation ---
+
+test.describe("List delete with cards", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.getByText("Create your first board").click();
+    await page.locator(".add-board-form input").fill("Board");
+    await page.locator(".add-board-form input").press("Enter");
+    await page.locator(".board-card-link").click();
+    await page.getByText("Add list").click();
+    await page.locator(".add-list-wrapper .add-form input").fill("To Do");
+    await page.locator(".add-list-wrapper .add-form input").press("Enter");
+  });
+
+  test("empty list deletes without confirmation", async ({ page }) => {
+    await page.locator(".list-header").hover();
+    await page.locator(".list-delete").click();
+    await expect(page.locator(".unsaved-dialog")).not.toBeVisible();
+    await expect(page.locator(".list-title")).toHaveCount(0);
+  });
+
+  test("list with cards shows confirmation dialog", async ({ page }) => {
+    await page.locator(".list .add-trigger").click();
+    await page.locator(".list .add-form input").fill("Task 1");
+    await page.locator(".list .add-form input").press("Enter");
+
+    await page.locator(".list-header").hover();
+    await page.locator(".list-delete").click();
+    await expect(page.locator(".unsaved-dialog")).toBeVisible();
+    await expect(page.locator(".unsaved-dialog p")).toContainText("archived");
+  });
+
+  test("confirming archives cards and removes list", async ({ page }) => {
+    await page.locator(".list .add-trigger").click();
+    await page.locator(".list .add-form input").fill("Task 1");
+    await page.locator(".list .add-form input").press("Enter");
+
+    await page.locator(".list-header").hover();
+    await page.locator(".list-delete").click();
+    await page.locator(".unsaved-dialog .btn-primary").click();
+    await expect(page.locator(".list-title")).toHaveCount(0);
+
+    // Verify the card was archived: open archive panel
+    await page.locator(".board-archive-btn").click();
+    await expect(page.locator(".archive-card-item")).toHaveCount(1);
+    await expect(page.locator(".archive-card-title")).toHaveText("Task 1");
+  });
+
+  test("cancel keeps the list intact", async ({ page }) => {
+    await page.locator(".list .add-trigger").click();
+    await page.locator(".list .add-form input").fill("Task 1");
+    await page.locator(".list .add-form input").press("Enter");
+
+    await page.locator(".list-header").hover();
+    await page.locator(".list-delete").click();
+    await page.locator(".unsaved-dialog .btn-cancel").click();
+    await expect(page.locator(".unsaved-dialog")).not.toBeVisible();
+    await expect(page.locator(".list-title")).toHaveText("To Do");
+    await expect(page.locator(".card-title")).toHaveText("Task 1");
   });
 });

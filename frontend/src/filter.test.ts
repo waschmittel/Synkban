@@ -1,0 +1,87 @@
+import { describe, it, expect } from "vitest";
+import { cardMatchesFilter } from "./filter";
+import type { Card } from "./types";
+
+function makeCard(over: Partial<Card> = {}): Card {
+  return {
+    id: "c1",
+    list_id: "l1",
+    title: "",
+    description: "",
+    position: 1,
+    created_at: "2024-01-01 00:00:00",
+    label_ids: [],
+    archived: false,
+    attachments: [],
+    ...over,
+  };
+}
+
+describe("cardMatchesFilter", () => {
+  it("no filter → matches anything", () => {
+    expect(cardMatchesFilter(makeCard(), "", [])).toBe(true);
+  });
+
+  it("title text match (case-insensitive)", () => {
+    expect(cardMatchesFilter(makeCard({ title: "Buy Milk" }), "milk", [])).toBe(true);
+    expect(cardMatchesFilter(makeCard({ title: "Buy Milk" }), "MILK", [])).toBe(true);
+    expect(cardMatchesFilter(makeCard({ title: "Buy Bread" }), "milk", [])).toBe(false);
+  });
+
+  it("description text match", () => {
+    expect(
+      cardMatchesFilter(makeCard({ title: "X", description: "do the laundry" }), "laundry", [])
+    ).toBe(true);
+  });
+
+  it("matches if either title or description matches", () => {
+    expect(
+      cardMatchesFilter(makeCard({ title: "Foo", description: "bar baz" }), "bar", [])
+    ).toBe(true);
+  });
+
+  it("text mismatch → false", () => {
+    expect(
+      cardMatchesFilter(makeCard({ title: "Foo", description: "bar" }), "xyz", [])
+    ).toBe(false);
+  });
+
+  it("label match: card has selected label", () => {
+    expect(
+      cardMatchesFilter(makeCard({ label_ids: ["a", "b"] }), "", ["b"])
+    ).toBe(true);
+  });
+
+  it("label match: any-of (OR within labels)", () => {
+    expect(
+      cardMatchesFilter(makeCard({ label_ids: ["x"] }), "", ["a", "x", "b"])
+    ).toBe(true);
+  });
+
+  it("label mismatch → false", () => {
+    expect(
+      cardMatchesFilter(makeCard({ label_ids: ["x"] }), "", ["a", "b"])
+    ).toBe(false);
+  });
+
+  it("card with no labels and label filter → false", () => {
+    expect(cardMatchesFilter(makeCard({ label_ids: [] }), "", ["a"])).toBe(false);
+  });
+
+  it("text AND labels: both must match", () => {
+    const card = makeCard({ title: "Bug fix", label_ids: ["bug"] });
+    expect(cardMatchesFilter(card, "bug", ["bug"])).toBe(true);
+    expect(cardMatchesFilter(card, "bug", ["feature"])).toBe(false);
+    expect(cardMatchesFilter(card, "feature", ["bug"])).toBe(false);
+  });
+
+  it("missing label_ids treated as empty", () => {
+    const card = { ...makeCard(), label_ids: undefined as any };
+    expect(cardMatchesFilter(card, "", [])).toBe(true);
+    expect(cardMatchesFilter(card, "", ["x"])).toBe(false);
+  });
+
+  it("empty text + empty labels always matches", () => {
+    expect(cardMatchesFilter(makeCard({ title: "anything" }), "", [])).toBe(true);
+  });
+});
