@@ -2,6 +2,10 @@
 
 A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.
 
+[![screenshot](Synkban.png)](Synkban.png)
+
+[Demo Video on Youtube](https://youtu.be/g3lMEZZe6CY)
+
 ## Features
 
 - **Boards** — create, rename, recolor, archive/restore, reorder
@@ -19,11 +23,11 @@ A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS
 
 ## Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| [Rust](https://rustup.rs/) | 1.70+ | Backend compilation |
-| [Node.js](https://nodejs.org/) | 18+ | Frontend build |
-| [Docker](https://www.docker.com/) | any | Optional, for containerized deployment |
+| Tool                              | Version | Purpose                                |
+| --------------------------------- | ------- | -------------------------------------- |
+| [Rust](https://rustup.rs/)        | 1.70+   | Backend compilation                    |
+| [Node.js](https://nodejs.org/)    | 18+     | Frontend build                         |
+| [Docker](https://www.docker.com/) | any     | Optional, for containerized deployment |
 
 ## Quick Start
 
@@ -66,7 +70,7 @@ pnpm install
 pnpm run dev
 ```
 
-Open http://localhost:3000. The Vite dev server proxies all `/api` requests to the backend.
+Open <http://localhost:3000>. The Vite dev server proxies all `/api` requests to the backend.
 
 ## Build
 
@@ -75,6 +79,7 @@ Open http://localhost:3000. The Vite dev server proxies all `/api` requests to t
 ```
 
 This script:
+
 1. Builds the frontend (`pnpm install && pnpm run build` → `frontend/dist/`)
 2. Copies `frontend/dist/` → `backend/static/`
 3. Compiles the backend in release mode, embedding static files into the binary
@@ -85,13 +90,14 @@ Output: `backend/target/release/synkban` — a single binary you can copy anywhe
 
 All configuration via environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HOST` | `127.0.0.1` | Bind address |
-| `PORT` | `8080` | Bind port |
-| `DATA_DIR` | `./data` | Path to data directory (created automatically) |
+| Variable   | Default     | Description                                    |
+| ---------- | ----------- | ---------------------------------------------- |
+| `HOST`     | `127.0.0.1` | Bind address                                   |
+| `PORT`     | `8080`      | Bind port                                      |
+| `DATA_DIR` | `./data`    | Path to data directory (created automatically) |
 
 Example:
+
 ```bash
 HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./synkban
 ```
@@ -118,6 +124,7 @@ docker run -p 8080:8080 -v synkban-data:/app/data synkban
 ```
 
 The Dockerfile is a multi-stage build:
+
 1. **node:22** — builds frontend
 2. **rust:1.95** — copies frontend dist into `static/`, compiles backend with embedded assets
 3. **debian:bookworm-slim** — minimal runtime image with just the binary
@@ -147,6 +154,7 @@ data/
 Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are cleaned up automatically when their last child is removed.
 
 ### board.json
+
 ```json
 {
   "id": "uuid",
@@ -160,6 +168,7 @@ Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are
 ```
 
 ### list.json
+
 ```json
 {
   "id": "uuid",
@@ -171,6 +180,7 @@ Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are
 ```
 
 ### {card-id}.json
+
 ```json
 {
   "id": "uuid",
@@ -204,55 +214,55 @@ Base URL: `/api`
 
 ### Change polling
 
-| Method | Path | Response | Description |
-|--------|------|----------|-------------|
-| GET | `/changes` | `{ mtime: number }` | Newest file mtime in `DATA_DIR`. The UI polls this every 15 s and only refetches the board when it changes — so external edits (rsync, Syncthing, etc.) flow through cheaply. |
+| Method | Path       | Response            | Description                                                                                                                                                                   |
+| ------ | ---------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/changes` | `{ mtime: number }` | Newest file mtime in `DATA_DIR`. The UI polls this every 15 s and only refetches the board when it changes — so external edits (rsync, Syncthing, etc.) flow through cheaply. |
 
 ### Boards
 
-| Method | Path | Body | Response | Description |
-|--------|------|------|----------|-------------|
-| GET | `/boards` | — | `Board[]` | List active boards (sorted by `position` then `created_at` desc) |
-| GET | `/boards/archive` | — | `Board[]` | List archived boards |
-| POST | `/boards` | `{ title }` | `Board` (201) | Create board |
-| GET | `/boards/:id` | — | `BoardDetail` | Board with nested lists, cards, and labels |
-| PUT | `/boards/:id` | `{ title?, color?, archived? }` | `Board` | Update fields. Archiving must precede deletion. |
-| PUT | `/boards/order` | `{ ids: string[] }` | 204 | Renumber active boards 1.0, 2.0, … in the given order |
-| DELETE | `/boards/:id` | — | 204 | Permanently delete (rejected with 400 if not archived) |
+| Method | Path              | Body                            | Response      | Description                                                      |
+| ------ | ----------------- | ------------------------------- | ------------- | ---------------------------------------------------------------- |
+| GET    | `/boards`         | —                               | `Board[]`     | List active boards (sorted by `position` then `created_at` desc) |
+| GET    | `/boards/archive` | —                               | `Board[]`     | List archived boards                                             |
+| POST   | `/boards`         | `{ title }`                     | `Board` (201) | Create board                                                     |
+| GET    | `/boards/:id`     | —                               | `BoardDetail` | Board with nested lists, cards, and labels                       |
+| PUT    | `/boards/:id`     | `{ title?, color?, archived? }` | `Board`       | Update fields. Archiving must precede deletion.                  |
+| PUT    | `/boards/order`   | `{ ids: string[] }`             | 204           | Renumber active boards 1.0, 2.0, … in the given order            |
+| DELETE | `/boards/:id`     | —                               | 204           | Permanently delete (rejected with 400 if not archived)           |
 
 ### Labels
 
-| Method | Path | Body | Response | Description |
-|--------|------|------|----------|-------------|
-| POST | `/boards/:board_id/labels` | `{ name }` | `Label` (201) | Create label (color auto-assigned) |
-| PUT | `/labels/:id` | `{ name }` | `Label` | Rename label |
-| DELETE | `/labels/:id` | — | 204 | Delete label |
+| Method | Path                       | Body       | Response      | Description                        |
+| ------ | -------------------------- | ---------- | ------------- | ---------------------------------- |
+| POST   | `/boards/:board_id/labels` | `{ name }` | `Label` (201) | Create label (color auto-assigned) |
+| PUT    | `/labels/:id`              | `{ name }` | `Label`       | Rename label                       |
+| DELETE | `/labels/:id`              | —          | 204           | Delete label                       |
 
 ### Lists
 
-| Method | Path | Body | Response | Description |
-|--------|------|------|----------|-------------|
-| POST | `/boards/:board_id/lists` | `{ title }` | `List` (201) | Add list to board |
-| PUT | `/lists/:id` | `{ title?, position? }` | `List` | Update title and/or position |
-| DELETE | `/lists/:id` | — | 204 | Delete list (archives any contained cards) |
+| Method | Path                      | Body                    | Response     | Description                                |
+| ------ | ------------------------- | ----------------------- | ------------ | ------------------------------------------ |
+| POST   | `/boards/:board_id/lists` | `{ title }`             | `List` (201) | Add list to board                          |
+| PUT    | `/lists/:id`              | `{ title?, position? }` | `List`       | Update title and/or position               |
+| DELETE | `/lists/:id`              | —                       | 204          | Delete list (archives any contained cards) |
 
 ### Cards
 
-| Method | Path | Body | Response | Description |
-|--------|------|------|----------|-------------|
-| GET | `/boards/:board_id/archive` | — | `Card[]` | List archived cards on a board |
-| POST | `/lists/:list_id/cards` | `{ title }` | `Card` (201) | Add card to list |
-| PUT | `/cards/:id` | `{ title?, description?, position?, list_id?, label_ids?, archived?, due_date? }` | `Card` | Update card fields. Set `list_id` to move; `due_date` accepts `null` to clear, omitted to leave unchanged. Restoring an orphaned card (whose list was deleted) requires `list_id`. |
-| DELETE | `/cards/:id` | — | 204 | Permanently delete card (rejected with 400 if not archived) |
+| Method | Path                        | Body                                                                              | Response     | Description                                                                                                                                                                        |
+| ------ | --------------------------- | --------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/boards/:board_id/archive` | —                                                                                 | `Card[]`     | List archived cards on a board                                                                                                                                                     |
+| POST   | `/lists/:list_id/cards`     | `{ title }`                                                                       | `Card` (201) | Add card to list                                                                                                                                                                   |
+| PUT    | `/cards/:id`                | `{ title?, description?, position?, list_id?, label_ids?, archived?, due_date? }` | `Card`       | Update card fields. Set `list_id` to move; `due_date` accepts `null` to clear, omitted to leave unchanged. Restoring an orphaned card (whose list was deleted) requires `list_id`. |
+| DELETE | `/cards/:id`                | —                                                                                 | 204          | Permanently delete card (rejected with 400 if not archived)                                                                                                                        |
 
 ### Attachments
 
-| Method | Path | Body | Response | Description |
-|--------|------|------|----------|-------------|
-| POST | `/cards/:card_id/attachments?filename=…` | raw bytes (`Content-Type` header preserved) | `Attachment` (201) | Upload an attachment (max 50 MB, 413 on overflow) |
-| GET | `/cards/:card_id/attachments/:att_id` | — | binary | Download (sets `Content-Disposition: attachment`) |
-| GET | `/cards/:card_id/attachments/:att_id/thumb` | — | JPEG | Thumbnail (404 for non-image attachments) |
-| DELETE | `/cards/:card_id/attachments/:att_id` | — | 204 | Remove attachment + thumbnail |
+| Method | Path                                        | Body                                        | Response           | Description                                       |
+| ------ | ------------------------------------------- | ------------------------------------------- | ------------------ | ------------------------------------------------- |
+| POST   | `/cards/:card_id/attachments?filename=…`    | raw bytes (`Content-Type` header preserved) | `Attachment` (201) | Upload an attachment (max 50 MB, 413 on overflow) |
+| GET    | `/cards/:card_id/attachments/:att_id`       | —                                           | binary             | Download (sets `Content-Disposition: attachment`) |
+| GET    | `/cards/:card_id/attachments/:att_id/thumb` | —                                           | JPEG               | Thumbnail (404 for non-image attachments)         |
+| DELETE | `/cards/:card_id/attachments/:att_id`       | —                                           | 204                | Remove attachment + thumbnail                     |
 
 ### Types
 
@@ -428,9 +438,11 @@ When packaged with `./build.sh --desktop`, Electron generates a UUID token at la
 
 **macOS "App is damaged" Error:**
 Because the app is not code-signed with a Developer ID, macOS Gatekeeper may report it as "damaged". You can fix this by running:
+
 ```bash
 sudo xattr -cr /Applications/Synkban.app
 ```
+
 (Or run it on the `.dmg` / `.zip` content before moving to Applications).
 
 ### Static file embedding
