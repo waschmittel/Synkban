@@ -39,6 +39,20 @@ A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS
 
 ## Development
 
+### Setup
+
+```bash
+# Install pnpm if needed
+npm install -g pnpm
+
+# Install dependencies and approve build scripts (required for pnpm 10+)
+pnpm install && pnpm approve-builds --all
+cd frontend && pnpm install && pnpm approve-builds --all
+cd ../electron && pnpm install && pnpm approve-builds --all
+```
+
+### Run
+
 Run backend and frontend separately for hot reload:
 
 ```bash
@@ -48,8 +62,8 @@ cargo run
 
 # Terminal 2 — frontend on :3000 (proxies /api → :8080)
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open http://localhost:3000. The Vite dev server proxies all `/api` requests to the backend.
@@ -61,7 +75,7 @@ Open http://localhost:3000. The Vite dev server proxies all `/api` requests to t
 ```
 
 This script:
-1. Builds the frontend (`npm ci && npm run build` → `frontend/dist/`)
+1. Builds the frontend (`pnpm install && pnpm run build` → `frontend/dist/`)
 2. Copies `frontend/dist/` → `backend/static/`
 3. Compiles the backend in release mode, embedding static files into the binary
 
@@ -412,6 +426,13 @@ ProseMirror with `prosemirror-example-setup`, configured in `frontend/src/proseE
 
 When packaged with `./build.sh --desktop`, Electron generates a UUID token at launch, spawns the Rust binary with that token + a per-user `DATA_DIR`, reads a random port from stdout, then opens a window pointing at the local server. Every request must present the token (cookie or `?token=` query param), so other apps on the same machine can't reach the UI. See `electron/main.js` and `run_desktop_server` in `backend/src/lib.rs`.
 
+**macOS "App is damaged" Error:**
+Because the app is not code-signed with a Developer ID, macOS Gatekeeper may report it as "damaged". You can fix this by running:
+```bash
+sudo xattr -cr /Applications/Synkban.app
+```
+(Or run it on the `.dmg` / `.zip` content before moving to Applications).
+
 ### Static file embedding
 
 The `include_dir!` macro embeds the entire `backend/static/` directory into the binary at compile time. The `serve_embedded` handler serves these files with correct MIME types, falling back to `index.html` for client-side routes (SPA fallback).
@@ -423,10 +444,10 @@ The `include_dir!` macro embeds the entire `backend/static/` directory into the 
 cd backend && cargo test
 
 # Frontend unit tests (Vitest)
-cd frontend && npm test
+cd frontend && pnpm test
 
 # End-to-end (Playwright; expects backend + frontend dev servers running)
-npx playwright test
+pnpm playwright test
 ```
 
 Backend tests live alongside the code (`#[cfg(test)] mod tests` per storage submodule, plus `backend/tests/integration.rs` for HTTP-level coverage). Frontend tests cover utilities (`positions`, `filter`, `mdInput`, `boardInput`), the API client, and `renderTitle`.

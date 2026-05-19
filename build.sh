@@ -13,8 +13,8 @@ done
 
 echo "=== Building frontend ==="
 cd "$ROOT/frontend"
-npm ci
-npm run build
+pnpm install
+pnpm run build
 
 echo ""
 echo "=== Embedding frontend into backend ==="
@@ -24,14 +24,23 @@ cp -r "$ROOT/frontend/dist" "$ROOT/backend/static"
 echo ""
 echo "=== Building backend ==="
 cd "$ROOT/backend"
-cargo build --release
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo "Building macOS aarch64 binary..."
+    rustup target add aarch64-apple-darwin || true
+    cargo build --release --target aarch64-apple-darwin
+    
+    mkdir -p "$ROOT/backend/target/release"
+    cp "$ROOT/backend/target/aarch64-apple-darwin/release/synkban" "$ROOT/backend/target/release/synkban"
+else
+    cargo build --release
+fi
 
 if [ "$DESKTOP" = true ]; then
     echo ""
     echo "=== Building desktop app (Electron) ==="
     cd "$ROOT/electron"
-    npm ci
-    npm run dist
+    pnpm install
+    pnpm run dist
 fi
 
 echo ""
