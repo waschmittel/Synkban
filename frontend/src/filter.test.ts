@@ -8,6 +8,7 @@ function makeCard(over: Partial<Card> = {}): Card {
     list_id: "l1",
     title: "",
     description: "",
+    description_text: "",
     position: 1,
     created_at: "2024-01-01 00:00:00",
     label_ids: [],
@@ -30,19 +31,19 @@ describe("cardMatchesFilter", () => {
 
   it("description text match", () => {
     expect(
-      cardMatchesFilter(makeCard({ title: "X", description: "do the laundry" }), "laundry", [])
+      cardMatchesFilter(makeCard({ title: "X", description_text: "do the laundry" }), "laundry", [])
     ).toBe(true);
   });
 
   it("matches if either title or description matches", () => {
     expect(
-      cardMatchesFilter(makeCard({ title: "Foo", description: "bar baz" }), "bar", [])
+      cardMatchesFilter(makeCard({ title: "Foo", description_text: "bar baz" }), "bar", [])
     ).toBe(true);
   });
 
   it("text mismatch → false", () => {
     expect(
-      cardMatchesFilter(makeCard({ title: "Foo", description: "bar" }), "xyz", [])
+      cardMatchesFilter(makeCard({ title: "Foo", description_text: "bar" }), "xyz", [])
     ).toBe(false);
   });
 
@@ -83,5 +84,22 @@ describe("cardMatchesFilter", () => {
 
   it("empty text + empty labels always matches", () => {
     expect(cardMatchesFilter(makeCard({ title: "anything" }), "", [])).toBe(true);
+  });
+
+  it("does not match ProseMirror node type names in the raw description JSON", () => {
+    // Raw description contains "paragraph" as a node type; description_text only
+    // holds the actual prose. The filter must use description_text.
+    const card = makeCard({
+      title: "X",
+      description: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"hello"}]}]}',
+      description_text: "hello",
+    });
+    expect(cardMatchesFilter(card, "paragraph", [])).toBe(false);
+    expect(cardMatchesFilter(card, "hello", [])).toBe(true);
+  });
+
+  it("missing description_text is treated as empty", () => {
+    const card = { ...makeCard({ title: "X" }), description_text: undefined as any };
+    expect(cardMatchesFilter(card, "missing", [])).toBe(false);
   });
 });

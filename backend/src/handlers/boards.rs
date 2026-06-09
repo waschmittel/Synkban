@@ -6,8 +6,9 @@ use crate::models::*;
 use crate::store;
 
 pub async fn check_changes(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
-    let mtime = store::get_latest_mtime(&data_dir)?;
-    Ok(HttpResponse::Ok().json(crate::models::ChangeCheck { mtime }))
+    let boards = store::get_per_board_mtimes(&data_dir)?;
+    let mtime = boards.values().copied().max().unwrap_or(0);
+    Ok(HttpResponse::Ok().json(crate::models::ChangeCheck { mtime, boards }))
 }
 
 pub async fn list_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
@@ -24,12 +25,11 @@ pub async fn create_board(
     data_dir: web::Data<PathBuf>,
     body: web::Json<CreateBoard>,
 ) -> Result<HttpResponse, AppError> {
-    let board = store::create_board(&data_dir, &body.title)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] CREATE board \"{}\" (id: {})\n{}",
-        crate::log_timestamp(), board.title, board.id, ops.join("\n")
-    );
+    let board = store::audit_op(
+        &data_dir,
+        |dd| store::create_board(dd, &body.title),
+        |b| format!("CREATE board \"{}\" (id: {})", b.title, b.id),
+    )?;
     Ok(HttpResponse::Created().json(board))
 }
 
@@ -47,18 +47,19 @@ pub async fn update_board(
     body: web::Json<UpdateBoard>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
-    let board = store::update_board(
+    let board = store::audit_op(
         &data_dir,
-        &board_id,
-        body.title.as_deref(),
-        body.color.as_deref(),
-        body.archived,
+        |dd| {
+            store::update_board(
+                dd,
+                &board_id,
+                body.title.as_deref(),
+                body.color.as_deref(),
+                body.archived,
+            )
+        },
+        |b| format!("UPDATE board \"{}\" (id: {})", b.title, b.id),
     )?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] UPDATE board \"{}\" (id: {})\n{}",
-        crate::log_timestamp(), board.title, board.id, ops.join("\n")
-    );
     Ok(HttpResponse::Ok().json(board))
 }
 
@@ -67,12 +68,11 @@ pub async fn delete_board(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
-    store::delete_board(&data_dir, &board_id)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] DELETE board (id: {})\n{}",
-        crate::log_timestamp(), board_id, ops.join("\n")
-    );
+    store::audit_op(
+        &data_dir,
+        |dd| store::delete_board(dd, &board_id),
+        |_| format!("DELETE board (id: {})", board_id),
+    )?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -88,11 +88,11 @@ pub async fn reorder_boards(
     data_dir: web::Data<PathBuf>,
     body: web::Json<ReorderBoards>,
 ) -> Result<HttpResponse, AppError> {
-    store::reorder_boards(&data_dir, &body.ids)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] REORDER boards ({} ids)\n{}",
-        crate::log_timestamp(), body.ids.len(), ops.join("\n")
-    );
+    let count = body.ids.len();
+    store::audit_op(
+        &data_dir,
+        |dd| store::reorder_boards(dd, &body.ids),
+        |_| format!("REORDER boards ({} ids)", count),
+    )?;
     Ok(HttpResponse::NoContent().finish())
 }

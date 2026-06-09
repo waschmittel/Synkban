@@ -1,7 +1,10 @@
 import type { Card } from "./types";
 
 /// Returns true if `card` matches the active text + label filter.
-/// Text filter (case-insensitive): matches title OR description substring.
+/// Text filter (case-insensitive): matches title OR description_text substring.
+/// The description_text field is the plain-text view of the ProseMirror doc,
+/// computed server-side; searching against the raw description JSON would
+/// false-match on node type names ("paragraph", "text").
 /// Label filter: matches when the card has at least one of the selected labels.
 /// Filters combine with AND. Empty filter values are ignored.
 export function cardMatchesFilter(
@@ -12,7 +15,7 @@ export function cardMatchesFilter(
   if (text) {
     const t = text.toLowerCase();
     const titleMatch = card.title.toLowerCase().includes(t);
-    const descMatch = card.description.toLowerCase().includes(t);
+    const descMatch = (card.description_text ?? "").toLowerCase().includes(t);
     if (!titleMatch && !descMatch) return false;
   }
   if (labelIds.length > 0) {

@@ -7,64 +7,54 @@ use std::path::Path;
 
 use crate::errors::AppError;
 use crate::models::Card;
+use crate::store::card_index::{self, CardLocation};
 use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::lists::find_board_for_list;
 use crate::store::paths::*;
 
-/// Where a card currently lives. Used by `update_card`/`delete_card` to know
-/// whether to operate on the list-scoped path or the orphan path.
-pub(crate) enum CardLocation {
-    InList { board_id: String, list_id: String },
-    Orphaned { board_id: String },
+/// Extracts plain text from a ProseMirror doc JSON string. Walks the tree
+/// and concatenates every `text` node, inserting a space between block-level
+/// containers so word boundaries survive. The filter searches against the
+/// result instead of the raw JSON.
+pub(crate) fn extract_prose_text(json: &str) -> String {
+    if json.is_empty() {
+        return String::new();
+    }
+    let Ok(value): Result<serde_json::Value, _> = serde_json::from_str(json) else {
+        return String::new();
+    };
+    let mut out = String::new();
+    walk(&value, &mut out);
+    out.trim().to_string()
 }
 
-pub(crate) fn find_card_location(
-    data_dir: &Path,
-    card_id: &str,
-) -> Result<CardLocation, AppError> {
-    let boards = boards_dir(data_dir);
-    if boards.exists() {
-        for board_entry in fs::read_dir(&boards)? {
-            let board_entry = board_entry?;
-            if !board_entry.file_type()?.is_dir() {
-                continue;
-            }
-            let board_id = board_entry.file_name().to_string_lossy().to_string();
-            let lists_path = lists_dir(data_dir, &board_id);
-            if lists_path.exists() {
-                for list_entry in fs::read_dir(&lists_path)? {
-                    let list_entry = list_entry?;
-                    if !list_entry.file_type()?.is_dir() {
-                        continue;
-                    }
-                    let list_id = list_entry.file_name().to_string_lossy().to_string();
-                    let card_path = cards_dir(data_dir, &board_id, &list_id)
-                        .join(format!("{card_id}.json"));
-                    if card_path.exists() {
-                        return Ok(CardLocation::InList { board_id, list_id });
-                    }
-                }
-            }
-            let orphan_path =
-                archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
-            if orphan_path.exists() {
-                return Ok(CardLocation::Orphaned { board_id });
-            }
+fn walk(node: &serde_json::Value, out: &mut String) {
+    if let Some(text) = node.get("text").and_then(|t| t.as_str()) {
+        out.push_str(text);
+    }
+    if let Some(content) = node.get("content").and_then(|c| c.as_array()) {
+        for child in content {
+            walk(child, out);
+        }
+        if !out.is_empty() && !out.ends_with(' ') {
+            out.push(' ');
         }
     }
-    Err(AppError::NotFound("Card not found".into()))
 }
 
-pub(crate) fn find_board_and_list_for_card(
-    data_dir: &Path,
-    card_id: &str,
-) -> Result<(String, String), AppError> {
-    match find_card_location(data_dir, card_id)? {
-        CardLocation::InList { board_id, list_id } => Ok((board_id, list_id)),
-        CardLocation::Orphaned { .. } => {
-            Err(AppError::NotFound("Card not found in any list".into()))
-        }
-    }
+/// Ensure `description_text` is consistent with `description`. Called lazily
+/// on read so existing cards written before this field existed get backfilled
+/// without an explicit migration.
+pub(crate) fn refresh_description_text(card: &mut Card) {
+    card.description_text = extract_prose_text(&card.description);
+}
+
+/// Read a `Card` from disk and ensure `description_text` is current. Use this
+/// instead of `read_json::<Card>` so the lazy backfill applies uniformly.
+pub(crate) fn read_card(path: &Path) -> Result<Card, AppError> {
+    let mut card: Card = read_json(path)?;
+    refresh_description_text(&mut card);
+    Ok(card)
 }
 
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
@@ -80,6 +70,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         list_id: list_id.to_string(),
         title: title.to_string(),
         description: String::new(),
+        description_text: String::new(),
         position: max_pos + 1.0,
         created_at: now_timestamp(),
         label_ids: Vec::new(),
@@ -88,6 +79,10 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         due_date: None,
     };
     write_json(&dir.join(format!("{id}.json")), &card)?;
+    card_index::record(&id, CardLocation::InList {
+        board_id: board_id.clone(),
+        list_id: list_id.to_string(),
+    });
     Ok(card)
 }
 
@@ -120,7 +115,7 @@ pub fn update_card(
     archived: Option<bool>,
     due_date: Option<Option<&str>>,
 ) -> Result<Card, AppError> {
-    let loc = find_card_location(data_dir, card_id)?;
+    let loc = card_index::locate(data_dir, card_id)?;
     let (_board_id, old_list_id, old_path, is_orphaned) = match &loc {
         CardLocation::InList { board_id, list_id } => {
             let path =
@@ -132,13 +127,14 @@ pub fn update_card(
             (board_id.clone(), String::new(), path, true)
         }
     };
-    let mut card: Card = read_json(&old_path)?;
+    let mut card = read_card(&old_path)?;
 
     if let Some(t) = title {
         card.title = t.to_string();
     }
     if let Some(d) = description {
         card.description = d.to_string();
+        refresh_description_text(&mut card);
     }
     if let Some(p) = position {
         card.position = p;
@@ -170,6 +166,10 @@ pub fn update_card(
         if let Some(parent) = old_path.parent() {
             remove_dir_if_empty(parent);
         }
+        card_index::record(card_id, CardLocation::InList {
+            board_id: target_board_id,
+            list_id: target_list_id.to_string(),
+        });
         return Ok(card);
     }
 
@@ -182,6 +182,10 @@ pub fn update_card(
             write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
             track("deleted", &old_path);
             fs::remove_file(&old_path)?;
+            card_index::record(card_id, CardLocation::InList {
+                board_id: target_board_id,
+                list_id: target_list_id.to_string(),
+            });
             return Ok(card);
         }
     }
@@ -191,7 +195,7 @@ pub fn update_card(
 }
 
 pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
-    let loc = find_card_location(data_dir, card_id)?;
+    let loc = card_index::locate(data_dir, card_id)?;
     let (board_id, path) = match &loc {
         CardLocation::InList { board_id, list_id } => (
             board_id.clone(),
@@ -202,7 +206,7 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
             archived_cards_dir(data_dir, board_id).join(format!("{card_id}.json")),
         ),
     };
-    let card: Card = read_json(&path)?;
+    let card = read_card(&path)?;
     if !card.archived {
         return Err(AppError::BadRequest(
             "only archived cards can be permanently deleted".into(),
@@ -220,6 +224,7 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
     }
     // Clean up archived_cards/ dir if empty after deleting orphaned card.
     remove_dir_if_empty(&archived_cards_dir(data_dir, &board_id));
+    card_index::forget(card_id);
     Ok(())
 }
 
@@ -245,7 +250,7 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
                             let card_entry = card_entry?;
                             let path = card_entry.path();
                             if path.extension().is_some_and(|e| e == "json") {
-                                let card = read_json::<Card>(&path)?;
+                                let card = read_card(&path)?;
                                 if card.archived {
                                     archived.push(card);
                                 }
@@ -262,7 +267,7 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json") {
-                archived.push(read_json::<Card>(&path)?);
+                archived.push(read_card(&path)?);
             }
         }
     }

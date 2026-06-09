@@ -13,12 +13,11 @@ pub async fn create_card(
     body: web::Json<CreateCard>,
 ) -> Result<HttpResponse, AppError> {
     let list_id = path.into_inner();
-    let card = store::create_card(&data_dir, &list_id, &body.title)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] CREATE card \"{}\" (id: {}) in list {}\n{}",
-        crate::log_timestamp(), card.title, card.id, list_id, ops.join("\n")
-    );
+    let card = store::audit_op(
+        &data_dir,
+        |dd| store::create_card(dd, &list_id, &body.title),
+        |c| format!("CREATE card \"{}\" (id: {}) in list {}", c.title, c.id, list_id),
+    )?;
     Ok(HttpResponse::Created().json(card))
 }
 
@@ -45,18 +44,6 @@ pub async fn update_card(
     }
     let card_id = path.into_inner();
     let due_date = body.due_date.as_ref().map(|dd| dd.as_deref());
-    let card = store::update_card(
-        &data_dir,
-        &card_id,
-        body.title.as_deref(),
-        body.description.as_deref(),
-        body.position,
-        body.list_id.as_deref(),
-        body.label_ids.as_deref(),
-        body.archived,
-        due_date,
-    )?;
-    let ops = store::drain_file_ops(&data_dir);
 
     let mut changes = Vec::new();
     if body.title.is_some() { changes.push("title"); }
@@ -69,10 +56,23 @@ pub async fn update_card(
     if body.due_date.is_some() { changes.push("due_date"); }
     let fields = if changes.is_empty() { "no-op".to_string() } else { changes.join(", ") };
 
-    println!(
-        "[{}] UPDATE card \"{}\" (id: {}) [{}]\n{}",
-        crate::log_timestamp(), card.title, card.id, fields, ops.join("\n")
-    );
+    let card = store::audit_op(
+        &data_dir,
+        |dd| {
+            store::update_card(
+                dd,
+                &card_id,
+                body.title.as_deref(),
+                body.description.as_deref(),
+                body.position,
+                body.list_id.as_deref(),
+                body.label_ids.as_deref(),
+                body.archived,
+                due_date,
+            )
+        },
+        |c| format!("UPDATE card \"{}\" (id: {}) [{}]", c.title, c.id, fields),
+    )?;
     Ok(HttpResponse::Ok().json(card))
 }
 
@@ -81,12 +81,11 @@ pub async fn delete_card(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let card_id = path.into_inner();
-    store::delete_card(&data_dir, &card_id)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] DELETE card (id: {})\n{}",
-        crate::log_timestamp(), card_id, ops.join("\n")
-    );
+    store::audit_op(
+        &data_dir,
+        |dd| store::delete_card(dd, &card_id),
+        |_| format!("DELETE card (id: {})", card_id),
+    )?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -107,18 +106,14 @@ pub async fn upload_attachment(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/octet-stream")
         .to_string();
-    let att = store::create_attachment(
+    let att = store::audit_op(
         &data_dir,
-        &card_id,
-        &query.filename,
-        &content_type,
-        &body,
+        |dd| store::create_attachment(dd, &card_id, &query.filename, &content_type, &body),
+        |a| format!(
+            "CREATE attachment \"{}\" ({}, {} bytes) on card {}",
+            a.filename, a.content_type, a.size, card_id
+        ),
     )?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] CREATE attachment \"{}\" ({}, {} bytes) on card {}\n{}",
-        crate::log_timestamp(), att.filename, att.content_type, att.size, card_id, ops.join("\n")
-    );
     Ok(HttpResponse::Created().json(att))
 }
 
@@ -151,12 +146,11 @@ pub async fn delete_attachment(
     path: web::Path<(String, String)>,
 ) -> Result<HttpResponse, AppError> {
     let (card_id, att_id) = path.into_inner();
-    store::delete_attachment(&data_dir, &card_id, &att_id)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] DELETE attachment (id: {}) from card {}\n{}",
-        crate::log_timestamp(), att_id, card_id, ops.join("\n")
-    );
+    store::audit_op(
+        &data_dir,
+        |dd| store::delete_attachment(dd, &card_id, &att_id),
+        |_| format!("DELETE attachment (id: {}) from card {}", att_id, card_id),
+    )?;
     Ok(HttpResponse::NoContent().finish())
 }
 

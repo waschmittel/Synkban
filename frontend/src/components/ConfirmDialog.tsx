@@ -13,6 +13,7 @@ export default function ConfirmDialog(props: Props) {
   return (
     <div
       class="unsaved-overlay archive-overlay"
+      onClick={(e) => { if (e.target === e.currentTarget) props.onCancel(); }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Escape") {

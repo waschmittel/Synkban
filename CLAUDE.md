@@ -257,3 +257,17 @@ Persistent data: mount volume at `/app/data`.
 - **electron-builder targets** — declared in `electron/package.json` per-platform: macOS `dmg` + `zip` (explicitly `arm64` / `aarch64` only), Linux `AppImage` + `deb`, Windows `nsis`. `extraResources` is now per-platform too because the Windows binary is `synkban.exe`. `CSC_IDENTITY_AUTO_DISCOVERY=false` is set in the job env so unsigned builds work without an installed cert.
 - **Release job** — depends on the build matrix, runs only when the trigger is a tag, downloads all artifacts and creates a GitHub Release via `softprops/action-gh-release@v2` with auto-generated notes.
 - **Cutting a release** — `git tag v0.2.0 && git push origin v0.2.0`. The workflow builds all three OSes in parallel and attaches the installers/zips to a new Release at that tag.
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical names (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context (`CONTEXT.md` + `docs/adr/` at repo root). See `docs/agents/domain.md`.

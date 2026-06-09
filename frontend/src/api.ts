@@ -16,7 +16,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  checkChanges: () => request<{ mtime: number }>("/changes"),
+  checkChanges: () => request<{ mtime: number; boards: Record<string, number> }>("/changes"),
 
   listBoards: () => request<Board[]>("/boards"),
 

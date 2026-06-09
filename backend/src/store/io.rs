@@ -27,6 +27,25 @@ pub fn drain_file_ops(data_dir: &Path) -> Vec<String> {
     })
 }
 
+/// Runs a mutating store op, drains the file-op log, and prints a single
+/// `[HH:MM:SS] <label>` line followed by indented file operations. The audit
+/// trail format lives here, not in handlers.
+pub fn audit_op<T>(
+    data_dir: &Path,
+    op: impl FnOnce(&Path) -> Result<T, AppError>,
+    describe: impl FnOnce(&T) -> String,
+) -> Result<T, AppError> {
+    let result = op(data_dir)?;
+    let ops = drain_file_ops(data_dir);
+    let label = describe(&result);
+    if ops.is_empty() {
+        println!("[{}] {}", crate::log_timestamp(), label);
+    } else {
+        println!("[{}] {}\n{}", crate::log_timestamp(), label, ops.join("\n"));
+    }
+    Ok(result)
+}
+
 pub(crate) fn remove_dir_if_empty(dir: &Path) {
     if let Ok(mut entries) = fs::read_dir(dir) {
         if entries.next().is_none() {
@@ -107,6 +126,37 @@ pub fn get_latest_mtime(data_dir: &Path) -> Result<u64, AppError> {
     let mut latest = 0u64;
     walk_mtime(&dir, &mut latest)?;
     Ok(latest)
+}
+
+/// Per-board mtime map: `board_id → max(mtime of any file under that board's dir)`.
+/// Lets clients refetch only the board they're looking at when other boards change.
+/// Total work is the same as `get_latest_mtime` — just bucketed by board.
+pub fn get_per_board_mtimes(data_dir: &Path) -> Result<std::collections::HashMap<String, u64>, AppError> {
+    let mut out = std::collections::HashMap::new();
+    let dir = boards_dir(data_dir);
+    if !dir.exists() {
+        return Ok(out);
+    }
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let board_id = entry.file_name().to_string_lossy().to_string();
+        let mut latest = 0u64;
+        // include the board dir's own mtime
+        if let Ok(meta) = entry.metadata() {
+            if let Ok(modified) = meta.modified() {
+                latest = modified
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+            }
+        }
+        walk_mtime(&entry.path(), &mut latest)?;
+        out.insert(board_id, latest);
+    }
+    Ok(out)
 }
 
 fn walk_mtime(dir: &Path, latest: &mut u64) -> Result<(), AppError> {

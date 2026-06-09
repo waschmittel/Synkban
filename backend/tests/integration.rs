@@ -295,12 +295,53 @@ async fn changes_endpoint_returns_mtime() {
     assert_eq!(resp.status(), StatusCode::OK);
     let json = read_json_body(test::read_body(resp).await);
     assert_eq!(json["mtime"], 0);
+    assert!(json["boards"].is_object());
+    assert_eq!(json["boards"].as_object().unwrap().len(), 0);
 
     let _: Value = post_json!(app, "/api/boards", json!({ "title": "B" }));
     let req = test::TestRequest::get().uri("/api/changes").to_request();
     let resp = test::call_service(&app, req).await;
     let json = read_json_body(test::read_body(resp).await);
     assert!(json["mtime"].as_u64().unwrap() > 0);
+    // Per-board map should now contain one entry whose mtime equals the global.
+    let boards_obj = json["boards"].as_object().unwrap();
+    assert_eq!(boards_obj.len(), 1);
+    let per_board = boards_obj.values().next().unwrap().as_u64().unwrap();
+    assert_eq!(per_board, json["mtime"].as_u64().unwrap());
+}
+
+#[actix_web::test]
+async fn changes_endpoint_per_board_isolates_quiet_boards() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+
+    let b1: Value = post_json!(app, "/api/boards", json!({ "title": "B1" }));
+    let b2: Value = post_json!(app, "/api/boards", json!({ "title": "B2" }));
+    let b1_id = b1["id"].as_str().unwrap();
+    let b2_id = b2["id"].as_str().unwrap();
+
+    // Sleep briefly so mtimes can diverge at ms resolution.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let req = test::TestRequest::get().uri("/api/changes").to_request();
+    let resp = test::call_service(&app, req).await;
+    let before = read_json_body(test::read_body(resp).await);
+    let b1_before = before["boards"][b1_id].as_u64().unwrap();
+    let b2_before = before["boards"][b2_id].as_u64().unwrap();
+
+    // Wait briefly, then mutate only b1.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let _: Value = post_json!(app, &format!("/api/boards/{b1_id}/lists"), json!({ "title": "L" }));
+
+    let req = test::TestRequest::get().uri("/api/changes").to_request();
+    let resp = test::call_service(&app, req).await;
+    let after = read_json_body(test::read_body(resp).await);
+    let b1_after = after["boards"][b1_id].as_u64().unwrap();
+    let b2_after = after["boards"][b2_id].as_u64().unwrap();
+
+    assert!(b1_after > b1_before, "b1 mtime should advance when b1 changes");
+    assert_eq!(b2_after, b2_before, "b2 mtime should NOT change when b1 changes");
 }
 
 // -- Token middleware (desktop mode) --
