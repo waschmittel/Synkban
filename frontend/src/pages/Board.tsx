@@ -295,8 +295,21 @@ export default function BoardPage() {
   };
 
   const handleRestoreCard = async (cardId: string) => {
-    const firstListId = board()?.lists[0]?.id;
-    await api.restoreCard(cardId, firstListId);
+    const card = archivedCards().find((c) => c.id === cardId);
+    const lists = board()?.lists ?? [];
+    // Only orphaned cards (original list gone) need a target list;
+    // sending list_id for in-place cards would move them.
+    const orphaned = !lists.some((l) => l.id === card?.list_id);
+    if (orphaned && lists.length === 0) {
+      alert("Cannot restore: this board has no lists. Create a list first.");
+      return;
+    }
+    try {
+      await api.restoreCard(cardId, orphaned ? lists[0].id : undefined);
+    } catch (err) {
+      alert(`Restore failed: ${(err as Error).message}`);
+      return;
+    }
     setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
     refetch();
   };
