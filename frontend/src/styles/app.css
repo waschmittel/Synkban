@@ -2278,6 +2278,11 @@ html.electron:not(.electron--mac) .app-header-actions {
   box-shadow: 0 0 0 1px #0079bf;
 }
 
+.link-dialog-error {
+  font-size: 12px;
+  color: #c9372c;
+}
+
 .link-dialog-actions {
   display: flex;
   gap: 8px;
