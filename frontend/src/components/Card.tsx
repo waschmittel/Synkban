@@ -121,16 +121,22 @@ export default function Card(props: Props) {
     // Navigation (no shift)
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      e.stopPropagation();
       let next = el.nextElementSibling as HTMLElement | null;
       while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
       next?.focus();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      e.stopPropagation();
       let prev = el.previousElementSibling as HTMLElement | null;
       while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
       prev?.focus();
     } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
+      // stopPropagation: prevent doc-level navigateArrow from running after
+      // we focus an add-trigger on an empty adjacent list, which would skip
+      // ahead to the next list.
+      e.stopPropagation();
       const adjList = (e.key === "ArrowRight"
         ? currentList?.nextElementSibling
         : currentList?.previousElementSibling) as HTMLElement | null;

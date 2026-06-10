@@ -1,6 +1,7 @@
 import { For, Show, createSignal } from "solid-js";
 import type { Label } from "../types";
 import { handleMarkdownShortcut } from "../mdInput";
+import { renderTitle } from "./Card";
 
 interface Props {
   open: boolean;
@@ -9,12 +10,6 @@ interface Props {
   onCreate: (name: string) => void;
   onRename: (labelId: string, name: string) => void;
   onDelete: (labelId: string) => void;
-}
-
-function renderLabelName(name: string): string {
-  return name
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>");
 }
 
 /// Right-side slide-out drawer for board label management. Always rendered
@@ -75,7 +70,7 @@ export default function LabelDrawer(props: Props) {
                       />
                       <span
                         class="label-drawer-name"
-                        innerHTML={renderLabelName(label.name)}
+                        innerHTML={renderTitle(label.name)}
                         onClick={() => startEdit(label.id, label.name)}
                         title="Click to rename"
                       />
