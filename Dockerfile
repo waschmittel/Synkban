@@ -19,6 +19,9 @@ WORKDIR /app
 
 COPY --from=backend-build /app/backend/target/release/synkban ./synkban
 
+RUN useradd -r -u 10001 app && mkdir -p /app/data && chown -R app /app
+USER app
+
 ENV DATA_DIR="./data"
 ENV HOST="0.0.0.0"
 ENV PORT="8080"
