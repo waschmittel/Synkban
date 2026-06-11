@@ -8,7 +8,7 @@ import { isTypingIn } from "../boardInput";
 import { createConfirm } from "../confirm";
 
 export default function Home() {
-  const [boards, { refetch }] = createResource(() => api.listBoards());
+  const [boards, { refetch, mutate }] = createResource(() => api.listBoards());
   const [archivedBoards, setArchivedBoards] = createSignal<Board[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
   const [showHelp, setShowHelp] = createSignal(false);
@@ -29,7 +29,31 @@ export default function Home() {
     });
   });
 
-  const reorderBoardByKey = async (key: string) => {
+  // Reorders are applied optimistically via mutate() so rapid Shift+Arrow presses
+  // compute from the latest order, and PUTs are serialized (latest order wins) so
+  // the backend never renumbers concurrently. refetch() only runs once the queue
+  // drains, so it can't clobber a newer optimistic order.
+  let queuedReorderIds: string[] | null = null;
+  let reorderInFlight = false;
+
+  const flushReorder = async () => {
+    if (reorderInFlight) return;
+    reorderInFlight = true;
+    try {
+      while (queuedReorderIds) {
+        const ids = queuedReorderIds;
+        queuedReorderIds = null;
+        try {
+          await api.reorderBoards(ids);
+        } catch { /* refetch below restores server truth */ }
+      }
+    } finally {
+      reorderInFlight = false;
+      refetch();
+    }
+  };
+
+  const reorderBoardByKey = (key: string) => {
     const focused = document.activeElement as HTMLElement | null;
     if (!focused?.classList.contains("board-card")) return false;
     const boardId = focused.getAttribute("data-board-id");
@@ -56,8 +80,9 @@ export default function Home() {
     const [moved] = reordered.splice(idx, 1);
     reordered.splice(newIdx, 0, moved);
     setPendingFocusBoardId(boardId);
-    await api.reorderBoards(reordered.map((b) => b.id));
-    refetch();
+    mutate(reordered);
+    queuedReorderIds = reordered.map((b) => b.id);
+    flushReorder();
     return true;
   };
 
@@ -84,6 +109,9 @@ export default function Home() {
       try {
         const { mtime } = await api.checkChanges();
         if (mtime !== lastMtime) {
+          // Reorder flush refetches when it drains; skipping here (without
+          // updating lastMtime) lets the next poll pick the change up.
+          if (reorderInFlight || queuedReorderIds) return;
           lastMtime = mtime;
           refetch();
           if (showArchive()) {
