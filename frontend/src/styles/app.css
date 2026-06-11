@@ -613,16 +613,17 @@ html.electron:not(.electron--mac) .app-header-actions {
   width: 320px;
   height: calc(100vh - 52px);
   background: #f8f9fa;
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
   z-index: 80;
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .label-drawer--open {
   transform: translateX(0);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
 }
 
 .label-drawer-backdrop {
