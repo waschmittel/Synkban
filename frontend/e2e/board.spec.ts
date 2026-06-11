@@ -26,6 +26,42 @@ test("valid board loads lists and cards", async ({ page, request }) => {
   await expect(page.locator(".board-error")).toHaveCount(0);
 });
 
+test("arrow navigation stops at empty list between non-empty lists", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Nav Board" } })
+  ).json();
+  const listA = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "A" } })
+  ).json();
+  const listB = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "B empty" } })
+  ).json();
+  const listC = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "C" } })
+  ).json();
+  await request.post(`/api/lists/${listA.id}/cards`, { data: { title: "Card A" } });
+  await request.post(`/api/lists/${listC.id}/cards`, { data: { title: "Card C" } });
+
+  await page.goto(`/board/${board.id}`);
+  await expect(page.locator(".card", { hasText: "Card A" })).toBeVisible();
+
+  // Focus card in list A, navigate right → must land on empty list B's
+  // add-trigger, not skip ahead to list C.
+  await page.locator(".card", { hasText: "Card A" }).focus();
+  await page.keyboard.press("ArrowRight");
+
+  const listBLocator = page.locator(`.list[data-list-id="${listB.id}"]`);
+  await expect(listBLocator.locator(".add-trigger")).toBeFocused();
+
+  // And navigating left from list C's card must also stop at list B.
+  await page.locator(".card", { hasText: "Card C" }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(listBLocator.locator(".add-trigger")).toBeFocused();
+});
+
 test("board deleted while open shows not-found state after poll refetch", async ({
   page,
   request,
