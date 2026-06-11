@@ -7,7 +7,7 @@ import {
   onMount,
   onCleanup,
 } from "solid-js";
-import { useParams, useNavigate } from "@solidjs/router";
+import { useParams, useNavigate, A } from "@solidjs/router";
 import { api } from "../api";
 import type { Card as CardType } from "../types";
 import List from "../components/List";
@@ -57,11 +57,13 @@ export default function BoardPage() {
   const [renamingListId, setRenamingListId] = createSignal<string | null>(null);
 
   createEffect(() => {
-    const color = board()?.color ?? "#0079bf";
+    // Reading an errored resource throws; bail out before touching board().
+    const color = (board.error ? undefined : board()?.color) ?? "#0079bf";
     document.documentElement.style.setProperty("--board-color", color);
   });
 
   createEffect(() => {
+    if (board.error) return;
     const b = board();
     if (b) header.setTitle(b.title);
   });
@@ -544,6 +546,16 @@ export default function BoardPage() {
         }
       }}
     >
+      <Show
+        when={!board.error}
+        fallback={
+          <div class="board-error">
+            <h2>Board not found</h2>
+            <p>This board may have been deleted, or the link is no longer valid.</p>
+            <A href="/" class="board-error-home">Back to boards</A>
+          </div>
+        }
+      >
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
         {(b) => (
           <>
@@ -664,6 +676,7 @@ export default function BoardPage() {
 
       <Show when={showHelp()}>
         <ShortcutHelp onClose={() => setShowHelp(false)} />
+      </Show>
       </Show>
     </div>
   );

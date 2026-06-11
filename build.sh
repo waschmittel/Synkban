@@ -35,6 +35,12 @@ else
     cargo build --release
 fi
 
+echo ""
+echo "=== Running e2e tests ==="
+cd "$ROOT/frontend"
+pnpm exec playwright install chromium
+pnpm run test:e2e
+
 if [ "$DESKTOP" = true ]; then
     echo ""
     echo "=== Building desktop app (Electron) ==="

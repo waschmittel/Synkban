@@ -1146,6 +1146,37 @@ html.electron:not(.electron--mac) .app-header-actions {
   font-size: 16px;
 }
 
+/* ═══ Board error ═══ */
+.board-error {
+  text-align: center;
+  padding: 80px 20px;
+  color: #172b4d;
+}
+
+.board-error h2 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.board-error p {
+  color: #5e6c84;
+  margin-bottom: 20px;
+}
+
+.board-error-home {
+  display: inline-block;
+  padding: 8px 16px;
+  background: #0079bf;
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.board-error-home:hover {
+  background: #026aa7;
+}
+
 /* ═══ Scrollbar ═══ */
 .cards-container::-webkit-scrollbar {
   width: 8px;

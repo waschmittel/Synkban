@@ -32,8 +32,9 @@ After any code change:
 
 1. **Backend changes:** `cd backend && cargo build` — must compile with zero warnings
 2. **Frontend changes:** `cd frontend && npx vite build` — must build cleanly
-3. **Full build:** `./build.sh` — frontend must build before backend (assets embedded at compile time)
+3. **Full build:** `./build.sh` — frontend must build before backend (assets embedded at compile time), then runs Playwright e2e tests against the built binary
 4. **Smoke test:** Start server, `curl http://localhost:8080/api/boards` should return `[]` on fresh data dir
+5. **E2E tests:** `cd frontend && pnpm run test:e2e` — Playwright specs in `frontend/e2e/` boot the release binary on port 8091 with a temp `DATA_DIR` (config: `frontend/playwright.config.ts`). Requires `backend/target/release/synkban` to exist and `pnpm exec playwright install chromium` once per machine. Runs automatically as part of `./build.sh`.
 
 ## Desktop Mode
 
