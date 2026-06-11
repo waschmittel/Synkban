@@ -196,6 +196,7 @@ export default function Home() {
         if (isTypingIn(t)) return false;
         if (t?.closest?.(".shortcut-help-overlay")) return false;
         if (t?.closest?.(".archive-modal-overlay")) return false;
+        if (confirm.isOpen()) return false;
         return true;
       },
     });
