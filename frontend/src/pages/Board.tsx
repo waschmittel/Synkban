@@ -411,6 +411,9 @@ export default function BoardPage() {
     const cardId = focus.lastFocused();
     setSelectedCard(null);
     if (cardId) focus.preserve(cardId);
+    // Checklist/attachment edits save immediately inside the modal; refetch so
+    // card badges reflect them without waiting for the next poll.
+    refetch();
   };
 
   // --- List drag ---

@@ -1,10 +1,11 @@
 import { onMount, onCleanup, createSignal, Show } from "solid-js";
 import { EditorView } from "prosemirror-view";
-import type { Attachment, Card, Label } from "../types";
+import type { Attachment, Card, ChecklistItem, Label } from "../types";
 import { api } from "../api";
 import { createCardEditor, docFromDescription, isDocEmpty } from "../proseEditor";
 import { handleMarkdownShortcut } from "../mdInput";
 import CardLabelSection from "./CardLabelSection";
+import ChecklistSection from "./ChecklistSection";
 import DueDateSection from "./DueDateSection";
 import AttachmentsSection from "./AttachmentsSection";
 import ImagePreviewOverlay from "./ImagePreviewOverlay";
@@ -23,6 +24,7 @@ export default function CardDetail(props: Props) {
   let editorRef!: HTMLDivElement;
   let titleInputRef!: HTMLInputElement;
   let dueDateRef!: HTMLInputElement;
+  let checklistAddRef!: HTMLInputElement;
   let view: EditorView | undefined;
 
   const [title, setTitle] = createSignal(props.card.title);
@@ -37,6 +39,7 @@ export default function CardDetail(props: Props) {
   const [previewAtt, setPreviewAtt] = createSignal<Attachment | null>(null);
   const [draggingFile, setDraggingFile] = createSignal(false);
   const [dueDate, setDueDate] = createSignal<string>(props.card.due_date ?? "");
+  const [checklist, setChecklist] = createSignal<ChecklistItem[]>(props.card.checklist ?? []);
   let dragCounter = 0;
 
   onMount(() => {
@@ -73,6 +76,43 @@ export default function CardDetail(props: Props) {
   const handleDeleteAttachment = async (attId: string) => {
     await api.deleteAttachment(props.card.id, attId);
     setAttachments((prev) => prev.filter((a) => a.id !== attId));
+  };
+
+  // --- Checklist (saves immediately: optimistic local update + API call) ---
+
+  // Checklist ops are optimistic and not awaited by the UI, but the backend
+  // does read-modify-write on the whole card file — overlapping requests
+  // clobber each other. Chain them so they hit the server one at a time.
+  let checklistQueue: Promise<unknown> = Promise.resolve();
+  const enqueueChecklistOp = (op: () => Promise<unknown>) => {
+    checklistQueue = checklistQueue.then(op, op);
+  };
+
+  const handleAddChecklistItem = (text: string) => {
+    enqueueChecklistOp(async () => {
+      const item = await api.addChecklistItem(props.card.id, text);
+      setChecklist((prev) => [...prev, item]);
+    });
+  };
+
+  const handleToggleChecklistItem = (itemId: string, done: boolean) => {
+    setChecklist((prev) => prev.map((i) => (i.id === itemId ? { ...i, done } : i)));
+    enqueueChecklistOp(() => api.updateChecklistItem(props.card.id, itemId, { done }));
+  };
+
+  const handleRenameChecklistItem = (itemId: string, text: string) => {
+    setChecklist((prev) => prev.map((i) => (i.id === itemId ? { ...i, text } : i)));
+    enqueueChecklistOp(() => api.updateChecklistItem(props.card.id, itemId, { text }));
+  };
+
+  const handleDeleteChecklistItem = (itemId: string) => {
+    setChecklist((prev) => prev.filter((i) => i.id !== itemId));
+    enqueueChecklistOp(() => api.deleteChecklistItem(props.card.id, itemId));
+  };
+
+  const handleToggleAllChecklist = (done: boolean) => {
+    setChecklist((prev) => prev.map((i) => ({ ...i, done })));
+    enqueueChecklistOp(() => api.setChecklistAll(props.card.id, done));
   };
 
   // --- Modal-wide file drag/drop ---
@@ -117,7 +157,16 @@ export default function CardDetail(props: Props) {
     const description = isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
     setDirty(false);
     const dd = dueDate().trim();
-    props.onSave(props.card.id, title(), description, selectedLabelIds(), dd || null);
+    // Wait for in-flight checklist writes: the card save is a read-modify-write
+    // of the same file and would otherwise clobber them (and the refetch after
+    // save would show stale state).
+    void checklistQueue.finally(() =>
+      props.onSave(props.card.id, title(), description, selectedLabelIds(), dd || null)
+    );
+  };
+
+  const closeAfterFlush = () => {
+    void checklistQueue.finally(() => props.onClose());
   };
 
   const guardedClose = () => {
@@ -125,7 +174,7 @@ export default function CardDetail(props: Props) {
       setShowUnsavedDialog(true);
       return;
     }
-    props.onClose();
+    closeAfterFlush();
   };
 
   // --- Keyboard ---
@@ -159,6 +208,9 @@ export default function CardDetail(props: Props) {
       if (e.key === "d") {
         e.preventDefault();
         dueDateRef?.focus();
+      } else if (e.key === "c") {
+        e.preventDefault();
+        checklistAddRef?.focus();
       } else if (e.key === "l") {
         e.preventDefault();
         setShowLabelPicker((v) => !v);
@@ -256,6 +308,15 @@ export default function CardDetail(props: Props) {
           <div class="editor-hint">
             <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save
           </div>
+          <ChecklistSection
+            items={checklist()}
+            onAdd={handleAddChecklistItem}
+            onToggle={handleToggleChecklistItem}
+            onRename={handleRenameChecklistItem}
+            onDelete={handleDeleteChecklistItem}
+            onToggleAll={handleToggleAllChecklist}
+            addInputRef={(el) => (checklistAddRef = el)}
+          />
           <AttachmentsSection
             cardId={props.card.id}
             attachments={attachments()}
@@ -275,7 +336,7 @@ export default function CardDetail(props: Props) {
       <Show when={showUnsavedDialog()}>
         <UnsavedDialog
           onSave={handleSave}
-          onDiscard={props.onClose}
+          onDiscard={closeAfterFlush}
           onCancel={() => setShowUnsavedDialog(false)}
         />
       </Show>

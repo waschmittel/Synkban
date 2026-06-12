@@ -248,6 +248,65 @@ describe("card operations", () => {
   });
 });
 
+describe("checklist operations", () => {
+  it("addChecklistItem sends POST with text", async () => {
+    const fn = mockFetch({ status: 201, json: () => Promise.resolve({}) });
+    await api.addChecklistItem("card-1", "Buy milk");
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/checklist",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ text: "Buy milk" }),
+      })
+    );
+  });
+
+  it("updateChecklistItem sends PUT with done", async () => {
+    const fn = mockFetch({});
+    await api.updateChecklistItem("card-1", "item-1", { done: true });
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/checklist/item-1",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ done: true }),
+      })
+    );
+  });
+
+  it("updateChecklistItem sends PUT with text", async () => {
+    const fn = mockFetch({});
+    await api.updateChecklistItem("card-1", "item-1", { text: "Renamed" });
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/checklist/item-1",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ text: "Renamed" }),
+      })
+    );
+  });
+
+  it("deleteChecklistItem sends DELETE to nested path", async () => {
+    const fn = mockFetch({ status: 204 });
+    await api.deleteChecklistItem("card-1", "item-1");
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/checklist/item-1",
+      expect.objectContaining({ method: "DELETE" })
+    );
+  });
+
+  it("setChecklistAll sends PUT to collection path", async () => {
+    const fn = mockFetch({});
+    await api.setChecklistAll("card-1", true);
+    expect(fn).toHaveBeenCalledWith(
+      "/api/cards/card-1/checklist",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ done: true }),
+      })
+    );
+  });
+});
+
 describe("label operations", () => {
   it("createLabel sends POST to board-scoped path", async () => {
     const fn = mockFetch({ status: 201, json: () => Promise.resolve({}) });

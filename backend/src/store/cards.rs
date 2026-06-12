@@ -57,6 +57,24 @@ pub(crate) fn read_card(path: &Path) -> Result<Card, AppError> {
     Ok(card)
 }
 
+/// Resolve a card's board id and on-disk JSON path, wherever it lives
+/// (in a list or orphaned in `archived_cards/`).
+pub(crate) fn locate_card_path(
+    data_dir: &Path,
+    card_id: &str,
+) -> Result<(String, std::path::PathBuf), AppError> {
+    match card_index::locate(data_dir, card_id)? {
+        CardLocation::InList { board_id, list_id } => {
+            let path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+            Ok((board_id, path))
+        }
+        CardLocation::Orphaned { board_id } => {
+            let path = archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
+            Ok((board_id, path))
+        }
+    }
+}
+
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -77,6 +95,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         archived: false,
         attachments: Vec::new(),
         due_date: None,
+        checklist: Vec::new(),
     };
     write_json(&dir.join(format!("{id}.json")), &card)?;
     card_index::record(&id, CardLocation::InList {

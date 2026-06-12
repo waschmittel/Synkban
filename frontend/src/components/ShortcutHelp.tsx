@@ -113,8 +113,15 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Enter"]} desc="Title → focus editor" />
             <Row keys={["l"]} desc="Toggle label picker" />
             <Row keys={["d"]} desc="Focus due date input" />
+            <Row keys={["c"]} desc="Focus checklist add input" />
             <Row keys={["f"]} desc="Toggle filter bar" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
+          </Section>
+          <Section title="Checklist">
+            <Row keys={["↑", "↓"]} desc="Navigate checklist items" />
+            <Row keys={["Space"]} desc="Toggle item done" />
+            <Row keys={["Enter"]} desc="Edit item text" />
+            <Row keys={["Del"]} desc="Delete item" />
           </Section>
           <Section title="Description Editor">
             <Row keys={["Tab"]} desc="Nest list item (indent)" />

@@ -18,6 +18,13 @@ pub struct Label {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChecklistItem {
+    pub id: String,
+    pub text: String,
+    pub done: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Attachment {
     pub id: String,
     pub filename: String,
@@ -69,6 +76,8 @@ pub struct Card {
     pub attachments: Vec<Attachment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due_date: Option<String>,
+    #[serde(default)]
+    pub checklist: Vec<ChecklistItem>,
 }
 
 #[derive(Debug, Serialize)]
@@ -149,6 +158,22 @@ pub struct CreateLabel {
 #[derive(Debug, Deserialize)]
 pub struct UpdateLabel {
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateChecklistItem {
+    pub text: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateChecklistItem {
+    pub text: Option<String>,
+    pub done: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SetChecklistAll {
+    pub done: bool,
 }
 
 #[derive(Debug, Deserialize)]

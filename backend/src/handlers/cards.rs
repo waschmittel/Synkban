@@ -89,6 +89,73 @@ pub async fn delete_card(
     Ok(HttpResponse::NoContent().finish())
 }
 
+pub async fn create_checklist_item(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+    body: web::Json<CreateChecklistItem>,
+) -> Result<HttpResponse, AppError> {
+    let card_id = path.into_inner();
+    let item = store::audit_op(
+        &data_dir,
+        |dd| store::create_checklist_item(dd, &card_id, &body.text),
+        |i| format!("CREATE checklist item \"{}\" (id: {}) on card {}", i.text, i.id, card_id),
+    )?;
+    Ok(HttpResponse::Created().json(item))
+}
+
+pub async fn update_checklist_item(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<(String, String)>,
+    body: web::Json<UpdateChecklistItem>,
+) -> Result<HttpResponse, AppError> {
+    let (card_id, item_id) = path.into_inner();
+    let mut changes = Vec::new();
+    if body.text.is_some() { changes.push("text"); }
+    if body.done == Some(true) { changes.push("done"); }
+    if body.done == Some(false) { changes.push("undone"); }
+    let fields = if changes.is_empty() { "no-op".to_string() } else { changes.join(", ") };
+    let item = store::audit_op(
+        &data_dir,
+        |dd| store::update_checklist_item(dd, &card_id, &item_id, body.text.as_deref(), body.done),
+        |i| format!("UPDATE checklist item \"{}\" (id: {}) on card {} [{}]", i.text, i.id, card_id, fields),
+    )?;
+    Ok(HttpResponse::Ok().json(item))
+}
+
+pub async fn delete_checklist_item(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse, AppError> {
+    let (card_id, item_id) = path.into_inner();
+    store::audit_op(
+        &data_dir,
+        |dd| store::delete_checklist_item(dd, &card_id, &item_id),
+        |_| format!("DELETE checklist item (id: {}) from card {}", item_id, card_id),
+    )?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn set_checklist_all(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+    body: web::Json<SetChecklistAll>,
+) -> Result<HttpResponse, AppError> {
+    let card_id = path.into_inner();
+    let card = store::audit_op(
+        &data_dir,
+        |dd| store::set_checklist_all(dd, &card_id, body.done),
+        |c| {
+            format!(
+                "UPDATE checklist on card \"{}\" (id: {}) [all {}]",
+                c.title,
+                c.id,
+                if body.done { "done" } else { "undone" }
+            )
+        },
+    )?;
+    Ok(HttpResponse::Ok().json(card))
+}
+
 pub async fn upload_attachment(
     data_dir: web::Data<PathBuf>,
     path: web::Path<String>,
