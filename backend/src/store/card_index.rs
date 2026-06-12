@@ -5,7 +5,6 @@
 //! before returning them.
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
@@ -80,34 +79,18 @@ pub fn forget(card_id: &str) {
 }
 
 fn scan(data_dir: &Path, card_id: &str) -> Result<CardLocation, AppError> {
-    let boards = boards_dir(data_dir);
-    if boards.exists() {
-        for board_entry in fs::read_dir(&boards)? {
-            let board_entry = board_entry?;
-            if !board_entry.file_type()?.is_dir() {
-                continue;
+    for board_id in crate::store::walk::board_ids(data_dir)? {
+        for list_id in crate::store::walk::list_ids(data_dir, &board_id)? {
+            let card_path =
+                cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+            if card_path.exists() {
+                return Ok(CardLocation::InList { board_id, list_id });
             }
-            let board_id = board_entry.file_name().to_string_lossy().to_string();
-            let lists_path = lists_dir(data_dir, &board_id);
-            if lists_path.exists() {
-                for list_entry in fs::read_dir(&lists_path)? {
-                    let list_entry = list_entry?;
-                    if !list_entry.file_type()?.is_dir() {
-                        continue;
-                    }
-                    let list_id = list_entry.file_name().to_string_lossy().to_string();
-                    let card_path = cards_dir(data_dir, &board_id, &list_id)
-                        .join(format!("{card_id}.json"));
-                    if card_path.exists() {
-                        return Ok(CardLocation::InList { board_id, list_id });
-                    }
-                }
-            }
-            let orphan_path = archived_cards_dir(data_dir, &board_id)
-                .join(format!("{card_id}.json"));
-            if orphan_path.exists() {
-                return Ok(CardLocation::Orphaned { board_id });
-            }
+        }
+        let orphan_path =
+            archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
+        if orphan_path.exists() {
+            return Ok(CardLocation::Orphaned { board_id });
         }
     }
     Err(AppError::NotFound("Card not found".into()))

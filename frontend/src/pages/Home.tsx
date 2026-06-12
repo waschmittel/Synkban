@@ -3,10 +3,11 @@ import { A } from "@solidjs/router";
 import { api } from "../api";
 import type { Board } from "../types";
 import ShortcutHelp from "../components/ShortcutHelp";
+import ArchivePanel from "../components/ArchivePanel";
+import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 import { isTypingIn } from "../boardInput";
 import { createConfirm } from "../confirm";
-import { focusTrap } from "../focusTrap";
 
 export default function Home() {
   const [boards, { refetch, mutate }] = createResource(() => api.listBoards());
@@ -15,9 +16,7 @@ export default function Home() {
   const [showHelp, setShowHelp] = createSignal(false);
   const [showArchive, setShowArchive] = createSignal(false);
   const confirm = createConfirm();
-  const [confirmDeleteId, setConfirmDeleteId] = createSignal<string | null>(null);
   const [pendingFocusBoardId, setPendingFocusBoardId] = createSignal<string | null>(null);
-  let lastMtime = 0;
 
   // Restore focus to a reordered board after the resource re-renders.
   createEffect(() => {
@@ -88,40 +87,29 @@ export default function Home() {
   };
 
   const openArchive = async () => {
-    setShowArchive(true);
     setArchiveLoading(true);
+    setShowArchive(true);
     try {
-      const boards = await api.listArchivedBoards();
-      setArchivedBoards(boards);
+      setArchivedBoards(await api.listArchivedBoards());
     } finally {
       setArchiveLoading(false);
-      requestAnimationFrame(() => {
-        const first = document.querySelector<HTMLElement>(".archive-board-item");
-        if (first) first.focus();
-        else document.querySelector<HTMLElement>(".archive-modal")?.focus();
-      });
     }
   };
 
   onMount(() => {
     api.listArchivedBoards().then(boards => setArchivedBoards(boards));
 
-    const pollId = setInterval(async () => {
-      try {
-        const { mtime } = await api.checkChanges();
-        if (mtime !== lastMtime) {
-          // Reorder flush refetches when it drains; skipping here (without
-          // updating lastMtime) lets the next poll pick the change up.
-          if (reorderInFlight || queuedReorderIds) return;
-          lastMtime = mtime;
-          refetch();
-          if (showArchive()) {
-            const boards = await api.listArchivedBoards();
-            setArchivedBoards(boards);
-          }
+    // Reorder flush refetches when it drains; skipping the tick (without
+    // consuming the mtime) lets the next poll pick the change up.
+    const stopPoller = startChangePoller({
+      shouldSkip: () => reorderInFlight || !!queuedReorderIds,
+      onChange: async () => {
+        refetch();
+        if (showArchive()) {
+          setArchivedBoards(await api.listArchivedBoards());
         }
-      } catch { /* ignore poll errors */ }
-    }, 15000);
+      },
+    });
 
     const navigateGrid = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -165,7 +153,7 @@ export default function Home() {
     const arrowDirs = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"] as const;
 
     const defs: ShortcutDef[] = [
-      { key: "Escape", canFire: () => showArchive(), handler: () => { setShowArchive(false); setConfirmDeleteId(null); } },
+      { key: "Escape", canFire: () => showArchive(), handler: () => setShowArchive(false) },
       { key: "Escape", canFire: () => showHelp(), handler: () => setShowHelp(false) },
       { key: "Escape", canFire: () => adding(), handler: () => close() },
       { key: "n", ...noMods, handler: (e) => { e.preventDefault(); setAdding(true); } },
@@ -205,7 +193,7 @@ export default function Home() {
     const handleToggleShortcuts = () => setShowHelp((v) => !v);
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     onCleanup(() => {
-      clearInterval(pollId);
+      stopPoller();
       dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     });
@@ -249,7 +237,6 @@ export default function Home() {
 
   const handleDeleteArchived = async (id: string) => {
     await api.deleteBoard(id);
-    setConfirmDeleteId(null);
     setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
   };
 
@@ -361,75 +348,22 @@ export default function Home() {
 
       {/* Archived boards panel */}
       <Show when={showArchive()}>
-        <div
-          class="archive-modal-overlay"
-          ref={(el) => onCleanup(focusTrap(el))}
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowArchive(false); setConfirmDeleteId(null); } }}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Escape") { setShowArchive(false); setConfirmDeleteId(null); }
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault();
-              const items = Array.from(document.querySelectorAll<HTMLElement>(".archive-board-item"));
-              if (items.length === 0) return;
-              const curIdx = items.indexOf(document.activeElement as HTMLElement);
-              let nextIdx: number;
-              if (curIdx < 0) {
-                nextIdx = e.key === "ArrowDown" ? 0 : items.length - 1;
-              } else {
-                nextIdx = e.key === "ArrowDown"
-                  ? Math.min(curIdx + 1, items.length - 1)
-                  : Math.max(curIdx - 1, 0);
-              }
-              items[nextIdx]?.focus();
-            }
-          }}
-        >
-          <div class="archive-modal" tabindex="-1" onClick={(e) => e.stopPropagation()}>
-            <div class="archive-modal-header">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="21 8 21 21 3 21 3 8" />
-                <rect x="1" y="3" width="22" height="5" />
-                <line x1="10" y1="12" x2="14" y2="12" />
-              </svg>
-              <span>Archived Boards</span>
-              <button class="modal-close" onClick={() => { setShowArchive(false); setConfirmDeleteId(null); }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div class="archive-modal-body">
-              <Show when={archiveLoading()}>
-                <div class="archive-empty">Loading…</div>
-              </Show>
-              <Show when={!archiveLoading() && archivedBoards().length === 0}>
-                <div class="archive-empty">No archived boards</div>
-              </Show>
-              <For each={archivedBoards()}>
-                  {(board) => (
-                    <div class="archive-board-item" tabindex="0">
-                      <div class="archive-board-color" style={board.color ? { background: board.color } : {}} />
-                      <span class="archive-card-title">{board.title}</span>
-                      <div class="archive-card-actions">
-                        <Show when={confirmDeleteId() === board.id} fallback={
-                          <>
-                            <button class="btn btn-sm" onClick={() => handleRestore(board.id)}>Restore</button>
-                            <button class="btn btn-sm btn-danger" onClick={() => setConfirmDeleteId(board.id)}>Delete</button>
-                          </>
-                        }>
-                          <span class="archive-confirm-text">Delete permanently?</span>
-                          <button class="btn btn-sm btn-danger" onClick={() => handleDeleteArchived(board.id)}>Yes</button>
-                          <button class="btn btn-sm" onClick={() => setConfirmDeleteId(null)}>No</button>
-                        </Show>
-                      </div>
-                    </div>
-                  )}
-                </For>
-            </div>
-          </div>
-        </div>
+        <ArchivePanel
+          title="Archived Boards"
+          items={archivedBoards()}
+          loading={archiveLoading()}
+          emptyText="No archived boards"
+          itemClass="archive-board-item"
+          renderItem={(board) => (
+            <>
+              <div class="archive-board-color" style={board.color ? { background: board.color } : {}} />
+              <span class="archive-card-title">{board.title}</span>
+            </>
+          )}
+          onClose={() => setShowArchive(false)}
+          onRestore={handleRestore}
+          onDelete={handleDeleteArchived}
+        />
       </Show>
 
       <Show when={showHelp()}>

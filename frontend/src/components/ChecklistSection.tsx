@@ -1,5 +1,6 @@
 import { createSignal, Index, Show } from "solid-js";
 import type { ChecklistItem } from "../types";
+import { moveRovingFocus } from "../rovingFocus";
 
 interface Props {
   items: ChecklistItem[];
@@ -107,21 +108,14 @@ export default function ChecklistSection(props: Props) {
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       setConfirmDeleteId(item.id);
-    } else if (e.key === "ArrowDown") {
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       e.stopPropagation();
+      const dir = e.key === "ArrowDown" ? 1 : -1;
       if (e.shiftKey) {
-        moveItem(item, index, index + 1);
+        moveItem(item, index, index + dir);
       } else {
-        (el.nextElementSibling as HTMLElement | null)?.focus();
-      }
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.shiftKey) {
-        moveItem(item, index, index - 1);
-      } else {
-        (el.previousElementSibling as HTMLElement | null)?.focus();
+        moveRovingFocus(el.parentElement as HTMLElement, ".checklist-item", dir);
       }
     }
   };

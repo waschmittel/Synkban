@@ -11,6 +11,7 @@ pub mod io;
 pub mod labels;
 pub mod lists;
 pub mod paths;
+pub(crate) mod walk;
 
 pub use attachments::{create_attachment, delete_attachment, get_attachment_data, get_thumbnail_data};
 pub use boards::{

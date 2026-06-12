@@ -4,6 +4,7 @@ import type { Attachment, Card, ChecklistItem, Label } from "../types";
 import { api } from "../api";
 import { createCardEditor, docFromDescription, isDocEmpty } from "../proseEditor";
 import { focusTrap } from "../focusTrap";
+import { createMutationQueue } from "../mutationQueue";
 import { handleMarkdownShortcut } from "../mdInput";
 import CardLabelSection from "./CardLabelSection";
 import ChecklistSection from "./ChecklistSection";
@@ -97,13 +98,10 @@ export default function CardDetail(props: Props) {
 
   // --- Checklist (saves immediately: optimistic local update + API call) ---
 
-  // Checklist ops are optimistic and not awaited by the UI, but the backend
-  // does read-modify-write on the whole card file — overlapping requests
-  // clobber each other. Chain them so they hit the server one at a time.
-  let checklistQueue: Promise<unknown> = Promise.resolve();
-  const enqueueChecklistOp = (op: () => Promise<unknown>) => {
-    checklistQueue = checklistQueue.then(op, op);
-  };
+  // Checklist ops are optimistic and not awaited by the UI; the queue
+  // serializes them against the card file (see mutationQueue.ts).
+  const checklistQueue = createMutationQueue();
+  const enqueueChecklistOp = checklistQueue.enqueue;
 
   const handleAddChecklistItem = (text: string) => {
     enqueueChecklistOp(async () => {
@@ -189,13 +187,13 @@ export default function CardDetail(props: Props) {
     // Wait for in-flight checklist writes: the card save is a read-modify-write
     // of the same file and would otherwise clobber them (and the refetch after
     // save would show stale state).
-    void checklistQueue.finally(() =>
+    void checklistQueue.flush().then(() =>
       props.onSave(props.card.id, title(), description, selectedLabelIds(), dd || null)
     );
   };
 
   const closeAfterFlush = () => {
-    void checklistQueue.finally(() => props.onClose());
+    void checklistQueue.flush().then(() => props.onClose());
   };
 
   const guardedClose = () => {

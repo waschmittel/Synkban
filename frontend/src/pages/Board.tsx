@@ -15,7 +15,8 @@ import AddForm from "../components/AddForm";
 import CardDetail from "../components/CardDetail";
 import ShortcutHelp from "../components/ShortcutHelp";
 import LabelDrawer from "../components/LabelDrawer";
-import ArchiveCardsModal from "../components/ArchiveCardsModal";
+import ArchivePanel from "../components/ArchivePanel";
+import { renderTitle } from "../components/Card";
 import FilterBar from "../components/FilterBar";
 import BoardColorPicker from "../components/BoardColorPicker";
 import { createConfirm } from "../confirm";
@@ -25,6 +26,7 @@ import { listDropPosition } from "../positions";
 import { cardMatchesFilter as filterCard } from "../filter";
 import { isTypingIn, isInUiOverlay } from "../boardInput";
 import { createFocusRestoration } from "../focusRestoration";
+import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 
 export default function BoardPage() {
@@ -68,24 +70,19 @@ export default function BoardPage() {
     if (b) header.setTitle(b.title);
   });
 
-  let lastMtime = 0;
   onMount(() => {
     header.setIsOnBoard(true);
 
-    const pollId = setInterval(async () => {
-      try {
-        const { mtime, boards } = await api.checkChanges();
-        // Watch only this board's mtime so quiet boards don't trigger refetch
-        // when another board changes. Falls back to the global mtime if the
-        // server doesn't (yet) provide the per-board map.
-        const mine = boards?.[params.id] ?? mtime;
-        if (mine !== lastMtime) {
-          lastMtime = mine;
-          focus.capturePending();
-          refetch();
-        }
-      } catch { /* ignore */ }
-    }, 15000);
+    // Watch only this board's mtime so quiet boards don't trigger refetch when
+    // another board changes. Falls back to the global mtime if the server
+    // doesn't (yet) provide the per-board map.
+    const stopPoller = startChangePoller({
+      select: (r) => r.boards?.[params.id] ?? r.mtime,
+      onChange: () => {
+        focus.capturePending();
+        refetch();
+      },
+    });
 
     const triggerAddList = () => {
       (document.querySelector(".add-list-wrapper .add-trigger") as HTMLElement | null)?.click();
@@ -243,7 +240,7 @@ export default function BoardPage() {
       header.setTitle("");
       header.setRenaming(false);
       drawer.close();
-      clearInterval(pollId);
+      stopPoller();
       dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
       document.removeEventListener("commit-board-rename", handleCommitRename as EventListener);
@@ -291,15 +288,9 @@ export default function BoardPage() {
     setArchiveLoading(true);
     setShowArchive(true);
     try {
-      const cards = await api.getArchivedCards(params.id);
-      setArchivedCards(cards);
+      setArchivedCards(await api.getArchivedCards(params.id));
     } finally {
       setArchiveLoading(false);
-      requestAnimationFrame(() => {
-        const first = document.querySelector<HTMLElement>(".archive-card-item");
-        if (first) first.focus();
-        else document.querySelector<HTMLElement>(".archive-modal")?.focus();
-      });
     }
   };
 
@@ -401,6 +392,10 @@ export default function BoardPage() {
     setSelectedCard(card);
   };
 
+  // Invariant for both close paths: the modal only unmounts after refetch()
+  // resolves, so board() already reflects the modal's writes. Closing first
+  // would let an immediate re-open snapshot a stale card (empty description,
+  // missing checklist items) from the still-refetching resource.
   const handleCardSave = async (
     id: string,
     title: string,
@@ -409,18 +404,19 @@ export default function BoardPage() {
     dueDate: string | null
   ) => {
     await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate });
+    try { await refetch(); } catch { /* board error surfaces via resource */ }
     setSelectedCard(null);
     focus.preserve(id);
-    refetch();
   };
 
-  const handleModalClose = () => {
+  const handleModalClose = async () => {
     const cardId = focus.lastFocused();
+    // Checklist/attachment edits save immediately inside the modal; refetch so
+    // card badges (and an immediate re-open) reflect them without waiting for
+    // the next poll.
+    try { await refetch(); } catch { /* board error surfaces via resource */ }
     setSelectedCard(null);
     if (cardId) focus.preserve(cardId);
-    // Checklist/attachment edits save immediately inside the modal; refetch so
-    // card badges reflect them without waiting for the next poll.
-    refetch();
   };
 
   // --- List drag ---
@@ -675,9 +671,16 @@ export default function BoardPage() {
       <confirm.Render />
 
       <Show when={showArchive()}>
-        <ArchiveCardsModal
-          cards={archivedCards()}
+        <ArchivePanel
+          title="Archived Cards"
+          items={archivedCards()}
           loading={archiveLoading()}
+          emptyText="No archived cards."
+          itemClass="archive-card-item"
+          restoreClass="btn btn-primary btn-sm"
+          renderItem={(card) => (
+            <span class="archive-card-title" innerHTML={renderTitle(card.title)} />
+          )}
           onClose={() => setShowArchive(false)}
           onRestore={handleRestoreCard}
           onDelete={handleDeleteArchivedCard}

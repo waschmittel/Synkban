@@ -70,24 +70,11 @@ pub fn list_archived_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
 }
 
 fn scan_boards(data_dir: &Path, want_archived: bool) -> Result<Vec<Board>, AppError> {
-    let dir = boards_dir(data_dir);
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-    let mut boards = Vec::new();
-    for entry in fs::read_dir(&dir)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            let board_json = entry.path().join("board.json");
-            if board_json.exists() {
-                let bf: BoardFile = read_json(&board_json)?;
-                if bf.archived == want_archived {
-                    boards.push(Board::from(bf));
-                }
-            }
-        }
-    }
-    Ok(boards)
+    Ok(crate::store::walk::board_files(data_dir)?
+        .into_iter()
+        .filter(|bf| bf.archived == want_archived)
+        .map(Board::from)
+        .collect())
 }
 
 pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
@@ -110,24 +97,11 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
 }
 
 fn max_position(data_dir: &Path) -> Result<f64, AppError> {
-    let dir = boards_dir(data_dir);
-    if !dir.exists() {
-        return Ok(0.0);
-    }
-    let mut max = 0.0f64;
-    for entry in fs::read_dir(&dir)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            let board_json = entry.path().join("board.json");
-            if board_json.exists() {
-                let bf: BoardFile = read_json(&board_json)?;
-                if !bf.archived && bf.position > max {
-                    max = bf.position;
-                }
-            }
-        }
-    }
-    Ok(max)
+    Ok(crate::store::walk::board_files(data_dir)?
+        .iter()
+        .filter(|bf| !bf.archived)
+        .map(|bf| bf.position)
+        .fold(0.0, f64::max))
 }
 
 /// Renumbers active boards to positions 1.0, 2.0, … in the order given.
@@ -154,40 +128,20 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
     let bf = read_board_file(data_dir, board_id)?;
 
     let mut lists_with_cards = Vec::new();
-    let lists_path = lists_dir(data_dir, board_id);
-    if lists_path.exists() {
-        for entry in fs::read_dir(&lists_path)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let list_json = entry.path().join("list.json");
-                if list_json.exists() {
-                    let list: List = read_json(&list_json)?;
-                    let mut cards = Vec::new();
-                    let cards_path = cards_dir(data_dir, board_id, &list.id);
-                    if cards_path.exists() {
-                        for card_entry in fs::read_dir(&cards_path)? {
-                            let card_entry = card_entry?;
-                            let path = card_entry.path();
-                            if path.extension().is_some_and(|e| e == "json") {
-                                let card = crate::store::cards::read_card(&path)?;
-                                if !card.archived {
-                                    cards.push(card);
-                                }
-                            }
-                        }
-                    }
-                    cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
-                    lists_with_cards.push(ListWithCards {
-                        id: list.id,
-                        board_id: list.board_id,
-                        title: list.title,
-                        position: list.position,
-                        created_at: list.created_at,
-                        cards,
-                    });
-                }
-            }
-        }
+    for list in crate::store::walk::lists(data_dir, board_id)? {
+        let mut cards: Vec<Card> = crate::store::walk::cards(data_dir, board_id, &list.id)?
+            .into_iter()
+            .filter(|c| !c.archived)
+            .collect();
+        cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+        lists_with_cards.push(ListWithCards {
+            id: list.id,
+            board_id: list.board_id,
+            title: list.title,
+            position: list.position,
+            created_at: list.created_at,
+            cards,
+        });
     }
     lists_with_cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
 

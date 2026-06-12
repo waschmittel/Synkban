@@ -11,17 +11,9 @@ use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, wri
 use crate::store::paths::*;
 
 pub(crate) fn find_board_for_list(data_dir: &Path, list_id: &str) -> Result<String, AppError> {
-    let boards = boards_dir(data_dir);
-    if boards.exists() {
-        for entry in fs::read_dir(&boards)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let board_id = entry.file_name().to_string_lossy().to_string();
-                let list_path = list_dir(data_dir, &board_id, list_id).join("list.json");
-                if list_path.exists() {
-                    return Ok(board_id);
-                }
-            }
+    for board_id in crate::store::walk::board_ids(data_dir)? {
+        if list_dir(data_dir, &board_id, list_id).join("list.json").exists() {
+            return Ok(board_id);
         }
     }
     Err(AppError::NotFound("List not found".into()))
@@ -51,23 +43,10 @@ pub fn create_list(data_dir: &Path, board_id: &str, title: &str) -> Result<List,
 }
 
 fn max_position(data_dir: &Path, board_id: &str) -> Result<f64, AppError> {
-    let dir = lists_dir(data_dir, board_id);
-    let mut max = 0.0f64;
-    if dir.exists() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let list_json = entry.path().join("list.json");
-                if list_json.exists() {
-                    let list: List = read_json(&list_json)?;
-                    if list.position > max {
-                        max = list.position;
-                    }
-                }
-            }
-        }
-    }
-    Ok(max)
+    Ok(crate::store::walk::lists(data_dir, board_id)?
+        .iter()
+        .map(|l| l.position)
+        .fold(0.0, f64::max))
 }
 
 pub fn update_list(
