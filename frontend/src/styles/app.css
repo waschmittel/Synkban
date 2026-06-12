@@ -104,8 +104,15 @@ html.electron:not(.electron--mac) .app-header-actions {
   color: white;
 }
 
+/* A real <button> so Electron's `.app-header button` no-drag rule applies —
+   a span here would be part of the window drag region and swallow clicks. */
 .app-logo--board {
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  text-align: left;
 }
 
 .header-rename-input {
