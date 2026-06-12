@@ -1,3 +1,6 @@
+import { onCleanup } from "solid-js";
+import { focusTrap } from "../focusTrap";
+
 interface Props {
   onSave: () => void;
   onDiscard: () => void;
@@ -25,7 +28,7 @@ export default function UnsavedDialog(props: Props) {
   };
 
   return (
-    <div class="unsaved-overlay" onKeyDown={onKeyDown}>
+    <div class="unsaved-overlay" ref={(el) => onCleanup(focusTrap(el))} onKeyDown={onKeyDown}>
       <div class="unsaved-dialog">
         <p>You have unsaved changes.</p>
         <div class="unsaved-dialog-actions">

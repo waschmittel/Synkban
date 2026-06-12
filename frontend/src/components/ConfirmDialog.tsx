@@ -2,6 +2,9 @@
 /// Confirm button auto-focuses; Enter activates the focused button and
 /// Escape cancels. Used for archive-card and delete-list flows.
 
+import { onCleanup } from "solid-js";
+import { focusTrap } from "../focusTrap";
+
 interface Props {
   message: string;
   confirmLabel: string;
@@ -13,6 +16,7 @@ export default function ConfirmDialog(props: Props) {
   return (
     <div
       class="unsaved-overlay archive-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       onClick={(e) => { if (e.target === e.currentTarget) props.onCancel(); }}
       onKeyDown={(e) => {
         e.stopPropagation();

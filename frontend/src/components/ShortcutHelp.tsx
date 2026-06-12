@@ -1,3 +1,6 @@
+import { onCleanup } from "solid-js";
+import { focusTrap } from "../focusTrap";
+
 interface Props {
   onClose: () => void;
 }
@@ -42,6 +45,7 @@ export default function ShortcutHelp(props: Props) {
   return (
     <div
       class="shortcut-help-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       onClick={handleOverlayClick}
       onKeyDown={handleKeyDown}
     >
@@ -105,7 +109,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Esc"]} desc="Close archive" />
           </Section>
           <Section title="Card Detail">
-            <Row keys={["Ctrl", "Enter"]} desc="Save" />
+            <Row keys={["Ctrl", "S"]} desc="Save" />
             <Row keys={["Ctrl", "B"]} desc="Bold selection (title)" />
             <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />

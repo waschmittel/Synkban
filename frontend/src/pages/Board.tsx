@@ -149,7 +149,14 @@ export default function BoardPage() {
       { key: "Escape", canFire: () => showHelp(), handler: () => setShowHelp(false) },
       { key: "Escape", canFire: () => showArchive(), handler: () => setShowArchive(false) },
       { key: "Escape", canFire: () => showColorPicker(), handler: () => setShowColorPicker(false) },
-      { key: "Escape", canFire: () => !!selectedCard(), handler: () => handleModalClose() },
+      // Fires when focus is outside the modal (e.g. on <body> after a dialog
+      // closed). Ask CardDetail to close so its unsaved-changes guard runs —
+      // closing directly here would discard dirty state without confirmation.
+      {
+        key: "Escape",
+        canFire: () => !!selectedCard(),
+        handler: () => document.dispatchEvent(new CustomEvent("request-card-close")),
+      },
       { key: "Escape", canFire: () => !!renamingListId(), handler: () => setRenamingListId(null) },
       { key: "Escape", canFire: () => header.renaming(), handler: () => header.setRenaming(false) },
       {

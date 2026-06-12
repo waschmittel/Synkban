@@ -6,6 +6,7 @@ import ShortcutHelp from "../components/ShortcutHelp";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 import { isTypingIn } from "../boardInput";
 import { createConfirm } from "../confirm";
+import { focusTrap } from "../focusTrap";
 
 export default function Home() {
   const [boards, { refetch, mutate }] = createResource(() => api.listBoards());
@@ -362,6 +363,7 @@ export default function Home() {
       <Show when={showArchive()}>
         <div
           class="archive-modal-overlay"
+          ref={(el) => onCleanup(focusTrap(el))}
           onClick={(e) => { if (e.target === e.currentTarget) { setShowArchive(false); setConfirmDeleteId(null); } }}
           onKeyDown={(e) => {
             e.stopPropagation();

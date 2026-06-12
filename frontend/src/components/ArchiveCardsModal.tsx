@@ -1,6 +1,7 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createSignal, onCleanup } from "solid-js";
 import type { Card } from "../types";
 import { renderTitle } from "./Card";
+import { focusTrap } from "../focusTrap";
 
 interface Props {
   cards: Card[];
@@ -19,6 +20,7 @@ export default function ArchiveCardsModal(props: Props) {
   return (
     <div
       class="archive-overlay archive-modal-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}
       onKeyDown={(e) => {
         e.stopPropagation();

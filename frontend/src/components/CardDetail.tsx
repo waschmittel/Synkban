@@ -3,6 +3,7 @@ import { EditorView } from "prosemirror-view";
 import type { Attachment, Card, ChecklistItem, Label } from "../types";
 import { api } from "../api";
 import { createCardEditor, docFromDescription, isDocEmpty } from "../proseEditor";
+import { focusTrap } from "../focusTrap";
 import { handleMarkdownShortcut } from "../mdInput";
 import CardLabelSection from "./CardLabelSection";
 import ChecklistSection from "./ChecklistSection";
@@ -46,9 +47,25 @@ export default function CardDetail(props: Props) {
     view = createCardEditor(editorRef, docFromDescription(props.card.description), () => {
       setDirty(true);
     });
+    // Board.tsx dispatches this when its global Escape handler fires while the
+    // modal is open but focus is outside it (e.g. on <body>) — route through
+    // the dirty guard instead of closing unconditionally.
+    document.addEventListener("request-card-close", handleCloseRequest);
   });
 
-  onCleanup(() => view?.destroy());
+  onCleanup(() => {
+    view?.destroy();
+    document.removeEventListener("request-card-close", handleCloseRequest);
+  });
+
+  const handleCloseRequest = () => {
+    if (showUnsavedDialog()) return;
+    if (previewAtt()) {
+      setPreviewAtt(null);
+      return;
+    }
+    guardedClose();
+  };
 
   // --- Labels ---
 
@@ -192,6 +209,9 @@ export default function CardDetail(props: Props) {
   // --- Keyboard ---
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // The unsaved dialog owns the keyboard while it's open (its own handler
+    // covers Enter/Escape) — don't let underlying modal shortcuts fire.
+    if (showUnsavedDialog()) return;
     if (e.key === "Escape") {
       if (previewAtt()) {
         setPreviewAtt(null);
@@ -200,7 +220,10 @@ export default function CardDetail(props: Props) {
       }
       guardedClose();
     }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    // Ctrl/Cmd+S saves. Not Ctrl+Enter: ProseMirror inserts a hard break on
+    // Ctrl+Enter, which would corrupt the description right before saving.
+    if ((e.key === "s" || e.key === "S") && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
       handleSave();
     }
     if (e.key === "Shift" && (e.ctrlKey || e.metaKey)) {
@@ -252,6 +275,7 @@ export default function CardDetail(props: Props) {
   return (
     <div
       class="modal-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       classList={{ "modal-overlay--drop-active": draggingFile() }}
       onClick={handleOverlayClick}
       onKeyDown={handleKeyDown}
@@ -318,7 +342,7 @@ export default function CardDetail(props: Props) {
           </div>
           <div class="editor-wrapper" ref={editorRef!} />
           <div class="editor-hint">
-            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save
+            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>Ctrl</kbd>+<kbd>S</kbd> save
           </div>
           <ChecklistSection
             items={checklist()}
