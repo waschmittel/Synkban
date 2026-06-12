@@ -1,5 +1,6 @@
 import { onCleanup } from "solid-js";
 import { focusTrap } from "../focusTrap";
+import { dialogKeys } from "../dialogKeys";
 
 interface Props {
   onClose: () => void;
@@ -35,19 +36,23 @@ export default function ShortcutHelp(props: Props) {
     if (e.target === e.currentTarget) props.onClose();
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape" || e.key === "?") {
-      e.stopPropagation();
-      props.onClose();
-    }
-  };
+  // Owned via dialogKeys so close keys work even while focus is still on the
+  // element behind the overlay (the help modal never auto-focuses anything).
+  onCleanup(
+    dialogKeys((e) => {
+      if (e.key === "Escape" || e.key === "?") {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onClose();
+      }
+    })
+  );
 
   return (
     <div
       class="shortcut-help-overlay"
       ref={(el) => onCleanup(focusTrap(el))}
       onClick={handleOverlayClick}
-      onKeyDown={handleKeyDown}
     >
       <div class="shortcut-help-modal">
         <div class="shortcut-help-header">

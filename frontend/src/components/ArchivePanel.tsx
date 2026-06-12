@@ -1,5 +1,6 @@
 import { For, Show, createSignal, createEffect, onCleanup, type JSX } from "solid-js";
 import { focusTrap } from "../focusTrap";
+import { dialogKeys } from "../dialogKeys";
 import { handleRovingArrow } from "../rovingFocus";
 
 interface Props<T extends { id: string }> {
@@ -39,18 +40,30 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
     });
   });
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    e.stopPropagation();
-    if (e.key === "Escape") props.onClose();
-    handleRovingArrow(e, overlayRef, `.${props.itemClass}`);
-  };
+  // Escape and ↑↓ are owned via dialogKeys so they work even before the
+  // first-row auto-focus lands (next animation frame). The element-level
+  // stopPropagation still shields the page's global shortcuts from all other
+  // keys while focus is inside the modal.
+  onCleanup(
+    dialogKeys((e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onClose();
+        return;
+      }
+      if (handleRovingArrow(e, overlayRef, `.${props.itemClass}`)) {
+        e.stopPropagation();
+      }
+    })
+  );
 
   return (
     <div
       class="archive-overlay archive-modal-overlay"
       ref={(el) => { overlayRef = el; onCleanup(focusTrap(el)); }}
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}
-      onKeyDown={handleKeyDown}
+      onKeyDown={(e) => e.stopPropagation()}
     >
       <div class="archive-modal" tabindex="-1">
         <div class="archive-modal-header">

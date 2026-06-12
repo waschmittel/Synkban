@@ -243,7 +243,14 @@ test("reorder items via drag and drop", async ({ page, request }) => {
   await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2);
   await page.mouse.down();
   await page.mouse.move(tgt.x + tgt.width / 2, tgt.y + 4, { steps: 10 });
-  await page.mouse.move(tgt.x + tgt.width / 2, tgt.y + 4, { steps: 2 });
+  // Autoscroll/render lag can leave the cached coordinates stale, turning the
+  // drop into a silent no-op — re-aim at the target's fresh position until
+  // the insertion indicator confirms the drop slot, only then release.
+  await expect(async () => {
+    const fresh = (await items.nth(2).boundingBox())!;
+    await page.mouse.move(fresh.x + fresh.width / 2, fresh.y + 4, { steps: 2 });
+    await expect(items.nth(2)).toHaveClass(/checklist-item--drop-before/, { timeout: 500 });
+  }).toPass();
   await page.mouse.up();
   await expect(items.nth(0)).toContainText("b");
   await expect(items.nth(1)).toContainText("a");

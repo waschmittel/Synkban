@@ -54,6 +54,50 @@ test("unsaved dialog: cancel via Escape keeps modal keyboard alive and guard int
   await expect(page.locator(".card", { hasText: "Task card" })).toBeVisible();
 });
 
+// Regression: a fast keypress can arrive before a dialog's rAF-deferred
+// auto-focus, while focus is still on the element *behind* the overlay — the
+// dialog's keys must work anyway (dialogKeys document-capture ownership).
+// Freezing rAF holds the dialog in that pre-focus state deterministically.
+test("unsaved dialog owns Escape before its auto-focus lands", async ({ page, request }) => {
+  const { board } = await seedCard(request, "Unsaved Race Board");
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+  const titleInput = page.locator(".modal-title-input");
+  await titleInput.fill("Dirty title");
+
+  await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".unsaved-dialog")).toBeVisible();
+  // Auto-focus suppressed: focus is still on the input behind the dialog.
+  await expect(titleInput).toBeFocused();
+
+  // Escape must still cancel the dialog (and not leak to the modal behind).
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".unsaved-dialog")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+
+  // Guard intact.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".unsaved-dialog")).toBeVisible();
+});
+
+test("confirm dialog owns Escape before its auto-focus lands", async ({ page, request }) => {
+  const { board } = await seedCard(request, "Confirm Race Board");
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).focus();
+  await expect(page.locator(".card", { hasText: "Task card" })).toBeFocused();
+
+  await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
+
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".unsaved-dialog")).toBeVisible();
+  // Escape must cancel the confirmation even though focus never entered it.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".unsaved-dialog")).toHaveCount(0);
+  await expect(page.locator(".card", { hasText: "Task card" })).toBeVisible();
+});
+
 test("modal shortcuts still work after dialog round-trip", async ({ page, request }) => {
   const { board } = await seedCard(request, "Shortcut Board");
   await page.goto(`/board/${board.id}`);
