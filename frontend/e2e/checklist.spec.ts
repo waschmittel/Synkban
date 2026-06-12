@@ -109,6 +109,7 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   await expect(page.locator(".checklist-item", { hasText: "kb one" })).toBeFocused();
   await page.keyboard.press("Space");
   await expect(page.locator(".checklist-progress")).toHaveText("2/2");
+  await expect(page.locator(".checklist-item", { hasText: "kb one" })).toBeFocused();
 
   // Delete the focused item; focus moves to the remaining neighbor.
   await page.keyboard.press("Delete");

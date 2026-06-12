@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, Index, Show } from "solid-js";
 import type { ChecklistItem } from "../types";
 
 interface Props {
@@ -23,8 +23,8 @@ export default function ChecklistSection(props: Props) {
   const doneCount = () => props.items.filter((i) => i.done).length;
   const allDone = () => props.items.length > 0 && doneCount() === props.items.length;
 
-  // Items are re-created in the DOM after an optimistic update, so focus by
-  // id on the next frame instead of holding on to the old element.
+  // Focus by id on the next frame — used where the focused element is being
+  // swapped out (edit input ↔ text span, item deletion).
   const focusItem = (id: string) =>
     requestAnimationFrame(() => {
       (
@@ -32,9 +32,11 @@ export default function ChecklistSection(props: Props) {
       )?.focus();
     });
 
+  // Rows are rendered with <Index> so an optimistic toggle updates the row
+  // in place instead of re-creating the DOM node. Focus must never leave the
+  // item, otherwise keys pressed right after Space (e.g. Delete) hit <body>.
   const toggleItem = (item: ChecklistItem) => {
     props.onToggle(item.id, !item.done);
-    focusItem(item.id);
   };
 
   const startEdit = (item: ChecklistItem) => {
@@ -116,28 +118,28 @@ export default function ChecklistSection(props: Props) {
         </Show>
       </div>
       <div class="checklist-items">
-        <For each={props.items}>
+        <Index each={props.items}>
           {(item) => (
             <div
               class="checklist-item"
-              classList={{ "checklist-item--done": item.done }}
+              classList={{ "checklist-item--done": item().done }}
               tabindex="0"
-              data-checklist-item-id={item.id}
-              onKeyDown={(e) => handleItemKeyDown(e, item)}
+              data-checklist-item-id={item().id}
+              onKeyDown={(e) => handleItemKeyDown(e, item())}
             >
               <input
                 type="checkbox"
                 class="checklist-checkbox"
                 tabindex="-1"
-                checked={item.done}
+                checked={item().done}
                 onClick={(e) => e.stopPropagation()}
-                onChange={() => toggleItem(item)}
+                onChange={() => toggleItem(item())}
               />
               <Show
-                when={editingId() === item.id}
+                when={editingId() === item().id}
                 fallback={
-                  <span class="checklist-text" onClick={() => startEdit(item)}>
-                    {item.text}
+                  <span class="checklist-text" onClick={() => startEdit(item())}>
+                    {item().text}
                   </span>
                 }
               >
@@ -147,15 +149,15 @@ export default function ChecklistSection(props: Props) {
                   type="text"
                   value={editValue()}
                   onInput={(e) => setEditValue(e.currentTarget.value)}
-                  onBlur={() => commitEdit(item)}
+                  onBlur={() => commitEdit(item())}
                   onKeyDown={(e) => {
                     e.stopPropagation();
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      commitEdit(item);
+                      commitEdit(item());
                     } else if (e.key === "Escape") {
                       e.stopPropagation();
-                      cancelEdit(item);
+                      cancelEdit(item());
                     }
                   }}
                 />
@@ -166,7 +168,7 @@ export default function ChecklistSection(props: Props) {
                 tabindex="-1"
                 onClick={(e) => {
                   e.stopPropagation();
-                  deleteItem(e.currentTarget.closest(".checklist-item") as HTMLElement, item.id);
+                  deleteItem(e.currentTarget.closest(".checklist-item") as HTMLElement, item().id);
                 }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -176,7 +178,7 @@ export default function ChecklistSection(props: Props) {
               </button>
             </div>
           )}
-        </For>
+        </Index>
       </div>
       <input
         ref={props.addInputRef}
