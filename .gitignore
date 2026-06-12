@@ -12,6 +12,7 @@ backend/static/*
 test-data/
 test-results/
 playwright-report/
+frontend/demo-results/
 
 # Node
 node_modules/

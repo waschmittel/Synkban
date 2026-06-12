@@ -2,9 +2,9 @@
 
 A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.
 
-[![screenshot](Synkban.png)](Synkban.png)
+![demo](demo.gif)
 
-[Demo Video on Youtube](https://youtu.be/g3lMEZZe6CY)
+Regenerate the demo with `./record-demo.sh` (requires `ffmpeg` and a built release binary).
 
 ## Features
 
