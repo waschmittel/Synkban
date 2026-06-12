@@ -117,9 +117,9 @@ describe("board operations", () => {
   });
 
   it("checkChanges calls correct endpoint", async () => {
-    const fn = mockFetch({ json: () => Promise.resolve({ mtime: 123 }) });
+    const fn = mockFetch({ json: () => Promise.resolve({ mtime: 123, boards: { "b-1": 123 } }) });
     const result = await api.checkChanges();
-    expect(result).toEqual({ mtime: 123 });
+    expect(result).toEqual({ mtime: 123, boards: { "b-1": 123 } });
     expect(fn).toHaveBeenCalledWith("/api/changes", expect.anything());
   });
 

@@ -169,7 +169,7 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
                             let card_entry = card_entry?;
                             let path = card_entry.path();
                             if path.extension().is_some_and(|e| e == "json") {
-                                let card = read_json::<Card>(&path)?;
+                                let card = crate::store::cards::read_card(&path)?;
                                 if !card.archived {
                                     cards.push(card);
                                 }

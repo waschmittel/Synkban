@@ -3,6 +3,9 @@ import { A } from "@solidjs/router";
 import { api } from "../api";
 import type { Board } from "../types";
 import ShortcutHelp from "../components/ShortcutHelp";
+import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
+import { isTypingIn } from "../boardInput";
+import { createConfirm } from "../confirm";
 
 export default function Home() {
   const [boards, { refetch }] = createResource(() => api.listBoards());
@@ -10,7 +13,7 @@ export default function Home() {
   const [archiveLoading, setArchiveLoading] = createSignal(false);
   const [showHelp, setShowHelp] = createSignal(false);
   const [showArchive, setShowArchive] = createSignal(false);
-  const [confirmArchiveId, setConfirmArchiveId] = createSignal<string | null>(null);
+  const confirm = createConfirm();
   const [confirmDeleteId, setConfirmDeleteId] = createSignal<string | null>(null);
   const [pendingFocusBoardId, setPendingFocusBoardId] = createSignal<string | null>(null);
   let lastMtime = 0;
@@ -91,89 +94,89 @@ export default function Home() {
       } catch { /* ignore poll errors */ }
     }, 15000);
 
-    const handleKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey
-      ) return;
-      if (target.closest?.(".shortcut-help-overlay")) return;
-      if (target.closest?.(".archive-modal-overlay")) return;
+    const navigateGrid = (e: KeyboardEvent) => {
+      e.preventDefault();
+      const cards = Array.from(document.querySelectorAll<HTMLElement>(".board-card, .add-board, .add-board-form"));
+      if (cards.length === 0) return;
+      const currentIdx = cards.indexOf(document.activeElement as HTMLElement);
 
-      if (e.key === "n") {
-        e.preventDefault();
-        setAdding(true);
-      } else if (e.key === "a") {
-        e.preventDefault();
-        if (showArchive()) {
-          setShowArchive(false);
-        } else {
-          openArchive();
-        }
-      } else if (e.key === "?") {
-        e.preventDefault();
-        setShowHelp((v) => !v);
-      } else if (e.key === "Escape") {
-        if (showArchive()) {
-          setShowArchive(false);
-          setConfirmDeleteId(null);
-        } else if (confirmArchiveId()) {
-          setConfirmArchiveId(null);
-        } else if (showHelp()) {
-          setShowHelp(false);
-        } else if (adding()) {
-          close();
-        }
-      } else if (e.shiftKey && ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-        reorderBoardByKey(e.key);
-      } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-        e.preventDefault();
-        const cards = Array.from(document.querySelectorAll<HTMLElement>(".board-card, .add-board, .add-board-form"));
-        if (cards.length === 0) return;
-        const currentIdx = cards.indexOf(document.activeElement as HTMLElement);
+      const grid = document.querySelector(".board-grid") as HTMLElement | null;
+      let cols = 1;
+      if (grid) {
+        cols = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+      }
 
-        const grid = document.querySelector(".board-grid") as HTMLElement | null;
-        let cols = 1;
-        if (grid) {
-          cols = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+      let nextIdx: number;
+      if (currentIdx < 0) {
+        nextIdx = (e.key === "ArrowUp" || e.key === "ArrowLeft") ? cards.length - 1 : 0;
+      } else {
+        switch (e.key) {
+          case "ArrowRight": nextIdx = Math.min(currentIdx + 1, cards.length - 1); break;
+          case "ArrowLeft": nextIdx = Math.max(currentIdx - 1, 0); break;
+          case "ArrowDown": nextIdx = Math.min(currentIdx + cols, cards.length - 1); break;
+          case "ArrowUp": nextIdx = Math.max(currentIdx - cols, 0); break;
+          default: return;
         }
+      }
+      cards[nextIdx]?.focus();
+    };
 
-        let nextIdx: number;
-        if (currentIdx < 0) {
-          nextIdx = (e.key === "ArrowUp" || e.key === "ArrowLeft") ? cards.length - 1 : 0;
-        } else {
-          switch (e.key) {
-            case "ArrowRight": nextIdx = Math.min(currentIdx + 1, cards.length - 1); break;
-            case "ArrowLeft": nextIdx = Math.max(currentIdx - 1, 0); break;
-            case "ArrowDown": nextIdx = Math.min(currentIdx + cols, cards.length - 1); break;
-            case "ArrowUp": nextIdx = Math.max(currentIdx - cols, 0); break;
-            default: return;
-          }
-        }
-        cards[nextIdx]?.focus();
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        const focused = document.activeElement as HTMLElement;
-        if (focused?.classList.contains("board-card")) {
-          const boardId = focused.getAttribute("data-board-id");
-          if (boardId) {
-            e.preventDefault();
-            handleArchive(boardId);
-          }
+    const archiveFocusedBoard = (e: KeyboardEvent) => {
+      const focused = document.activeElement as HTMLElement;
+      if (focused?.classList.contains("board-card")) {
+        const boardId = focused.getAttribute("data-board-id");
+        if (boardId) {
+          e.preventDefault();
+          handleArchive(boardId);
         }
       }
     };
 
-    const handleToggleShortcuts = () => setShowHelp((v) => !v);
+    const noMods = { ctrl: false, meta: false, alt: false } as const;
+    const arrowDirs = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"] as const;
 
-    document.addEventListener("keydown", handleKey);
+    const defs: ShortcutDef[] = [
+      { key: "Escape", canFire: () => showArchive(), handler: () => { setShowArchive(false); setConfirmDeleteId(null); } },
+      { key: "Escape", canFire: () => showHelp(), handler: () => setShowHelp(false) },
+      { key: "Escape", canFire: () => adding(), handler: () => close() },
+      { key: "n", ...noMods, handler: (e) => { e.preventDefault(); setAdding(true); } },
+      {
+        key: "a", ...noMods,
+        handler: (e) => {
+          e.preventDefault();
+          if (showArchive()) setShowArchive(false);
+          else openArchive();
+        },
+      },
+      { key: "?", ...noMods, handler: (e) => { e.preventDefault(); setShowHelp((v) => !v); } },
+      { key: "Delete", ...noMods, handler: archiveFocusedBoard },
+      { key: "Backspace", ...noMods, handler: archiveFocusedBoard },
+      ...arrowDirs.map<ShortcutDef>((key) => ({
+        key, shift: true, ...noMods,
+        handler: (e) => { e.preventDefault(); reorderBoardByKey(key); },
+      })),
+      ...arrowDirs.map<ShortcutDef>((key) => ({
+        key, shift: false, ...noMods, handler: navigateGrid,
+      })),
+    ];
+
+    // Home page only guards typing surfaces and its two overlays — no `filter-bar`,
+    // `label-drawer`, or board-level modals on this page.
+    const dispose = registerShortcuts(defs, {
+      baseCanFire: (e) => {
+        const t = e.target as HTMLElement | null;
+        if (isTypingIn(t)) return false;
+        if (t?.closest?.(".shortcut-help-overlay")) return false;
+        if (t?.closest?.(".archive-modal-overlay")) return false;
+        return true;
+      },
+    });
+
+    const handleToggleShortcuts = () => setShowHelp((v) => !v);
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     onCleanup(() => {
       clearInterval(pollId);
-      document.removeEventListener("keydown", handleKey);
+      dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     });
   });
@@ -195,15 +198,14 @@ export default function Home() {
     refetch();
   };
 
-  const handleArchive = (id: string) => {
-    setConfirmArchiveId(id);
-  };
-
-  const confirmArchive = async () => {
-    const id = confirmArchiveId();
-    if (!id) return;
+  const handleArchive = async (id: string) => {
+    const title = getBoardTitle(id);
+    const ok = await confirm.ask({
+      message: `Archive "${title}"?`,
+      confirmLabel: "Archive",
+    });
+    if (!ok) return;
     await api.archiveBoard(id);
-    setConfirmArchiveId(null);
     refetch();
     const boards = await api.listArchivedBoards();
     setArchivedBoards(boards);
@@ -325,24 +327,7 @@ export default function Home() {
         </div>
       </Show>
 
-      {/* Archive confirmation dialog */}
-      <Show when={confirmArchiveId()}>
-        <div class="unsaved-overlay" onClick={() => setConfirmArchiveId(null)} onKeyDown={(e) => { if (e.key === "Escape") setConfirmArchiveId(null); }}>
-          <div class="unsaved-dialog" onClick={(e) => e.stopPropagation()}>
-            <p>Archive "{getBoardTitle(confirmArchiveId()!)}"?</p>
-            <div class="unsaved-dialog-actions">
-              <button
-                class="btn btn-primary"
-                ref={(el) => requestAnimationFrame(() => el.focus())}
-                onClick={confirmArchive}
-              >
-                Archive
-              </button>
-              <button class="btn" onClick={() => setConfirmArchiveId(null)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      </Show>
+      <confirm.Render />
 
       {/* Archived boards panel */}
       <Show when={showArchive()}>

@@ -5,7 +5,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::errors::AppError;
-use crate::models::{Card, List};
+use crate::models::List;
+use crate::store::card_index::{self, CardLocation};
 use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::paths::*;
 
@@ -93,22 +94,27 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let dir = list_dir(data_dir, &board_id, list_id);
     let cdir = cards_dir(data_dir, &board_id, list_id);
+    let mut orphaned_card_ids: Vec<String> = Vec::new();
     if cdir.exists() {
         let archive_dir = archived_cards_dir(data_dir, &board_id);
         for entry in fs::read_dir(&cdir)? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json") {
-                let mut card: Card = read_json(&path)?;
+                let mut card = crate::store::cards::read_card(&path)?;
                 card.archived = true;
                 fs::create_dir_all(&archive_dir)?;
                 write_json(&archive_dir.join(format!("{}.json", card.id)), &card)?;
+                orphaned_card_ids.push(card.id);
             }
         }
     }
     track("deleted dir", &dir);
     fs::remove_dir_all(&dir)?;
     remove_dir_if_empty(&lists_dir(data_dir, &board_id));
+    for cid in orphaned_card_ids {
+        card_index::record(&cid, CardLocation::Orphaned { board_id: board_id.clone() });
+    }
     Ok(())
 }
 

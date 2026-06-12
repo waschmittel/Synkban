@@ -11,12 +11,11 @@ pub async fn create_list(
     body: web::Json<CreateList>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
-    let list = store::create_list(&data_dir, &board_id, &body.title)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] CREATE list \"{}\" (id: {}) in board {}\n{}",
-        crate::log_timestamp(), list.title, list.id, board_id, ops.join("\n")
-    );
+    let list = store::audit_op(
+        &data_dir,
+        |dd| store::create_list(dd, &board_id, &body.title),
+        |l| format!("CREATE list \"{}\" (id: {}) in board {}", l.title, l.id, board_id),
+    )?;
     Ok(HttpResponse::Created().json(list))
 }
 
@@ -26,17 +25,11 @@ pub async fn update_list(
     body: web::Json<UpdateList>,
 ) -> Result<HttpResponse, AppError> {
     let list_id = path.into_inner();
-    let list = store::update_list(
+    let list = store::audit_op(
         &data_dir,
-        &list_id,
-        body.title.as_deref(),
-        body.position,
+        |dd| store::update_list(dd, &list_id, body.title.as_deref(), body.position),
+        |l| format!("UPDATE list \"{}\" (id: {}) in board {}", l.title, l.id, l.board_id),
     )?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] UPDATE list \"{}\" (id: {}) in board {}\n{}",
-        crate::log_timestamp(), list.title, list.id, list.board_id, ops.join("\n")
-    );
     Ok(HttpResponse::Ok().json(list))
 }
 
@@ -45,11 +38,10 @@ pub async fn delete_list(
     path: web::Path<String>,
 ) -> Result<HttpResponse, AppError> {
     let list_id = path.into_inner();
-    store::delete_list(&data_dir, &list_id)?;
-    let ops = store::drain_file_ops(&data_dir);
-    println!(
-        "[{}] DELETE list (id: {})\n{}",
-        crate::log_timestamp(), list_id, ops.join("\n")
-    );
+    store::audit_op(
+        &data_dir,
+        |dd| store::delete_list(dd, &list_id),
+        |_| format!("DELETE list (id: {})", list_id),
+    )?;
     Ok(HttpResponse::NoContent().finish())
 }

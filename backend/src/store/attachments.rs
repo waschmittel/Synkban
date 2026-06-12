@@ -7,9 +7,9 @@ use std::fs;
 use std::path::Path;
 
 use crate::errors::AppError;
-use crate::models::{Attachment, Card};
-use crate::store::cards::find_board_and_list_for_card;
-use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
+use crate::models::Attachment;
+use crate::store::card_index::find_board_and_list;
+use crate::store::io::{now_timestamp, remove_dir_if_empty, track, write_json};
 use crate::store::paths::*;
 
 pub fn create_attachment(
@@ -19,7 +19,7 @@ pub fn create_attachment(
     content_type: &str,
     data: &[u8],
 ) -> Result<Attachment, AppError> {
-    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
+    let (board_id, list_id) = find_board_and_list(data_dir, card_id)?;
     let att_id = uuid::Uuid::new_v4().to_string();
 
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
@@ -32,7 +32,7 @@ pub fn create_attachment(
     }
 
     let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-    let mut card: Card = read_json(&card_path)?;
+    let mut card = crate::store::cards::read_card(&card_path)?;
     let att = Attachment {
         id: att_id,
         filename: filename.to_string(),
@@ -50,9 +50,9 @@ pub fn get_attachment_data(
     card_id: &str,
     att_id: &str,
 ) -> Result<(Attachment, Vec<u8>), AppError> {
-    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
+    let (board_id, list_id) = find_board_and_list(data_dir, card_id)?;
     let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-    let card: Card = read_json(&card_path)?;
+    let card = crate::store::cards::read_card(&card_path)?;
     let att = card
         .attachments
         .into_iter()
@@ -67,9 +67,9 @@ pub fn delete_attachment(
     card_id: &str,
     att_id: &str,
 ) -> Result<(), AppError> {
-    let (board_id, list_id) = find_board_and_list_for_card(data_dir, card_id)?;
+    let (board_id, list_id) = find_board_and_list(data_dir, card_id)?;
     let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-    let mut card: Card = read_json(&card_path)?;
+    let mut card = crate::store::cards::read_card(&card_path)?;
     let before = card.attachments.len();
     card.attachments.retain(|a| a.id != att_id);
     if card.attachments.len() == before {
@@ -112,7 +112,7 @@ pub fn get_thumbnail_data(
     card_id: &str,
     att_id: &str,
 ) -> Result<Vec<u8>, AppError> {
-    let (board_id, _) = find_board_and_list_for_card(data_dir, card_id)?;
+    let (board_id, _) = find_board_and_list(data_dir, card_id)?;
     let thumb_path =
         attachment_dir(data_dir, &board_id, card_id).join(format!("{att_id}_thumb"));
     if !thumb_path.exists() {
@@ -124,9 +124,10 @@ pub fn get_thumbnail_data(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Card;
     use crate::store::boards::create_board;
     use crate::store::cards::create_card;
-    use crate::store::io::drain_file_ops;
+    use crate::store::io::{drain_file_ops, read_json};
     use crate::store::lists::create_list;
     use tempfile::TempDir;
 
@@ -151,7 +152,7 @@ mod tests {
         let att_path = attachment_dir(d.path(), &b.id, &c.id).join(&att.id);
         assert!(att_path.exists());
 
-        let (board_id, list_id) = find_board_and_list_for_card(d.path(), &c.id).unwrap();
+        let (board_id, list_id) = find_board_and_list(d.path(), &c.id).unwrap();
         let card: Card = read_json(
             &cards_dir(d.path(), &board_id, &list_id).join(format!("{}.json", c.id)),
         )
@@ -214,7 +215,7 @@ mod tests {
         let att_path = attachment_dir(d.path(), &b.id, &c.id).join(&att.id);
         assert!(!att_path.exists());
 
-        let (board_id, list_id) = find_board_and_list_for_card(d.path(), &c.id).unwrap();
+        let (board_id, list_id) = find_board_and_list(d.path(), &c.id).unwrap();
         let card: Card = read_json(
             &cards_dir(d.path(), &board_id, &list_id).join(format!("{}.json", c.id)),
         )

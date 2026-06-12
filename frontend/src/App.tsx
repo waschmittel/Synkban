@@ -1,15 +1,17 @@
 import type { ParentProps } from "solid-js";
 import { Show } from "solid-js";
 import { A } from "@solidjs/router";
-import { LabelProvider, useLabelContext } from "./LabelContext";
+import { BoardHeaderProvider, useBoardHeader } from "./BoardHeaderContext";
+import { LabelDrawerProvider, useLabelDrawer } from "./LabelDrawerContext";
 
 function AppHeader() {
-  const lc = useLabelContext();
+  const header = useBoardHeader();
+  const drawer = useLabelDrawer();
 
   return (
     <header class="app-header">
       <Show
-        when={lc.hasBoard()}
+        when={header.isOnBoard()}
         fallback={<A href="/" class="app-logo">Synkban</A>}
       >
         <A href="/" class="app-logo-home" title="Back to boards">
@@ -18,17 +20,17 @@ function AppHeader() {
           </svg>
         </A>
         <Show
-          when={lc.renaming()}
+          when={header.renaming()}
           fallback={
             <span
               class="app-logo app-logo--board"
               onClick={() => {
-                lc.setRenameValue(lc.boardTitle());
-                lc.setRenaming(true);
+                header.setRenameValue(header.title());
+                header.setRenaming(true);
               }}
               title="Click to rename"
             >
-              {lc.boardTitle()}
+              {header.title()}
             </span>
           }
         >
@@ -36,22 +38,22 @@ function AppHeader() {
             class="header-rename-input"
             type="text"
             ref={(el) => requestAnimationFrame(() => { el.focus(); el.select(); })}
-            value={lc.renameValue()}
-            onInput={(e) => lc.setRenameValue(e.currentTarget.value)}
+            value={header.renameValue()}
+            onInput={(e) => header.setRenameValue(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); document.dispatchEvent(new CustomEvent("commit-board-rename")); }
-              if (e.key === "Escape") { e.preventDefault(); lc.setRenaming(false); }
+              if (e.key === "Escape") { e.preventDefault(); header.setRenaming(false); }
             }}
             onBlur={() => document.dispatchEvent(new CustomEvent("commit-board-rename"))}
           />
         </Show>
       </Show>
       <div class="app-header-actions">
-        <Show when={lc.hasBoard()}>
+        <Show when={header.isOnBoard()}>
           <button
             class="btn-header-labels"
-            classList={{ "btn-header-labels--active": lc.isOpen() }}
-            onClick={lc.toggle}
+            classList={{ "btn-header-labels--active": drawer.isOpen() }}
+            onClick={drawer.toggle}
             title="Manage labels"
           >
             <svg
@@ -84,11 +86,13 @@ function AppHeader() {
 
 export default function App(props: ParentProps) {
   return (
-    <LabelProvider>
-      <div class="app">
-        <AppHeader />
-        <main class="app-main">{props.children}</main>
-      </div>
-    </LabelProvider>
+    <BoardHeaderProvider>
+      <LabelDrawerProvider>
+        <div class="app">
+          <AppHeader />
+          <main class="app-main">{props.children}</main>
+        </div>
+      </LabelDrawerProvider>
+    </BoardHeaderProvider>
   );
 }

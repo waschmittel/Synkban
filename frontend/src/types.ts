@@ -26,6 +26,7 @@ export interface Card {
   list_id: string;
   title: string;
   description: string;
+  description_text: string;
   position: number;
   created_at: string;
   label_ids: string[];

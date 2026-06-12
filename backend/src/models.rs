@@ -54,6 +54,11 @@ pub struct Card {
     pub list_id: String,
     pub title: String,
     pub description: String,
+    /// Plain-text view of `description`, computed server-side from the ProseMirror
+    /// doc JSON. Used by the frontend filter so it doesn't have to substring-match
+    /// the raw JSON (where node type names like "paragraph" would false-match).
+    #[serde(default)]
+    pub description_text: String,
     pub position: f64,
     pub created_at: String,
     #[serde(default)]
@@ -90,6 +95,10 @@ pub struct ListWithCards {
 #[derive(Debug, Serialize)]
 pub struct ChangeCheck {
     pub mtime: u64,
+    /// Per-board mtimes so clients can refetch only the board they're viewing
+    /// when another board changes. Same total work as the global `mtime`,
+    /// just bucketed.
+    pub boards: std::collections::HashMap<String, u64>,
 }
 
 #[derive(Debug, Deserialize)]

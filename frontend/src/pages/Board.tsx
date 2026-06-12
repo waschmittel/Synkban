@@ -2,7 +2,6 @@ import {
   createResource,
   createSignal,
   createEffect,
-  untrack,
   For,
   Show,
   onMount,
@@ -19,33 +18,35 @@ import LabelDrawer from "../components/LabelDrawer";
 import ArchiveCardsModal from "../components/ArchiveCardsModal";
 import FilterBar from "../components/FilterBar";
 import BoardColorPicker from "../components/BoardColorPicker";
-import ConfirmDialog from "../components/ConfirmDialog";
-import { useLabelContext } from "../LabelContext";
+import { createConfirm } from "../confirm";
+import { useBoardHeader } from "../BoardHeaderContext";
+import { useLabelDrawer } from "../LabelDrawerContext";
 import { listDropPosition } from "../positions";
 import { cardMatchesFilter as filterCard } from "../filter";
-import { isInInput } from "../boardInput";
+import { isTypingIn, isInUiOverlay } from "../boardInput";
+import { createFocusRestoration } from "../focusRestoration";
+import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 
 export default function BoardPage() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const lc = useLabelContext();
+  const header = useBoardHeader();
+  const drawer = useLabelDrawer();
 
   const [board, { refetch }] = createResource(
     () => params.id,
     (id) => api.getBoard(id)
   );
+  const focus = createFocusRestoration(board);
+  const confirm = createConfirm();
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
   const [showHelp, setShowHelp] = createSignal(false);
-  const [lastFocusedCardId, setLastFocusedCardId] = createSignal<string | null>(null);
   const [showColorPicker, setShowColorPicker] = createSignal(false);
-  const [pendingFocusCardId, setPendingFocusCardId] = createSignal<string | null>(null);
 
   // Archive state
-  const [confirmArchiveCardId, setConfirmArchiveCardId] = createSignal<string | null>(null);
   const [showArchive, setShowArchive] = createSignal(false);
   const [archivedCards, setArchivedCards] = createSignal<CardType[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
-  const [confirmDeleteListId, setConfirmDeleteListId] = createSignal<string | null>(null);
 
   // Filter state
   const [showFilterBar, setShowFilterBar] = createSignal(false);
@@ -55,17 +56,6 @@ export default function BoardPage() {
   // List rename state
   const [renamingListId, setRenamingListId] = createSignal<string | null>(null);
 
-  // Restore focus to a moved card after board resource re-renders.
-  createEffect(() => {
-    board(); // only dependency — fires after DOM update from refetch
-    const cardId = untrack(pendingFocusCardId);
-    if (!cardId) return;
-    setPendingFocusCardId(null);
-    requestAnimationFrame(() => {
-      (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
-    });
-  });
-
   createEffect(() => {
     const color = board()?.color ?? "#0079bf";
     document.documentElement.style.setProperty("--board-color", color);
@@ -73,175 +63,179 @@ export default function BoardPage() {
 
   createEffect(() => {
     const b = board();
-    if (b) lc.setBoardTitle(b.title);
+    if (b) header.setTitle(b.title);
   });
 
   let lastMtime = 0;
   onMount(() => {
-    lc.setHasBoard(true);
+    header.setIsOnBoard(true);
 
     const pollId = setInterval(async () => {
       try {
-        const { mtime } = await api.checkChanges();
-        if (mtime !== lastMtime) {
-          lastMtime = mtime;
-          // Preserve focused card across refetch-triggered DOM recreation
-          const focused = document.activeElement as HTMLElement | null;
-          const cardId = focused?.dataset.cardId;
-          if (cardId) setPendingFocusCardId(cardId);
+        const { mtime, boards } = await api.checkChanges();
+        // Watch only this board's mtime so quiet boards don't trigger refetch
+        // when another board changes. Falls back to the global mtime if the
+        // server doesn't (yet) provide the per-board map.
+        const mine = boards?.[params.id] ?? mtime;
+        if (mine !== lastMtime) {
+          lastMtime = mine;
+          focus.capturePending();
           refetch();
         }
       } catch { /* ignore */ }
     }, 15000);
 
-    const handleGlobalKey = (e: KeyboardEvent) => {
-      if (isInInput(e.target)) return;
-      if (confirmArchiveCardId() || confirmDeleteListId()) return;
+    const triggerAddList = () => {
+      (document.querySelector(".add-list-wrapper .add-trigger") as HTMLElement | null)?.click();
+    };
+    const triggerAddCard = () => {
+      const focused = document.activeElement;
+      const list = focused?.closest(".list") ?? document.querySelector(".list");
+      (list?.querySelector(".add-trigger") as HTMLElement | null)?.click();
+    };
+    const navigateArrow = (e: KeyboardEvent) => {
+      const focused = document.activeElement as HTMLElement | null;
+      const isCard = focused?.classList.contains("card");
+      const isCardListTrigger =
+        focused?.classList.contains("add-trigger") &&
+        !!focused.closest(".list") &&
+        !focused.closest(".add-list-wrapper");
 
-      // Shift+Alt+Left/Right: reorder list from focused add-trigger.
-      // Card.tsx handles the same shortcut for focused cards (with stopPropagation).
-      if (e.shiftKey && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-        const focused = document.activeElement as HTMLElement | null;
-        const list = focused?.closest?.(".list") as HTMLElement | null;
-        if (list) {
-          e.preventDefault();
-          moveListByKey(list.dataset.listId!, e.key === "ArrowLeft" ? "left" : "right");
-        }
-        return;
-      }
-
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-      if (e.key === "?") {
+      if (!isCard && !isCardListTrigger) {
         e.preventDefault();
-        setShowHelp((v) => !v);
-      } else if (e.key === "Escape") {
-        if (showHelp()) {
-          setShowHelp(false);
-        } else if (showArchive()) {
-          setShowArchive(false);
-        } else if (showColorPicker()) {
-          setShowColorPicker(false);
-        } else if (selectedCard()) {
-          handleModalClose();
-        } else if (renamingListId()) {
-          setRenamingListId(null);
-        } else if (lc.renaming()) {
-          lc.setRenaming(false);
+        const lists = document.querySelectorAll(".list");
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+          const firstList = lists[0];
+          const firstCard = firstList?.querySelector<HTMLElement>(".card");
+          if (firstCard) firstCard.focus();
+          else firstList?.querySelector<HTMLElement>(".add-trigger")?.focus();
         } else {
-          lc.close();
-          const focused = document.activeElement as HTMLElement | null;
-          if (focused?.classList.contains("card")) {
-            const boardEl = document.querySelector(".board-page") as HTMLElement | null;
-            boardEl?.focus();
-          }
+          const lastList = lists[lists.length - 1];
+          const cards = lastList?.querySelectorAll<HTMLElement>(".card");
+          const lastCard = cards?.[cards.length - 1];
+          if (lastCard) lastCard.focus();
+          else lastList?.querySelector<HTMLElement>(".add-trigger")?.focus();
         }
-      } else if (e.key === "f") {
-        e.preventDefault();
-        setShowFilterBar((v) => !v);
-      } else if (e.key === "g") {
-        e.preventDefault();
-        lc.toggle();
-      } else if (e.key === "l") {
-        e.preventDefault();
-        const trigger = document.querySelector(
-          ".add-list-wrapper .add-trigger"
-        ) as HTMLElement | null;
-        trigger?.click();
-      } else if (e.key === "n" || e.key === "c") {
-        e.preventDefault();
-        const focused = document.activeElement;
-        const list = focused?.closest(".list") ?? document.querySelector(".list");
-        const trigger = list?.querySelector(".add-trigger") as HTMLElement | null;
-        trigger?.click();
-      } else if (e.key === "e") {
-        const focused = document.activeElement;
-        if (focused?.classList.contains("card")) {
+      } else if (isCardListTrigger) {
+        const currentList = focused!.closest(".list") as HTMLElement;
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
-          (focused as HTMLElement).click();
-        }
-      } else if (e.key === "r") {
-        const focused = document.activeElement as HTMLElement | null;
-        const list = focused?.closest?.(".list") as HTMLElement | null;
-        if (list) {
-          e.preventDefault();
-          setRenamingListId(list.dataset.listId ?? null);
-        }
-      } else if (e.key === "a") {
-        e.preventDefault();
-        if (showArchive()) {
-          setShowArchive(false);
-        } else {
-          openArchive();
-        }
-      } else if (e.key === "Backspace") {
-        e.preventDefault();
-      } else if (e.key === "b") {
-        e.preventDefault();
-        navigate("/");
-      } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(e.key) && !e.shiftKey) {
-        const focused = document.activeElement as HTMLElement | null;
-        const isCard = focused?.classList.contains("card");
-        const isCardListTrigger =
-          focused?.classList.contains("add-trigger") &&
-          !!focused.closest(".list") &&
-          !focused.closest(".add-list-wrapper");
-
-        if (!isCard && !isCardListTrigger) {
-          e.preventDefault();
-          const lists = document.querySelectorAll(".list");
-          if (e.key === "ArrowDown" || e.key === "ArrowRight") {
-            const firstList = lists[0];
-            const firstCard = firstList?.querySelector<HTMLElement>(".card");
-            if (firstCard) firstCard.focus();
-            else firstList?.querySelector<HTMLElement>(".add-trigger")?.focus();
-          } else {
-            const lastList = lists[lists.length - 1];
-            const cards = lastList?.querySelectorAll<HTMLElement>(".card");
-            const lastCard = cards?.[cards.length - 1];
-            if (lastCard) lastCard.focus();
-            else lastList?.querySelector<HTMLElement>(".add-trigger")?.focus();
-          }
-        } else if (isCardListTrigger) {
-          const currentList = focused!.closest(".list") as HTMLElement;
-          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-            e.preventDefault();
-            const adj = (e.key === "ArrowLeft"
-              ? currentList.previousElementSibling
-              : currentList.nextElementSibling) as HTMLElement | null;
-            if (adj?.classList.contains("list")) {
-              if (e.key === "ArrowRight") {
-                const first = adj.querySelector<HTMLElement>(".card");
-                first ? first.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
-              } else {
-                const cards = adj.querySelectorAll<HTMLElement>(".card");
-                const last = cards[cards.length - 1];
-                last ? last.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
-              }
+          const adj = (e.key === "ArrowLeft"
+            ? currentList.previousElementSibling
+            : currentList.nextElementSibling) as HTMLElement | null;
+          if (adj?.classList.contains("list")) {
+            if (e.key === "ArrowRight") {
+              const first = adj.querySelector<HTMLElement>(".card");
+              first ? first.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
+            } else {
+              const cards = adj.querySelectorAll<HTMLElement>(".card");
+              const last = cards[cards.length - 1];
+              last ? last.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
             }
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            const cards = currentList.querySelectorAll<HTMLElement>(".card");
-            cards[cards.length - 1]?.focus();
           }
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          const cards = currentList.querySelectorAll<HTMLElement>(".card");
+          cards[cards.length - 1]?.focus();
         }
       }
     };
 
+    // ESC handlers are ordered: first matching `canFire` wins. Stack matches
+    // the visual layering — help overlay above archive, above color picker, etc.
+    const escDefs: ShortcutDef[] = [
+      { key: "Escape", canFire: () => showHelp(), handler: () => setShowHelp(false) },
+      { key: "Escape", canFire: () => showArchive(), handler: () => setShowArchive(false) },
+      { key: "Escape", canFire: () => showColorPicker(), handler: () => setShowColorPicker(false) },
+      { key: "Escape", canFire: () => !!selectedCard(), handler: () => handleModalClose() },
+      { key: "Escape", canFire: () => !!renamingListId(), handler: () => setRenamingListId(null) },
+      { key: "Escape", canFire: () => header.renaming(), handler: () => header.setRenaming(false) },
+      {
+        key: "Escape",
+        handler: () => {
+          drawer.close();
+          const focused = document.activeElement as HTMLElement | null;
+          if (focused?.classList.contains("card")) {
+            (document.querySelector(".board-page") as HTMLElement | null)?.focus();
+          }
+        },
+      },
+    ];
+
+    const arrowDefs: ShortcutDef[] = (["ArrowLeft", "ArrowRight"] as const).map((key) => ({
+      // Shift+Alt+Left/Right: reorder list from focused add-trigger.
+      // Card.tsx handles the same shortcut for focused cards (with stopPropagation).
+      key, shift: true, alt: true,
+      handler: (e) => {
+        const focused = document.activeElement as HTMLElement | null;
+        const list = focused?.closest?.(".list") as HTMLElement | null;
+        if (list) {
+          e.preventDefault();
+          moveListByKey(list.dataset.listId!, key === "ArrowLeft" ? "left" : "right");
+        }
+      },
+    }));
+
+    const navDefs: ShortcutDef[] = (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"] as const).map(
+      (key) => ({ key, shift: false, alt: false, ctrl: false, meta: false, handler: navigateArrow }),
+    );
+
+    const noMods = { ctrl: false, meta: false, alt: false } as const;
+    const dispose = registerShortcuts(
+      [
+        ...escDefs,
+        ...arrowDefs,
+        { key: "?", ...noMods, handler: (e) => { e.preventDefault(); setShowHelp((v) => !v); } },
+        { key: "f", ...noMods, handler: (e) => { e.preventDefault(); setShowFilterBar((v) => !v); } },
+        { key: "g", ...noMods, handler: (e) => { e.preventDefault(); drawer.toggle(); } },
+        { key: "l", ...noMods, handler: (e) => { e.preventDefault(); triggerAddList(); } },
+        { key: "n", ...noMods, handler: (e) => { e.preventDefault(); triggerAddCard(); } },
+        { key: "c", ...noMods, handler: (e) => { e.preventDefault(); triggerAddCard(); } },
+        {
+          key: "e", ...noMods,
+          canFire: () => !!(document.activeElement?.classList.contains("card")),
+          handler: (e) => { e.preventDefault(); (document.activeElement as HTMLElement).click(); },
+        },
+        {
+          key: "r", ...noMods,
+          handler: (e) => {
+            const focused = document.activeElement as HTMLElement | null;
+            const list = focused?.closest?.(".list") as HTMLElement | null;
+            if (list) {
+              e.preventDefault();
+              setRenamingListId(list.dataset.listId ?? null);
+            }
+          },
+        },
+        {
+          key: "a", ...noMods,
+          handler: (e) => {
+            e.preventDefault();
+            if (showArchive()) setShowArchive(false);
+            else openArchive();
+          },
+        },
+        { key: "Backspace", ...noMods, handler: (e) => e.preventDefault() },
+        { key: "b", ...noMods, handler: (e) => { e.preventDefault(); navigate("/"); } },
+        ...navDefs,
+      ],
+      // Confirm dialogs swallow ALL shortcuts as a global guard.
+      { baseCanFire: (e) => !isTypingIn(e.target) && !isInUiOverlay(e.target) && !confirm.isOpen() },
+    );
+
     const handleToggleShortcuts = () => setShowHelp((v) => !v);
     const handleCommitRename = () => commitRename();
 
-    document.addEventListener("keydown", handleGlobalKey);
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     document.addEventListener("commit-board-rename", handleCommitRename as EventListener);
 
     onCleanup(() => {
-      lc.setHasBoard(false);
-      lc.setBoardTitle("");
-      lc.setRenaming(false);
-      lc.close();
+      header.setIsOnBoard(false);
+      header.setTitle("");
+      header.setRenaming(false);
+      drawer.close();
       clearInterval(pollId);
-      document.removeEventListener("keydown", handleGlobalKey);
+      dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
       document.removeEventListener("commit-board-rename", handleCommitRename as EventListener);
       document.documentElement.style.setProperty("--board-color", "#0079bf");
@@ -249,10 +243,10 @@ export default function BoardPage() {
   });
 
   const commitRename = async () => {
-    if (!lc.renaming()) return;
-    const name = lc.renameValue().trim();
+    if (!header.renaming()) return;
+    const name = header.renameValue().trim();
     const b = board();
-    lc.setRenaming(false);
+    header.setRenaming(false);
     if (name && b && name !== b.title) {
       await api.updateBoard(b.id, { title: name });
       refetch();
@@ -261,12 +255,9 @@ export default function BoardPage() {
 
   // --- Archive ---
 
-  const handleArchiveCard = (cardId: string) => setConfirmArchiveCardId(cardId);
-
-  const confirmArchive = async () => {
-    const id = confirmArchiveCardId();
-    if (!id) return;
-    const el = document.querySelector(`[data-card-id="${id}"]`) as HTMLElement | null;
+  const handleArchiveCard = async (cardId: string) => {
+    if (!await confirm.ask({ message: "Archive this card?", confirmLabel: "Archive" })) return;
+    const el = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
     let neighborId: string | null = null;
     if (el) {
       let sibling = el.nextElementSibling as HTMLElement | null;
@@ -277,13 +268,12 @@ export default function BoardPage() {
       }
       neighborId = sibling?.dataset.cardId ?? null;
     }
-    await api.archiveCard(id);
-    setConfirmArchiveCardId(null);
+    await api.archiveCard(cardId);
     if (neighborId) {
-      setLastFocusedCardId(neighborId);
-      setPendingFocusCardId(neighborId);
+      focus.setLastFocused(neighborId);
+      focus.preserve(neighborId);
     } else {
-      setLastFocusedCardId(null);
+      focus.setLastFocused(null);
     }
     refetch();
   };
@@ -355,22 +345,20 @@ export default function BoardPage() {
 
   const handleAddCard = async (listId: string, title: string) => {
     const card = await api.createCard(listId, title);
-    setPendingFocusCardId(card.id);
+    focus.preserve(card.id);
     refetch();
   };
 
-  const handleDeleteList = (listId: string) => {
+  const handleDeleteList = async (listId: string) => {
     const b = board();
     const list = b?.lists.find((l) => l.id === listId);
     if (list && list.cards.length > 0) {
-      setConfirmDeleteListId(listId);
-    } else {
-      doDeleteList(listId);
+      const ok = await confirm.ask({
+        message: `Delete "${list.title}" and archive its ${list.cards.length} card${list.cards.length === 1 ? "" : "s"}?`,
+        confirmLabel: "Delete",
+      });
+      if (!ok) return;
     }
-  };
-
-  const doDeleteList = async (listId: string) => {
-    setConfirmDeleteListId(null);
     await api.deleteList(listId);
     refetch();
   };
@@ -381,13 +369,13 @@ export default function BoardPage() {
   };
 
   const handleMoveCard = async (cardId: string, targetListId: string, position: number) => {
-    setPendingFocusCardId(cardId);
+    focus.preserve(cardId);
     await api.updateCard(cardId, { list_id: targetListId, position });
     refetch();
   };
 
   const handleCardClick = (card: CardType) => {
-    setLastFocusedCardId(card.id);
+    focus.setLastFocused(card.id);
     setSelectedCard(card);
   };
 
@@ -400,23 +388,14 @@ export default function BoardPage() {
   ) => {
     await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate });
     setSelectedCard(null);
-    // Refetch recreates card DOM; use pending mechanism so the createEffect
-    // restores focus after the resource resolves.
-    setPendingFocusCardId(id);
+    focus.preserve(id);
     refetch();
   };
 
   const handleModalClose = () => {
-    const cardId = lastFocusedCardId();
+    const cardId = focus.lastFocused();
     setSelectedCard(null);
-    // Polling may fire between close and focus, so also use the pending
-    // mechanism (the createEffect will re-focus once the resource resolves).
-    if (cardId) {
-      setPendingFocusCardId(cardId);
-      requestAnimationFrame(() => {
-        (document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null)?.focus();
-      });
-    }
+    if (cardId) focus.preserve(cardId);
   };
 
   // --- List drag ---
@@ -543,7 +522,7 @@ export default function BoardPage() {
         if (showColorPicker()) setShowColorPicker(false);
         const target = e.target as HTMLElement;
         if (target === e.currentTarget || target.classList.contains("lists-container") || target.classList.contains("board-title-bar")) {
-          const cardId = lastFocusedCardId();
+          const cardId = focus.lastFocused();
           if (cardId) {
             const card = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
             if (card) { card.focus(); return; }
@@ -634,9 +613,9 @@ export default function BoardPage() {
             </div>
 
             <LabelDrawer
-              open={lc.isOpen()}
+              open={drawer.isOpen()}
               labels={b().labels}
-              onClose={lc.close}
+              onClose={drawer.close}
               onCreate={handleCreateLabel}
               onRename={handleUpdateLabel}
               onDelete={handleDeleteLabel}
@@ -658,23 +637,7 @@ export default function BoardPage() {
         )}
       </Show>
 
-      <Show when={confirmArchiveCardId()}>
-        <ConfirmDialog
-          message="Archive this card?"
-          confirmLabel="Archive"
-          onConfirm={confirmArchive}
-          onCancel={() => setConfirmArchiveCardId(null)}
-        />
-      </Show>
-
-      <Show when={confirmDeleteListId()}>
-        <ConfirmDialog
-          message="Delete this list? Its cards will be archived."
-          confirmLabel="Delete list"
-          onConfirm={() => doDeleteList(confirmDeleteListId()!)}
-          onCancel={() => setConfirmDeleteListId(null)}
-        />
-      </Show>
+      <confirm.Render />
 
       <Show when={showArchive()}>
         <ArchiveCardsModal
