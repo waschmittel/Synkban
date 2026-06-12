@@ -110,6 +110,18 @@ export default function CardDetail(props: Props) {
     enqueueChecklistOp(() => api.deleteChecklistItem(props.card.id, itemId));
   };
 
+  const handleMoveChecklistItem = (itemId: string, toIndex: number) => {
+    setChecklist((prev) => {
+      const from = prev.findIndex((i) => i.id === itemId);
+      if (from === -1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(Math.max(0, Math.min(toIndex, next.length)), 0, item);
+      return next;
+    });
+    enqueueChecklistOp(() => api.updateChecklistItem(props.card.id, itemId, { pos: toIndex }));
+  };
+
   const handleToggleAllChecklist = (done: boolean) => {
     setChecklist((prev) => prev.map((i) => ({ ...i, done })));
     enqueueChecklistOp(() => api.setChecklistAll(props.card.id, done));
@@ -314,6 +326,7 @@ export default function CardDetail(props: Props) {
             onToggle={handleToggleChecklistItem}
             onRename={handleRenameChecklistItem}
             onDelete={handleDeleteChecklistItem}
+            onMove={handleMoveChecklistItem}
             onToggleAll={handleToggleAllChecklist}
             addInputRef={(el) => (checklistAddRef = el)}
           />

@@ -113,10 +113,11 @@ pub async fn update_checklist_item(
     if body.text.is_some() { changes.push("text"); }
     if body.done == Some(true) { changes.push("done"); }
     if body.done == Some(false) { changes.push("undone"); }
+    if body.pos.is_some() { changes.push("pos"); }
     let fields = if changes.is_empty() { "no-op".to_string() } else { changes.join(", ") };
     let item = store::audit_op(
         &data_dir,
-        |dd| store::update_checklist_item(dd, &card_id, &item_id, body.text.as_deref(), body.done),
+        |dd| store::update_checklist_item(dd, &card_id, &item_id, body.text.as_deref(), body.done, body.pos),
         |i| format!("UPDATE checklist item \"{}\" (id: {}) on card {} [{}]", i.text, i.id, card_id, fields),
     )?;
     Ok(HttpResponse::Ok().json(item))

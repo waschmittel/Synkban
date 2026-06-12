@@ -122,7 +122,7 @@ export const api = {
   updateChecklistItem: (
     cardId: string,
     itemId: string,
-    data: { text?: string; done?: boolean }
+    data: { text?: string; done?: boolean; pos?: number }
   ) =>
     request<ChecklistItem>(`/cards/${cardId}/checklist/${itemId}`, {
       method: "PUT",

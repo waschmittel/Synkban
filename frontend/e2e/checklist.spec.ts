@@ -13,6 +13,21 @@ async function seedCard(request: APIRequestContext, boardTitle: string) {
   return { board, list, card };
 }
 
+// Checklist saves are optimistic — the PUT may still be in flight when the UI
+// already shows the new order. Poll the API before reloading the page.
+async function expectPersistedOrder(
+  request: APIRequestContext,
+  boardId: string,
+  expected: string[]
+) {
+  await expect
+    .poll(async () => {
+      const detail = await (await request.get(`/api/boards/${boardId}`)).json();
+      return detail.lists[0].cards[0].checklist.map((i: { text: string }) => i.text);
+    })
+    .toEqual(expected);
+}
+
 test("add checklist items, toggle one, card badge shows done/total", async ({
   page,
   request,
@@ -111,8 +126,12 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   await expect(page.locator(".checklist-progress")).toHaveText("2/2");
   await expect(page.locator(".checklist-item", { hasText: "kb one" })).toBeFocused();
 
-  // Delete the focused item; focus moves to the remaining neighbor.
+  // Delete asks for inline confirmation; Enter on the focused Yes button
+  // confirms, then focus moves to the remaining neighbor.
   await page.keyboard.press("Delete");
+  await expect(page.locator(".checklist-confirm-text")).toHaveText("Delete?");
+  await expect(page.locator(".checklist-confirm .btn-danger")).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.locator(".checklist-item")).toHaveCount(1);
   await expect(page.locator(".checklist-item", { hasText: "kb two" })).toBeFocused();
   await expect(page.locator(".checklist-progress")).toHaveText("1/1");
@@ -122,4 +141,118 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   const badge = page.locator(".checklist-badge");
   await expect(badge).toHaveText("1/1");
   await expect(badge).toHaveClass(/checklist-badge--complete/);
+});
+
+test("delete confirmation can be cancelled via Escape and No", async ({
+  page,
+  request,
+}) => {
+  const { board, card } = await seedCard(request, "Confirm Board");
+  for (const text of ["keep me", "other"]) {
+    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
+  }
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+
+  const first = page.locator(".checklist-item", { hasText: "keep me" });
+
+  // Escape cancels and refocuses the item.
+  await first.focus();
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".checklist-confirm-text")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".checklist-confirm-text")).toHaveCount(0);
+  await expect(page.locator(".checklist-item")).toHaveCount(2);
+  await expect(first).toBeFocused();
+  // Modal stayed open (Escape was consumed by the confirmation).
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+
+  // The × button also asks first; No cancels.
+  await first.hover();
+  await first.locator(".checklist-delete").click();
+  await expect(page.locator(".checklist-confirm-text")).toBeVisible();
+  await page.locator(".checklist-confirm .btn-cancel").click();
+  await expect(page.locator(".checklist-item")).toHaveCount(2);
+
+  // Yes deletes.
+  await first.hover();
+  await first.locator(".checklist-delete").click();
+  await page.locator(".checklist-confirm .btn-danger").click();
+  await expect(page.locator(".checklist-item")).toHaveCount(1);
+  await expect(page.locator(".checklist-item", { hasText: "other" })).toBeVisible();
+});
+
+test("reorder items with Shift+Arrow keys, persists across reload", async ({
+  page,
+  request,
+}) => {
+  const { board, card } = await seedCard(request, "Reorder KB Board");
+  for (const text of ["a", "b", "c"]) {
+    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
+  }
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+
+  const items = page.locator(".checklist-item");
+  await items.nth(0).focus();
+
+  // a down twice: a,b,c → b,a,c → b,c,a — focus follows the moved item.
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(items.nth(1)).toContainText("a");
+  await expect(items.nth(1)).toBeFocused();
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(items.nth(2)).toContainText("a");
+  await expect(items.nth(2)).toBeFocused();
+
+  // At the bottom edge, Shift+ArrowDown is a no-op.
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(items.nth(2)).toContainText("a");
+
+  // Move it back up one: b,c,a → b,a,c.
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect(items.nth(1)).toContainText("a");
+  await expect(items.nth(0)).toContainText("b");
+  await expect(items.nth(2)).toContainText("c");
+
+  await expectPersistedOrder(request, board.id, ["b", "a", "c"]);
+  await page.reload();
+  await page.locator(".card", { hasText: "Task card" }).click();
+  await expect(items.nth(0)).toContainText("b");
+  await expect(items.nth(1)).toContainText("a");
+  await expect(items.nth(2)).toContainText("c");
+});
+
+test("reorder items via drag and drop", async ({ page, request }) => {
+  const { board, card } = await seedCard(request, "Reorder DnD Board");
+  for (const text of ["a", "b", "c"]) {
+    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
+  }
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+
+  const items = page.locator(".checklist-item");
+  // Drag "a" onto the top half of "c" → insert before c: b, a, c.
+  // Manual mouse events: locator.dragTo() doesn't trigger Chromium's
+  // intercepted HTML5 drag here, and the modal can autoscroll during the
+  // drag, so aim at the top edge of the target row.
+  const src = (await items.nth(0).boundingBox())!;
+  const tgt = (await items.nth(2).boundingBox())!;
+  await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(tgt.x + tgt.width / 2, tgt.y + 4, { steps: 10 });
+  await page.mouse.move(tgt.x + tgt.width / 2, tgt.y + 4, { steps: 2 });
+  await page.mouse.up();
+  await expect(items.nth(0)).toContainText("b");
+  await expect(items.nth(1)).toContainText("a");
+  await expect(items.nth(2)).toContainText("c");
+
+  await expectPersistedOrder(request, board.id, ["b", "a", "c"]);
+  await page.reload();
+  await page.locator(".card", { hasText: "Task card" }).click();
+  await expect(items.nth(0)).toContainText("b");
+  await expect(items.nth(1)).toContainText("a");
+  await expect(items.nth(2)).toContainText("c");
 });

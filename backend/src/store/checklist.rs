@@ -31,21 +31,33 @@ pub fn update_checklist_item(
     item_id: &str,
     text: Option<&str>,
     done: Option<bool>,
+    pos: Option<usize>,
 ) -> Result<ChecklistItem, AppError> {
     let (_board_id, path) = locate_card_path(data_dir, card_id)?;
     let mut card = read_card(&path)?;
-    let item = card
+    let idx = card
         .checklist
-        .iter_mut()
-        .find(|i| i.id == item_id)
+        .iter()
+        .position(|i| i.id == item_id)
         .ok_or_else(|| AppError::NotFound("Checklist item not found".into()))?;
-    if let Some(t) = text {
-        item.text = t.to_string();
+    {
+        let item = &mut card.checklist[idx];
+        if let Some(t) = text {
+            item.text = t.to_string();
+        }
+        if let Some(d) = done {
+            item.done = d;
+        }
     }
-    if let Some(d) = done {
-        item.done = d;
+    if let Some(p) = pos {
+        let target = p.min(card.checklist.len() - 1);
+        let item = card.checklist.remove(idx);
+        card.checklist.insert(target, item);
+        let item = card.checklist[target].clone();
+        write_json(&path, &card)?;
+        return Ok(item);
     }
-    let item = item.clone();
+    let item = card.checklist[idx].clone();
     write_json(&path, &card)?;
     Ok(item)
 }
@@ -124,12 +136,12 @@ mod tests {
         let (d, cid) = setup();
         let item = create_checklist_item(d.path(), &cid, "task").unwrap();
         let updated =
-            update_checklist_item(d.path(), &cid, &item.id, None, Some(true)).unwrap();
+            update_checklist_item(d.path(), &cid, &item.id, None, Some(true), None).unwrap();
         assert!(updated.done);
         assert_eq!(updated.text, "task");
 
         let updated =
-            update_checklist_item(d.path(), &cid, &item.id, None, Some(false)).unwrap();
+            update_checklist_item(d.path(), &cid, &item.id, None, Some(false), None).unwrap();
         assert!(!updated.done);
     }
 
@@ -137,9 +149,9 @@ mod tests {
     fn rename_item_keeps_done_state() {
         let (d, cid) = setup();
         let item = create_checklist_item(d.path(), &cid, "old").unwrap();
-        update_checklist_item(d.path(), &cid, &item.id, None, Some(true)).unwrap();
+        update_checklist_item(d.path(), &cid, &item.id, None, Some(true), None).unwrap();
         let updated =
-            update_checklist_item(d.path(), &cid, &item.id, Some("new"), None).unwrap();
+            update_checklist_item(d.path(), &cid, &item.id, Some("new"), None, None).unwrap();
         assert_eq!(updated.text, "new");
         assert!(updated.done);
     }
@@ -148,7 +160,7 @@ mod tests {
     fn update_item_not_found() {
         let (d, cid) = setup();
         let err =
-            update_checklist_item(d.path(), &cid, "fake", None, Some(true)).unwrap_err();
+            update_checklist_item(d.path(), &cid, "fake", None, Some(true), None).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
@@ -170,6 +182,70 @@ mod tests {
         let (d, cid) = setup();
         let err = delete_checklist_item(d.path(), &cid, "fake").unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
+    }
+
+    fn checklist_ids(d: &TempDir, cid: &str) -> Vec<String> {
+        let (_, path) = locate_card_path(d.path(), cid).unwrap();
+        read_card(&path)
+            .unwrap()
+            .checklist
+            .iter()
+            .map(|i| i.id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn move_item_down() {
+        let (d, cid) = setup();
+        let a = create_checklist_item(d.path(), &cid, "a").unwrap();
+        let b = create_checklist_item(d.path(), &cid, "b").unwrap();
+        let c = create_checklist_item(d.path(), &cid, "c").unwrap();
+
+        update_checklist_item(d.path(), &cid, &a.id, None, None, Some(1)).unwrap();
+        assert_eq!(checklist_ids(&d, &cid), vec![b.id, a.id, c.id]);
+    }
+
+    #[test]
+    fn move_item_up() {
+        let (d, cid) = setup();
+        let a = create_checklist_item(d.path(), &cid, "a").unwrap();
+        let b = create_checklist_item(d.path(), &cid, "b").unwrap();
+        let c = create_checklist_item(d.path(), &cid, "c").unwrap();
+
+        update_checklist_item(d.path(), &cid, &c.id, None, None, Some(0)).unwrap();
+        assert_eq!(checklist_ids(&d, &cid), vec![c.id, a.id, b.id]);
+    }
+
+    #[test]
+    fn move_item_pos_clamped_to_end() {
+        let (d, cid) = setup();
+        let a = create_checklist_item(d.path(), &cid, "a").unwrap();
+        let b = create_checklist_item(d.path(), &cid, "b").unwrap();
+
+        update_checklist_item(d.path(), &cid, &a.id, None, None, Some(99)).unwrap();
+        assert_eq!(checklist_ids(&d, &cid), vec![b.id, a.id]);
+    }
+
+    #[test]
+    fn move_item_same_pos_is_noop() {
+        let (d, cid) = setup();
+        let a = create_checklist_item(d.path(), &cid, "a").unwrap();
+        let b = create_checklist_item(d.path(), &cid, "b").unwrap();
+
+        update_checklist_item(d.path(), &cid, &b.id, None, None, Some(1)).unwrap();
+        assert_eq!(checklist_ids(&d, &cid), vec![a.id, b.id]);
+    }
+
+    #[test]
+    fn move_item_with_done_update_applies_both() {
+        let (d, cid) = setup();
+        let a = create_checklist_item(d.path(), &cid, "a").unwrap();
+        let b = create_checklist_item(d.path(), &cid, "b").unwrap();
+
+        let updated =
+            update_checklist_item(d.path(), &cid, &b.id, None, Some(true), Some(0)).unwrap();
+        assert!(updated.done);
+        assert_eq!(checklist_ids(&d, &cid), vec![b.id, a.id]);
     }
 
     #[test]
@@ -205,7 +281,7 @@ mod tests {
 
         // Card is now orphaned in archived_cards/ — checklist still editable.
         let updated =
-            update_checklist_item(d.path(), &c.id, &item.id, None, Some(true)).unwrap();
+            update_checklist_item(d.path(), &c.id, &item.id, None, Some(true), None).unwrap();
         assert!(updated.done);
     }
 

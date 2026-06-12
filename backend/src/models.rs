@@ -169,6 +169,7 @@ pub struct CreateChecklistItem {
 pub struct UpdateChecklistItem {
     pub text: Option<String>,
     pub done: Option<bool>,
+    pub pos: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
