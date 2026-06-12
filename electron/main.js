@@ -63,10 +63,21 @@ async function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${port}/?token=${token}`);
+  const appOrigin = `http://127.0.0.1:${port}`;
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (new URL(url).origin !== appOrigin) {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.loadURL(`${appOrigin}/?token=${token}`);
 }
 
 app.whenReady().then(createWindow);

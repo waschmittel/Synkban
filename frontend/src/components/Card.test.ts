@@ -34,6 +34,12 @@ describe("renderTitle", () => {
     );
   });
 
+  it("neutralizes HTML payloads without markdown markers (label-name XSS)", () => {
+    expect(renderTitle('<img src=x onerror="alert(1)">')).toBe(
+      '&lt;img src=x onerror="alert(1)"&gt;'
+    );
+  });
+
   it("escapes ampersands", () => {
     expect(renderTitle("A & B")).toBe("A &amp; B");
   });

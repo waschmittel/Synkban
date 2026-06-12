@@ -1,3 +1,6 @@
+import { onCleanup } from "solid-js";
+import { focusTrap } from "../focusTrap";
+
 interface Props {
   onClose: () => void;
 }
@@ -42,6 +45,7 @@ export default function ShortcutHelp(props: Props) {
   return (
     <div
       class="shortcut-help-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       onClick={handleOverlayClick}
       onKeyDown={handleKeyDown}
     >
@@ -105,7 +109,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Esc"]} desc="Close archive" />
           </Section>
           <Section title="Card Detail">
-            <Row keys={["Ctrl", "Enter"]} desc="Save" />
+            <Row keys={["Ctrl", "S"]} desc="Save" />
             <Row keys={["Ctrl", "B"]} desc="Bold selection (title)" />
             <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
@@ -113,8 +117,15 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Enter"]} desc="Title → focus editor" />
             <Row keys={["l"]} desc="Toggle label picker" />
             <Row keys={["d"]} desc="Focus due date input" />
+            <Row keys={["c"]} desc="Focus checklist add input" />
             <Row keys={["f"]} desc="Toggle filter bar" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
+          </Section>
+          <Section title="Checklist">
+            <Row keys={["↑", "↓"]} desc="Navigate checklist items" />
+            <Row keys={["Space"]} desc="Toggle item done" />
+            <Row keys={["Enter"]} desc="Edit item text" />
+            <Row keys={["Del"]} desc="Delete item" />
           </Section>
           <Section title="Description Editor">
             <Row keys={["Tab"]} desc="Nest list item (indent)" />

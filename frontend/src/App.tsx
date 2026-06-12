@@ -22,7 +22,7 @@ function AppHeader() {
         <Show
           when={header.renaming()}
           fallback={
-            <span
+            <button
               class="app-logo app-logo--board"
               onClick={() => {
                 header.setRenameValue(header.title());
@@ -31,7 +31,7 @@ function AppHeader() {
               title="Click to rename"
             >
               {header.title()}
-            </span>
+            </button>
           }
         >
           <input

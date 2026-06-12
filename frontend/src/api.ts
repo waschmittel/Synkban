@@ -1,4 +1,4 @@
-import type { Attachment, Board, BoardDetail, Card, Label, ListWithCards } from "./types";
+import type { Attachment, Board, BoardDetail, Card, ChecklistItem, Label, ListWithCards } from "./types";
 
 const BASE = "/api";
 
@@ -112,6 +112,31 @@ export const api = {
 
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
+
+  addChecklistItem: (cardId: string, text: string) =>
+    request<ChecklistItem>(`/cards/${cardId}/checklist`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  updateChecklistItem: (
+    cardId: string,
+    itemId: string,
+    data: { text?: string; done?: boolean; pos?: number }
+  ) =>
+    request<ChecklistItem>(`/cards/${cardId}/checklist/${itemId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteChecklistItem: (cardId: string, itemId: string) =>
+    request<void>(`/cards/${cardId}/checklist/${itemId}`, { method: "DELETE" }),
+
+  setChecklistAll: (cardId: string, done: boolean) =>
+    request<Card>(`/cards/${cardId}/checklist`, {
+      method: "PUT",
+      body: JSON.stringify({ done }),
+    }),
 
   createLabel: (boardId: string, name: string) =>
     request<Label>(`/boards/${boardId}/labels`, {

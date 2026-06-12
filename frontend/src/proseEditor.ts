@@ -58,6 +58,23 @@ function markActive(state: EditorState, type: MarkType) {
   return state.doc.rangeHasMark(from, to, type);
 }
 
+const ALLOWED_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
+
+/// Returns a normalized safe href, or null if the URL is relative or uses a
+/// disallowed scheme (e.g. javascript:, data:). The URL constructor strips
+/// surrounding whitespace and lowercases the protocol, so obfuscated schemes
+/// like " JaVaScRiPt:" are caught too.
+export function sanitizeLinkHref(raw: string): string | null {
+  const candidate = /^www\./i.test(raw) ? `https://${raw}` : raw;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+  return ALLOWED_LINK_PROTOCOLS.includes(url.protocol) ? candidate : null;
+}
+
 function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string) {
   const overlay = document.createElement("div");
   overlay.className = "link-dialog-overlay";
@@ -75,6 +92,11 @@ function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string
   input.placeholder = "https://…";
   input.value = prefillUrl;
 
+  const errorMsg = document.createElement("div");
+  errorMsg.className = "link-dialog-error";
+  errorMsg.style.display = "none";
+  errorMsg.textContent = "Only http, https and mailto links are allowed.";
+
   const actions = document.createElement("div");
   actions.className = "link-dialog-actions";
 
@@ -90,6 +112,7 @@ function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string
   actions.appendChild(cancelBtn);
   dialog.appendChild(label);
   dialog.appendChild(input);
+  dialog.appendChild(errorMsg);
   dialog.appendChild(actions);
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
@@ -102,8 +125,13 @@ function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string
   const close = () => overlay.remove();
 
   const submit = () => {
-    const href = input.value.trim();
-    if (!href) return;
+    const raw = input.value.trim();
+    if (!raw) return;
+    const href = sanitizeLinkHref(raw);
+    if (!href) {
+      errorMsg.style.display = "";
+      return;
+    }
     close();
     toggleMark(markType, { href })(view.state, view.dispatch);
     view.focus();
@@ -114,6 +142,7 @@ function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) { close(); view.focus(); }
   });
+  input.addEventListener("input", () => { errorMsg.style.display = "none"; });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); submit(); }
     if (e.key === "Escape") { e.preventDefault(); close(); view.focus(); }

@@ -47,6 +47,12 @@ export function registerShortcuts(
 ): () => void {
   const baseCanFire = options.baseCanFire ?? defaultBaseCanFire;
   const listener = (e: KeyboardEvent) => {
+    // SolidJS delegates keydown handlers to the document, so a component's
+    // stopPropagation() can't prevent this document-level listener from
+    // running — but it does set cancelBubble, which we honor here. Without
+    // this, e.g. Card's ArrowRight handler focuses an empty list's
+    // add-trigger and then navigateArrow fires again and skips past it.
+    if (e.cancelBubble) return;
     if (!baseCanFire(e)) return;
     for (const def of defs) {
       if (def.key !== e.key) continue;

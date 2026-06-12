@@ -121,16 +121,22 @@ export default function Card(props: Props) {
     // Navigation (no shift)
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      e.stopPropagation();
       let next = el.nextElementSibling as HTMLElement | null;
       while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
       next?.focus();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      e.stopPropagation();
       let prev = el.previousElementSibling as HTMLElement | null;
       while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
       prev?.focus();
     } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
+      // stopPropagation: prevent doc-level navigateArrow from running after
+      // we focus an add-trigger on an empty adjacent list, which would skip
+      // ahead to the next list.
+      e.stopPropagation();
       const adjList = (e.key === "ArrowRight"
         ? currentList?.nextElementSibling
         : currentList?.previousElementSibling) as HTMLElement | null;
@@ -152,6 +158,8 @@ export default function Card(props: Props) {
 
   const hasDescription = () => !!props.card.description;
   const hasAttachments = () => (props.card.attachments?.length ?? 0) > 0;
+  const checklistTotal = () => props.card.checklist?.length ?? 0;
+  const checklistDone = () => props.card.checklist?.filter((i) => i.done).length ?? 0;
 
   const getDueDateDisplay = () => {
     const dd = props.card.due_date;
@@ -195,7 +203,7 @@ export default function Card(props: Props) {
         </Show>
         <div class="card-content">
           <span class="card-title" innerHTML={renderTitle(props.card.title)} />
-          <Show when={hasDescription() || hasAttachments() || getDueDateDisplay()}>
+          <Show when={hasDescription() || hasAttachments() || getDueDateDisplay() || checklistTotal() > 0}>
             <div class="card-badges">
               <Show when={getDueDateDisplay()}>
                 {(dd) => (
@@ -218,6 +226,19 @@ export default function Card(props: Props) {
                     <line x1="21" y1="14" x2="3" y2="14" />
                     <line x1="17" y1="18" x2="3" y2="18" />
                   </svg>
+                </span>
+              </Show>
+              <Show when={checklistTotal() > 0}>
+                <span
+                  class="card-badge checklist-badge"
+                  classList={{ "checklist-badge--complete": checklistDone() === checklistTotal() }}
+                  title={`Checklist: ${checklistDone()} of ${checklistTotal()} done`}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 11 12 14 22 4" />
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  {checklistDone()}/{checklistTotal()}
                 </span>
               </Show>
               <Show when={hasAttachments()}>

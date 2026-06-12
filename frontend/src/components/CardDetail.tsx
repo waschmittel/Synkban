@@ -1,10 +1,13 @@
 import { onMount, onCleanup, createSignal, Show } from "solid-js";
 import { EditorView } from "prosemirror-view";
-import type { Attachment, Card, Label } from "../types";
+import type { Attachment, Card, ChecklistItem, Label } from "../types";
 import { api } from "../api";
 import { createCardEditor, docFromDescription, isDocEmpty } from "../proseEditor";
+import { focusTrap } from "../focusTrap";
+import { createMutationQueue } from "../mutationQueue";
 import { handleMarkdownShortcut } from "../mdInput";
 import CardLabelSection from "./CardLabelSection";
+import ChecklistSection from "./ChecklistSection";
 import DueDateSection from "./DueDateSection";
 import AttachmentsSection from "./AttachmentsSection";
 import ImagePreviewOverlay from "./ImagePreviewOverlay";
@@ -23,6 +26,7 @@ export default function CardDetail(props: Props) {
   let editorRef!: HTMLDivElement;
   let titleInputRef!: HTMLInputElement;
   let dueDateRef!: HTMLInputElement;
+  let checklistAddRef!: HTMLInputElement;
   let view: EditorView | undefined;
 
   const [title, setTitle] = createSignal(props.card.title);
@@ -37,15 +41,32 @@ export default function CardDetail(props: Props) {
   const [previewAtt, setPreviewAtt] = createSignal<Attachment | null>(null);
   const [draggingFile, setDraggingFile] = createSignal(false);
   const [dueDate, setDueDate] = createSignal<string>(props.card.due_date ?? "");
+  const [checklist, setChecklist] = createSignal<ChecklistItem[]>(props.card.checklist ?? []);
   let dragCounter = 0;
 
   onMount(() => {
     view = createCardEditor(editorRef, docFromDescription(props.card.description), () => {
       setDirty(true);
     });
+    // Board.tsx dispatches this when its global Escape handler fires while the
+    // modal is open but focus is outside it (e.g. on <body>) — route through
+    // the dirty guard instead of closing unconditionally.
+    document.addEventListener("request-card-close", handleCloseRequest);
   });
 
-  onCleanup(() => view?.destroy());
+  onCleanup(() => {
+    view?.destroy();
+    document.removeEventListener("request-card-close", handleCloseRequest);
+  });
+
+  const handleCloseRequest = () => {
+    if (showUnsavedDialog()) return;
+    if (previewAtt()) {
+      setPreviewAtt(null);
+      return;
+    }
+    guardedClose();
+  };
 
   // --- Labels ---
 
@@ -73,6 +94,52 @@ export default function CardDetail(props: Props) {
   const handleDeleteAttachment = async (attId: string) => {
     await api.deleteAttachment(props.card.id, attId);
     setAttachments((prev) => prev.filter((a) => a.id !== attId));
+  };
+
+  // --- Checklist (saves immediately: optimistic local update + API call) ---
+
+  // Checklist ops are optimistic and not awaited by the UI; the queue
+  // serializes them against the card file (see mutationQueue.ts).
+  const checklistQueue = createMutationQueue();
+  const enqueueChecklistOp = checklistQueue.enqueue;
+
+  const handleAddChecklistItem = (text: string) => {
+    enqueueChecklistOp(async () => {
+      const item = await api.addChecklistItem(props.card.id, text);
+      setChecklist((prev) => [...prev, item]);
+    });
+  };
+
+  const handleToggleChecklistItem = (itemId: string, done: boolean) => {
+    setChecklist((prev) => prev.map((i) => (i.id === itemId ? { ...i, done } : i)));
+    enqueueChecklistOp(() => api.updateChecklistItem(props.card.id, itemId, { done }));
+  };
+
+  const handleRenameChecklistItem = (itemId: string, text: string) => {
+    setChecklist((prev) => prev.map((i) => (i.id === itemId ? { ...i, text } : i)));
+    enqueueChecklistOp(() => api.updateChecklistItem(props.card.id, itemId, { text }));
+  };
+
+  const handleDeleteChecklistItem = (itemId: string) => {
+    setChecklist((prev) => prev.filter((i) => i.id !== itemId));
+    enqueueChecklistOp(() => api.deleteChecklistItem(props.card.id, itemId));
+  };
+
+  const handleMoveChecklistItem = (itemId: string, toIndex: number) => {
+    setChecklist((prev) => {
+      const from = prev.findIndex((i) => i.id === itemId);
+      if (from === -1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(Math.max(0, Math.min(toIndex, next.length)), 0, item);
+      return next;
+    });
+    enqueueChecklistOp(() => api.updateChecklistItem(props.card.id, itemId, { pos: toIndex }));
+  };
+
+  const handleToggleAllChecklist = (done: boolean) => {
+    setChecklist((prev) => prev.map((i) => ({ ...i, done })));
+    enqueueChecklistOp(() => api.setChecklistAll(props.card.id, done));
   };
 
   // --- Modal-wide file drag/drop ---
@@ -117,7 +184,16 @@ export default function CardDetail(props: Props) {
     const description = isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
     setDirty(false);
     const dd = dueDate().trim();
-    props.onSave(props.card.id, title(), description, selectedLabelIds(), dd || null);
+    // Wait for in-flight checklist writes: the card save is a read-modify-write
+    // of the same file and would otherwise clobber them (and the refetch after
+    // save would show stale state).
+    void checklistQueue.flush().then(() =>
+      props.onSave(props.card.id, title(), description, selectedLabelIds(), dd || null)
+    );
+  };
+
+  const closeAfterFlush = () => {
+    void checklistQueue.flush().then(() => props.onClose());
   };
 
   const guardedClose = () => {
@@ -125,12 +201,15 @@ export default function CardDetail(props: Props) {
       setShowUnsavedDialog(true);
       return;
     }
-    props.onClose();
+    closeAfterFlush();
   };
 
   // --- Keyboard ---
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // The unsaved dialog owns the keyboard while it's open (its own handler
+    // covers Enter/Escape) — don't let underlying modal shortcuts fire.
+    if (showUnsavedDialog()) return;
     if (e.key === "Escape") {
       if (previewAtt()) {
         setPreviewAtt(null);
@@ -139,7 +218,10 @@ export default function CardDetail(props: Props) {
       }
       guardedClose();
     }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    // Ctrl/Cmd+S saves. Not Ctrl+Enter: ProseMirror inserts a hard break on
+    // Ctrl+Enter, which would corrupt the description right before saving.
+    if ((e.key === "s" || e.key === "S") && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
       handleSave();
     }
     if (e.key === "Shift" && (e.ctrlKey || e.metaKey)) {
@@ -159,6 +241,9 @@ export default function CardDetail(props: Props) {
       if (e.key === "d") {
         e.preventDefault();
         dueDateRef?.focus();
+      } else if (e.key === "c") {
+        e.preventDefault();
+        checklistAddRef?.focus();
       } else if (e.key === "l") {
         e.preventDefault();
         setShowLabelPicker((v) => !v);
@@ -188,6 +273,7 @@ export default function CardDetail(props: Props) {
   return (
     <div
       class="modal-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       classList={{ "modal-overlay--drop-active": draggingFile() }}
       onClick={handleOverlayClick}
       onKeyDown={handleKeyDown}
@@ -254,8 +340,18 @@ export default function CardDetail(props: Props) {
           </div>
           <div class="editor-wrapper" ref={editorRef!} />
           <div class="editor-hint">
-            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>Ctrl</kbd>+<kbd>Enter</kbd> save
+            <kbd>Ctrl</kbd>+<kbd>B</kbd> bold &middot; <kbd>Ctrl</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>Ctrl</kbd>+<kbd>S</kbd> save
           </div>
+          <ChecklistSection
+            items={checklist()}
+            onAdd={handleAddChecklistItem}
+            onToggle={handleToggleChecklistItem}
+            onRename={handleRenameChecklistItem}
+            onDelete={handleDeleteChecklistItem}
+            onMove={handleMoveChecklistItem}
+            onToggleAll={handleToggleAllChecklist}
+            addInputRef={(el) => (checklistAddRef = el)}
+          />
           <AttachmentsSection
             cardId={props.card.id}
             attachments={attachments()}
@@ -275,7 +371,7 @@ export default function CardDetail(props: Props) {
       <Show when={showUnsavedDialog()}>
         <UnsavedDialog
           onSave={handleSave}
-          onDiscard={props.onClose}
+          onDiscard={closeAfterFlush}
           onCancel={() => setShowUnsavedDialog(false)}
         />
       </Show>

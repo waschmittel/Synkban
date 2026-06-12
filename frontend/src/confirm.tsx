@@ -24,6 +24,8 @@ export function createConfirm(): ConfirmHelper {
   return {
     ask: (opts) =>
       new Promise<boolean>((resolve) => {
+        // A still-pending request would never settle once replaced — cancel it.
+        request()?.resolve(false);
         setRequest({ ...opts, resolve });
       }),
     isOpen: () => request() !== null,

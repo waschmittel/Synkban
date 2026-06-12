@@ -4,6 +4,12 @@ export interface Label {
   color: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface Attachment {
   id: string;
   filename: string;
@@ -33,6 +39,7 @@ export interface Card {
   archived: boolean;
   attachments: Attachment[];
   due_date?: string;
+  checklist: ChecklistItem[];
 }
 
 export interface ListWithCards {

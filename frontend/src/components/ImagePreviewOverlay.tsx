@@ -1,5 +1,7 @@
+import { onCleanup } from "solid-js";
 import type { Attachment } from "../types";
 import { api } from "../api";
+import { focusTrap } from "../focusTrap";
 
 interface Props {
   cardId: string;
@@ -14,6 +16,7 @@ export default function ImagePreviewOverlay(props: Props) {
   return (
     <div
       class="image-preview-overlay"
+      ref={(el) => onCleanup(focusTrap(el))}
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}
     >
       <div class="image-preview-container">

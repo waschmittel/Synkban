@@ -57,6 +57,24 @@ pub(crate) fn read_card(path: &Path) -> Result<Card, AppError> {
     Ok(card)
 }
 
+/// Resolve a card's board id and on-disk JSON path, wherever it lives
+/// (in a list or orphaned in `archived_cards/`).
+pub(crate) fn locate_card_path(
+    data_dir: &Path,
+    card_id: &str,
+) -> Result<(String, std::path::PathBuf), AppError> {
+    match card_index::locate(data_dir, card_id)? {
+        CardLocation::InList { board_id, list_id } => {
+            let path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
+            Ok((board_id, path))
+        }
+        CardLocation::Orphaned { board_id } => {
+            let path = archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
+            Ok((board_id, path))
+        }
+    }
+}
+
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -77,6 +95,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         archived: false,
         attachments: Vec::new(),
         due_date: None,
+        checklist: Vec::new(),
     };
     write_json(&dir.join(format!("{id}.json")), &card)?;
     card_index::record(&id, CardLocation::InList {
@@ -87,21 +106,10 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
 }
 
 fn max_position(data_dir: &Path, board_id: &str, list_id: &str) -> Result<f64, AppError> {
-    let dir = cards_dir(data_dir, board_id, list_id);
-    let mut max = 0.0f64;
-    if dir.exists() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") {
-                let card: Card = read_json(&path)?;
-                if card.position > max {
-                    max = card.position;
-                }
-            }
-        }
-    }
-    Ok(max)
+    Ok(crate::store::walk::cards(data_dir, board_id, list_id)?
+        .iter()
+        .map(|c| c.position)
+        .fold(0.0, f64::max))
 }
 
 pub fn update_card(
@@ -236,41 +244,14 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
         return Err(AppError::NotFound("Board not found".into()));
     }
     let mut archived = Vec::new();
-    let lists_path = lists_dir(data_dir, board_id);
-    if lists_path.exists() {
-        for entry in fs::read_dir(&lists_path)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let list_json = entry.path().join("list.json");
-                if list_json.exists() {
-                    let list: crate::models::List = read_json(&list_json)?;
-                    let cards_path = cards_dir(data_dir, board_id, &list.id);
-                    if cards_path.exists() {
-                        for card_entry in fs::read_dir(&cards_path)? {
-                            let card_entry = card_entry?;
-                            let path = card_entry.path();
-                            if path.extension().is_some_and(|e| e == "json") {
-                                let card = read_card(&path)?;
-                                if card.archived {
-                                    archived.push(card);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    for list_id in crate::store::walk::list_ids(data_dir, board_id)? {
+        archived.extend(
+            crate::store::walk::cards(data_dir, board_id, &list_id)?
+                .into_iter()
+                .filter(|c| c.archived),
+        );
     }
-    let orphan_dir = archived_cards_dir(data_dir, board_id);
-    if orphan_dir.exists() {
-        for entry in fs::read_dir(&orphan_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") {
-                archived.push(read_card(&path)?);
-            }
-        }
-    }
+    archived.extend(crate::store::walk::orphaned_cards(data_dir, board_id)?);
     archived.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(archived)
 }

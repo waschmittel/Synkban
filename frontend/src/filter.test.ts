@@ -14,6 +14,7 @@ function makeCard(over: Partial<Card> = {}): Card {
     label_ids: [],
     archived: false,
     attachments: [],
+    checklist: [],
     ...over,
   };
 }
@@ -96,6 +97,33 @@ describe("cardMatchesFilter", () => {
     });
     expect(cardMatchesFilter(card, "paragraph", [])).toBe(false);
     expect(cardMatchesFilter(card, "hello", [])).toBe(true);
+  });
+
+  it("checklist item text match (case-insensitive)", () => {
+    const card = makeCard({
+      title: "X",
+      checklist: [
+        { id: "i1", text: "Wash the Car", done: false },
+        { id: "i2", text: "other", done: true },
+      ],
+    });
+    expect(cardMatchesFilter(card, "car", [])).toBe(true);
+    expect(cardMatchesFilter(card, "CAR", [])).toBe(true);
+    expect(cardMatchesFilter(card, "bike", [])).toBe(false);
+  });
+
+  it("checklist match combines with label filter (AND)", () => {
+    const card = makeCard({
+      checklist: [{ id: "i1", text: "deploy", done: false }],
+      label_ids: ["ops"],
+    });
+    expect(cardMatchesFilter(card, "deploy", ["ops"])).toBe(true);
+    expect(cardMatchesFilter(card, "deploy", ["bug"])).toBe(false);
+  });
+
+  it("missing checklist treated as empty", () => {
+    const card = { ...makeCard({ title: "X" }), checklist: undefined as any };
+    expect(cardMatchesFilter(card, "anything", [])).toBe(false);
   });
 
   it("missing description_text is treated as empty", () => {
