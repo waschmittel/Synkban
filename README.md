@@ -2,14 +2,12 @@
 
 A **local-first, keyboard-driven, syncable** (via any third party file sync) kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk.
 
+![demo](demo.gif)
+
 Can be run in two ways:
 
 * Standalone Electron app
 * Web Server for deployment behind an authenticating proxy
-
-![demo](demo.gif)
-
-Regenerate the demo with `./record-demo.sh` (requires `ffmpeg` and a built release binary).
 
 ## Features
 
