@@ -2717,3 +2717,19 @@ html.electron:not(.electron--mac) .app-header-actions {
   flex-shrink: 0;
 }
 
+/* ═══ Narrow viewport: lock horizontal scroll to one list at a time ═══ */
+@media (max-width: 640px) {
+  .lists-container {
+    scroll-snap-type: x mandatory;
+    padding: 0 12px 24px;
+    gap: 12px;
+  }
+
+  .list,
+  .list-drop-placeholder {
+    scroll-snap-align: center;
+    min-width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+  }
+}
+
