@@ -787,7 +787,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 6px;
+  margin-top: 6px;
 }
 
 .card-label-chip {

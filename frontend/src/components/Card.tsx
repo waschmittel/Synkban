@@ -187,22 +187,22 @@ export default function Card(props: Props) {
       data-card-position={props.card.position}
     >
       <div class="card-main">
-        <Show when={cardLabels().length > 0}>
-          <div class="card-labels">
-            <For each={cardLabels()}>
-              {(label) => (
-                <span
-                  class="card-label-chip"
-                  style={{ "background-color": label.color }}
-                  title={label.name}
-                  innerHTML={renderTitle(label.name)}
-                />
-              )}
-            </For>
-          </div>
-        </Show>
         <div class="card-content">
           <span class="card-title" innerHTML={renderTitle(props.card.title)} />
+          <Show when={cardLabels().length > 0}>
+            <div class="card-labels">
+              <For each={cardLabels()}>
+                {(label) => (
+                  <span
+                    class="card-label-chip"
+                    style={{ "background-color": label.color }}
+                    title={label.name}
+                    innerHTML={renderTitle(label.name)}
+                  />
+                )}
+              </For>
+            </div>
+          </Show>
           <Show when={hasDescription() || hasAttachments() || getDueDateDisplay() || checklistTotal() > 0}>
             <div class="card-badges">
               <Show when={getDueDateDisplay()}>
