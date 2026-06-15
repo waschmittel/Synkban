@@ -3,11 +3,28 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 DESKTOP=false
+SKIP_TESTS=false
+
+usage() {
+    cat <<'USAGE'
+Usage: ./build.sh [options]
+
+Builds the frontend, embeds it into the Rust backend, builds the backend,
+and runs the Playwright e2e tests.
+
+Options:
+  --desktop      Also package the Electron desktop app into electron/dist/
+  --skip-tests   Skip the Playwright e2e tests
+  -h, --help     Show this help and exit
+USAGE
+}
 
 for arg in "$@"; do
     case "$arg" in
         --desktop) DESKTOP=true ;;
-        *) echo "Unknown flag: $arg"; exit 1 ;;
+        --skip-tests) SKIP_TESTS=true ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown flag: $arg"; echo; usage; exit 1 ;;
     esac
 done
 
@@ -35,11 +52,16 @@ else
     cargo build --release
 fi
 
-echo ""
-echo "=== Running e2e tests ==="
-cd "$ROOT/frontend"
-pnpm exec playwright install chromium
-pnpm run test:e2e
+if [ "$SKIP_TESTS" = true ]; then
+    echo ""
+    echo "=== Skipping e2e tests (--skip-tests) ==="
+else
+    echo ""
+    echo "=== Running e2e tests ==="
+    cd "$ROOT/frontend"
+    pnpm exec playwright install chromium
+    pnpm run test:e2e
+fi
 
 if [ "$DESKTOP" = true ]; then
     echo ""

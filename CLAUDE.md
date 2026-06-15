@@ -10,6 +10,9 @@ Local-first, syncable kanban board. Rust backend (Actix Web), SolidJS frontend, 
 # Full production build (frontend first, then backend with embedded assets)
 ./build.sh
 
+# Skip the Playwright e2e tests
+./build.sh --skip-tests
+
 # Run
 ./backend/target/release/synkban
 # → http://localhost:8080
