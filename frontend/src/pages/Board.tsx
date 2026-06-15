@@ -41,6 +41,20 @@ export default function BoardPage() {
   );
   const focus = createFocusRestoration(board);
   const confirm = createConfirm();
+
+  // All active boards in Home-screen order (position ASC) — drives the bottom
+  // dock and Ctrl+Arrow board cycling.
+  const [allBoards, { refetch: refetchBoards }] = createResource(() => api.listBoards());
+  const boardList = () => allBoards() ?? [];
+  const cycleBoard = (dir: 1 | -1) => {
+    const list = boardList();
+    if (list.length < 2) return;
+    const idx = list.findIndex((b) => b.id === params.id);
+    if (idx < 0) return;
+    const next = (idx + dir + list.length) % list.length;
+    navigate(`/board/${list[next].id}`);
+  };
+
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
   const [showHelp, setShowHelp] = createSignal(false);
   const [showColorPicker, setShowColorPicker] = createSignal(false);
@@ -186,6 +200,12 @@ export default function BoardPage() {
       (key) => ({ key, shift: false, alt: false, ctrl: false, meta: false, handler: navigateArrow }),
     );
 
+    // ',' / 'j' (prev) and '.' / 'k' (next): cycle boards in Home order (wraps).
+    const cycleDefs: ShortcutDef[] = ([",", "j", ".", "k"] as const).map((key) => ({
+      key, ctrl: false, shift: false, alt: false, meta: false,
+      handler: (e) => { e.preventDefault(); cycleBoard(key === "," || key === "j" ? -1 : 1); },
+    }));
+
     const noMods = { ctrl: false, meta: false, alt: false } as const;
     const dispose = registerShortcuts(
       [
@@ -223,6 +243,7 @@ export default function BoardPage() {
         },
         { key: "Backspace", ...noMods, handler: (e) => e.preventDefault() },
         { key: "b", ...noMods, handler: (e) => { e.preventDefault(); navigate("/"); } },
+        ...cycleDefs,
         ...navDefs,
       ],
       // Confirm dialogs swallow ALL shortcuts as a global guard.
@@ -256,6 +277,7 @@ export default function BoardPage() {
     if (name && b && name !== b.title) {
       await api.updateBoard(b.id, { title: name });
       refetch();
+      refetchBoards();
     }
   };
 
@@ -495,6 +517,7 @@ export default function BoardPage() {
     if (!b) return;
     await api.updateBoard(b.id, { color });
     refetch();
+    refetchBoards();
     setShowColorPicker(false);
   };
 
@@ -693,6 +716,25 @@ export default function BoardPage() {
       <Show when={showHelp()}>
         <ShortcutHelp onClose={() => setShowHelp(false)} />
       </Show>
+      </Show>
+
+      <Show when={boardList().length > 1}>
+        <nav class="board-dock" aria-label="Switch board">
+          <For each={boardList()}>
+            {(bd) => (
+              <button
+                class="board-dock-dot"
+                classList={{ "board-dock-dot--active": bd.id === params.id }}
+                style={{ "--dot-color": bd.color ?? "#0079bf" }}
+                data-board-id={bd.id}
+                title={bd.title}
+                aria-label={bd.title}
+                aria-current={bd.id === params.id ? "true" : undefined}
+                onClick={() => navigate(`/board/${bd.id}`)}
+              />
+            )}
+          </For>
+        </nav>
       </Show>
     </div>
   );

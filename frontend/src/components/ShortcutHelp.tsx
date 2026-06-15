@@ -104,6 +104,8 @@ export default function ShortcutHelp(props: Props) {
           </Section>
           <Section title="Board">
             <Row keys={["b"]} desc="Back to boards overview" />
+            <Row keys={[", / j"]} desc="Previous board" />
+            <Row keys={[". / k"]} desc="Next board" />
             <Row keys={["l"]} desc="Add new list" />
             <Row keys={["g"]} desc="Toggle label panel" />
             <Row keys={["f"]} desc="Toggle filter bar" />

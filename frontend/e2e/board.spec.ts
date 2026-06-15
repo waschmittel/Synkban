@@ -1,4 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+// Board ids in the bottom dock's render order. The dock is a snapshot taken at
+// page-mount and is the exact list `cycleBoard` navigates, so reading it makes
+// the cycling assertions deterministic even though other test files create
+// boards against the shared backend. Only re-read after a full page.goto()
+// (which remounts and refreshes the snapshot), not after keyboard cycling.
+const dockBoardIds = (page: Page): Promise<string[]> =>
+  page
+    .locator(".board-dock-dot")
+    .evaluateAll((els) =>
+      els.map((e) => e.getAttribute("data-board-id")).filter((id): id is string => !!id)
+    );
 
 test("unknown board shows not-found state instead of stuck loading", async ({ page }) => {
   await page.goto("/board/does-not-exist");
@@ -288,4 +300,89 @@ test("board deleted while open shows not-found state after poll refetch", async 
   await expect(page.locator(".board-error h2")).toHaveText("Board not found", {
     timeout: 25_000,
   });
+});
+
+test("',' and '.' cycle through boards in dock order, wrapping at the ends", async ({
+  page,
+  request,
+}) => {
+  // Create three of our own so the dock is guaranteed to have >1 entry.
+  const a = await (
+    await request.post("/api/boards", { data: { title: `Cycle A ${Date.now()}` } })
+  ).json();
+  await request.post("/api/boards", { data: { title: `Cycle B ${Date.now()}` } });
+  await request.post("/api/boards", { data: { title: `Cycle C ${Date.now()}` } });
+
+  await page.goto(`/board/${a.id}`);
+  await expect(page.locator(".board-dock")).toBeVisible();
+
+  const ids = await dockBoardIds(page);
+  const n = ids.length;
+  expect(n).toBeGreaterThan(1);
+  const start = ids.indexOf(a.id);
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  const urlAt = (k: number) => new RegExp(`/board/${ids[((k % n) + n) % n]}$`);
+
+  // Step '.' forward through every board; the last press wraps back to start.
+  for (let s = 1; s <= n; s++) {
+    await page.keyboard.press(".");
+    await expect(page).toHaveURL(urlAt(start + s));
+  }
+  await expect(page).toHaveURL(urlAt(start));
+
+  // ',' goes back one, wrapping to the last board when at the first.
+  await page.keyboard.press(",");
+  await expect(page).toHaveURL(urlAt(start - 1));
+});
+
+test("'j' and 'k' are aliases for ',' and '.' board cycling", async ({
+  page,
+  request,
+}) => {
+  const a = await (
+    await request.post("/api/boards", { data: { title: `JK A ${Date.now()}` } })
+  ).json();
+  await request.post("/api/boards", { data: { title: `JK B ${Date.now()}` } });
+
+  await page.goto(`/board/${a.id}`);
+  await expect(page.locator(".board-dock")).toBeVisible();
+
+  const ids = await dockBoardIds(page);
+  const n = ids.length;
+  const start = ids.indexOf(a.id);
+  const urlAt = (k: number) => new RegExp(`/board/${ids[((k % n) + n) % n]}$`);
+
+  await page.keyboard.press("k"); // next, like '.'
+  await expect(page).toHaveURL(urlAt(start + 1));
+  await page.keyboard.press("j"); // previous, like ','
+  await expect(page).toHaveURL(urlAt(start));
+});
+
+test("dock dots highlight the active board, show its name, and navigate on click", async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  const titleA = `Dock A ${stamp}`;
+  const titleB = `Dock B ${stamp}`;
+  const a = await (await request.post("/api/boards", { data: { title: titleA } })).json();
+  const b = await (await request.post("/api/boards", { data: { title: titleB } })).json();
+
+  await page.goto(`/board/${a.id}`);
+  await expect(page.locator(".board-dock")).toBeVisible();
+
+  // Exactly one dot is highlighted, and it's the one for the open board.
+  await expect(page.locator(".board-dock-dot--active")).toHaveCount(1);
+  const dotA = page.locator(`.board-dock-dot[data-board-id="${a.id}"]`);
+  await expect(dotA).toHaveClass(/board-dock-dot--active/);
+  // Tooltip carries the board name.
+  await expect(dotA).toHaveAttribute("title", titleA);
+
+  // Clicking another board's dot navigates there and moves the highlight.
+  const dotB = page.locator(`.board-dock-dot[data-board-id="${b.id}"]`);
+  await expect(dotB).toHaveAttribute("title", titleB);
+  await dotB.click();
+  await expect(page).toHaveURL(new RegExp(`/board/${b.id}$`));
+  await expect(dotB).toHaveClass(/board-dock-dot--active/);
 });

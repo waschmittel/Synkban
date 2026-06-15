@@ -820,6 +820,51 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: flex-start;
 }
 
+/* ═══ Board dock (bottom board switcher) ═══ */
+.board-dock {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-sm);
+  z-index: 50;
+}
+
+.board-dock-dot {
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--dot-color, #0079bf);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.board-dock-dot:hover,
+.board-dock-dot:focus-visible {
+  opacity: 1;
+  transform: scale(1.15);
+  outline: none;
+}
+
+.board-dock-dot--active {
+  width: 15px;
+  height: 15px;
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
 /* ═══ List ═══ */
 .list {
   background: rgba(241, 242, 244, 0.96);
