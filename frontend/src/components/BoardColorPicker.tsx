@@ -1,21 +1,17 @@
-import { For, Show } from "solid-js";
+import { Show } from "solid-js";
 
-const BOARD_COLORS = [
-  "#0079bf", "#026aa7", "#5ba4cf", "#29cce5",
-  "#b3d9ff", "#519839", "#4bbf6b", "#d29034",
-  "#f5a623", "#eb5a46", "#cd5a91", "#89609e",
-  "#172b4d", "#838c91", "#7a6652", "#344563",
-];
+const DEFAULT_COLOR = "#0079bf";
 
 interface Props {
   open: boolean;
   currentColor?: string;
   onToggle: () => void;
   onSelect: (color: string | null) => void;
+  onPreview: (color: string) => void;
 }
 
-/// Board color button + grid dropdown. Open state lives in the parent so it
-/// can close the dropdown from its own outside-click handler.
+/// Board color button + dropdown with a free color picker. Open state lives in
+/// the parent so it can close the dropdown from its own outside-click handler.
 export default function BoardColorPicker(props: Props) {
   return (
     <div class="board-color-area" onClick={(e) => e.stopPropagation()}>
@@ -31,25 +27,16 @@ export default function BoardColorPicker(props: Props) {
       </button>
       <Show when={props.open}>
         <div class="board-color-dropdown">
-          <div class="board-color-grid">
-            <For each={BOARD_COLORS}>
-              {(color) => (
-                <button
-                  class="board-color-swatch"
-                  classList={{ "board-color-swatch--active": props.currentColor === color }}
-                  style={{ "background-color": color }}
-                  onClick={() => props.onSelect(color)}
-                  title={color}
-                >
-                  <Show when={props.currentColor === color}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </Show>
-                </button>
-              )}
-            </For>
-          </div>
+          <label class="board-color-field">
+            <span>Color</span>
+            <input
+              type="color"
+              class="board-color-input"
+              value={props.currentColor ?? DEFAULT_COLOR}
+              onInput={(e) => props.onPreview(e.currentTarget.value)}
+              onChange={(e) => props.onSelect(e.currentTarget.value)}
+            />
+          </label>
           <button class="board-color-reset" onClick={() => props.onSelect(null)}>
             Reset to default
           </button>

@@ -594,6 +594,7 @@ export default function BoardPage() {
                 currentColor={b().color}
                 onToggle={() => setShowColorPicker((v) => !v)}
                 onSelect={handleSetBoardColor}
+                onPreview={(c) => document.documentElement.style.setProperty("--board-color", c)}
               />
             </div>
             <Show when={showFilterBar()}>
