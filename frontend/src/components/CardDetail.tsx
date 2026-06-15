@@ -16,6 +16,7 @@ import UnsavedDialog from "./UnsavedDialog";
 interface Props {
   card: Card;
   boardLabels: Label[];
+  onCreateLabel: (name: string) => Promise<Label>;
   onSave: (id: string, title: string, description: string, labelIds: string[], dueDate: string | null) => void;
   onClose: () => void;
   onToggleFilter?: () => void;
@@ -74,6 +75,12 @@ export default function CardDetail(props: Props) {
     setSelectedLabelIds((ids) =>
       ids.includes(labelId) ? ids.filter((id) => id !== labelId) : [...ids, labelId]
     );
+    setDirty(true);
+  };
+
+  const createLabel = async (name: string) => {
+    const label = await props.onCreateLabel(name);
+    setSelectedLabelIds((ids) => (ids.includes(label.id) ? ids : [...ids, label.id]));
     setDirty(true);
   };
 
@@ -323,6 +330,8 @@ export default function CardDetail(props: Props) {
             pickerOpen={showLabelPicker()}
             onToggleLabel={toggleLabel}
             onTogglePicker={() => setShowLabelPicker((v) => !v)}
+            onClosePicker={() => setShowLabelPicker(false)}
+            onCreateLabel={createLabel}
           />
           <DueDateSection
             value={dueDate()}

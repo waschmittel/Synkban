@@ -1,6 +1,7 @@
-import { For, Show } from "solid-js";
+import { For, Show, createSignal } from "solid-js";
 import type { Label } from "../types";
 import { renderTitle } from "./Card";
+import { handleMarkdownShortcut } from "../mdInput";
 
 interface Props {
   boardLabels: Label[];
@@ -8,6 +9,8 @@ interface Props {
   pickerOpen: boolean;
   onToggleLabel: (labelId: string) => void;
   onTogglePicker: () => void;
+  onClosePicker: () => void;
+  onCreateLabel: (name: string) => void | Promise<void>;
 }
 
 /// Renders the assigned-label chips above the title and (when open) the
@@ -18,6 +21,39 @@ export default function CardLabelSection(props: Props) {
     props.boardLabels.filter((l) => props.selectedIds.includes(l.id));
   const hasLabels = () => props.boardLabels.length > 0;
 
+  const [newName, setNewName] = createSignal("");
+  const [creating, setCreating] = createSignal(false);
+  let areaRef: HTMLDivElement | undefined;
+  let addBtnRef: HTMLButtonElement | undefined;
+
+  const submitNew = async () => {
+    const name = newName().trim();
+    if (!name || creating()) return;
+    setCreating(true);
+    try {
+      await props.onCreateLabel(name);
+      setNewName("");
+      props.onClosePicker();
+      addBtnRef?.focus();
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Close the picker (and thus the inline create form) when focus leaves the
+  // whole label area. relatedTarget is unreliable for clicks on non-focusable
+  // regions, so confirm via document.activeElement on the next microtask.
+  const handleFocusOut = (e: FocusEvent) => {
+    if (!props.pickerOpen) return;
+    const next = e.relatedTarget as Node | null;
+    if (next && areaRef?.contains(next)) return;
+    queueMicrotask(() => {
+      if (props.pickerOpen && !areaRef?.contains(document.activeElement)) {
+        props.onClosePicker();
+      }
+    });
+  };
+
   return (
     <>
       <div class="modal-section-header">
@@ -27,7 +63,7 @@ export default function CardLabelSection(props: Props) {
         </svg>
         <span class="modal-label">Labels</span>
       </div>
-      <div class="label-assigned-area">
+      <div class="label-assigned-area" ref={areaRef} onFocusOut={handleFocusOut}>
         <div class="label-assigned-chips">
           <For each={assignedLabels()}>
             {(label) => (
@@ -48,6 +84,7 @@ export default function CardLabelSection(props: Props) {
           </For>
           <button
             class="label-add-btn"
+            ref={addBtnRef}
             onClick={props.onTogglePicker}
             title={props.pickerOpen ? "Hide label picker (L)" : "Add/remove labels (L)"}
           >
@@ -59,14 +96,7 @@ export default function CardLabelSection(props: Props) {
           </button>
         </div>
         <Show when={props.pickerOpen}>
-          <Show
-            when={hasLabels()}
-            fallback={
-              <div class="label-picker-empty">
-                No labels on this board yet. Press <kbd>G</kbd> to open the label drawer and create some.
-              </div>
-            }
-          >
+          <Show when={hasLabels()}>
             <div class="label-picker">
               <For each={props.boardLabels}>
                 {(label) => {
@@ -92,6 +122,30 @@ export default function CardLabelSection(props: Props) {
               </For>
             </div>
           </Show>
+          <form
+            class="label-create"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitNew();
+            }}
+          >
+            <input
+              class="label-create-input"
+              placeholder="New label name…"
+              value={newName()}
+              disabled={creating()}
+              onInput={(e) => setNewName(e.currentTarget.value)}
+              onKeyDown={(e) => handleMarkdownShortcut(e)}
+              ref={(el) => requestAnimationFrame(() => el.focus())}
+            />
+            <button
+              type="submit"
+              class="label-create-btn"
+              disabled={!newName().trim() || creating()}
+            >
+              Create
+            </button>
+          </form>
         </Show>
       </div>
     </>

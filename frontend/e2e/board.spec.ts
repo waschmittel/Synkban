@@ -211,6 +211,65 @@ test("Shift+ArrowRight moves card to adjacent list and persists", async ({
   await expect(inListB).toBeVisible();
 });
 
+test("create a new label inline in card detail and auto-assign it", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Label Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Labelled card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Labelled card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+
+  // Open the label picker and create a brand-new label inline.
+  await page.locator(".label-add-btn").click();
+  await page.locator(".label-create-input").fill("Urgent");
+  await page.locator(".label-create-btn").click();
+
+  // New label is auto-assigned (shows as a chip), the inline create form is
+  // gone, and focus returns to the "Add label" button.
+  await expect(page.locator(".label-assigned-chip", { hasText: "Urgent" })).toBeVisible();
+  await expect(page.locator(".label-create")).toHaveCount(0);
+  await expect(page.locator(".label-add-btn")).toBeFocused();
+
+  // Save and confirm the label persists on the card in the list view.
+  await page.locator(".modal-footer .btn-primary", { hasText: "Save" }).click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await expect(page.locator(".card-label-chip", { hasText: "Urgent" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator(".card-label-chip", { hasText: "Urgent" })).toBeVisible();
+});
+
+test("inline label create form closes when focus leaves the label area", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Blur Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Blur card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Blur card" }).click();
+
+  await page.locator(".label-add-btn").click();
+  await expect(page.locator(".label-create")).toBeVisible();
+
+  // Moving focus out of the label area (to the title input) closes the picker.
+  await page.locator(".modal-title-input").focus();
+  await expect(page.locator(".label-create")).toHaveCount(0);
+});
+
 test("board deleted while open shows not-found state after poll refetch", async ({
   page,
   request,

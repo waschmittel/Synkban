@@ -501,8 +501,9 @@ export default function BoardPage() {
   // --- Label management ---
 
   const handleCreateLabel = async (name: string) => {
-    await api.createLabel(params.id, name);
+    const label = await api.createLabel(params.id, name);
     refetch();
+    return label;
   };
 
   const handleDeleteLabel = async (labelId: string) => {
@@ -661,6 +662,7 @@ export default function BoardPage() {
           <CardDetail
             card={card()}
             boardLabels={board()?.labels ?? []}
+            onCreateLabel={handleCreateLabel}
             onSave={handleCardSave}
             onClose={handleModalClose}
             onToggleFilter={() => setShowFilterBar((v) => !v)}
