@@ -1,16 +1,74 @@
-//! Attachment CRUD. Binary blobs live at
-//! `boards/{bid}/attachments/{cid}/{att-id}` (no extension); image
-//! attachments also get a JPEG thumbnail at `{att-id}_thumb` (max 400px).
-//! Attachment metadata is stored on the card JSON.
+//! Attachment CRUD. Each attachment is a file trio under
+//! `boards/{bid}/attachments/{cid}/`:
+//!   - `{att-id}`        binary blob (no extension)
+//!   - `{att-id}_thumb`  JPEG thumbnail (images only, max 400px)
+//!   - `{att-id}.json`   metadata sidecar (the `Attachment` record)
+//!
+//! The sidecar — not the card JSON — is the source of truth for attachment
+//! metadata, so attachment persistence is independent of the card record: it
+//! survives concurrent card edits without write-conflicts (additive new files
+//! instead of rewriting one shared file), and travels with the attachment dir
+//! when a card moves between boards. Card responses are populated from the
+//! sidecars via `load_attachments`. `store::gc` reconciles leftovers (partial
+//! writes, orphaned dirs, pre-sidecar data).
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::errors::AppError;
 use crate::models::Attachment;
 use crate::store::card_index::find_board_and_list;
-use crate::store::io::{now_timestamp, remove_dir_if_empty, track, write_json};
+use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::paths::*;
+
+fn sidecar_path(data_dir: &Path, board_id: &str, card_id: &str, att_id: &str) -> PathBuf {
+    attachment_dir(data_dir, board_id, card_id).join(format!("{att_id}.json"))
+}
+
+/// Load a card's attachment metadata from its sidecar files, sorted by
+/// creation time. Empty if the card has no attachment dir. This is how card
+/// responses get their `attachments` — the card JSON never stores them.
+pub(crate) fn load_attachments(data_dir: &Path, board_id: &str, card_id: &str) -> Vec<Attachment> {
+    let dir = attachment_dir(data_dir, board_id, card_id);
+    let mut out: Vec<Attachment> = Vec::new();
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "json") {
+                if let Ok(att) = read_json::<Attachment>(&path) {
+                    out.push(att);
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    out
+}
+
+/// Relocate a card's attachment dir when the card moves to a list on a
+/// different board. No-op if the card has no attachments. The sidecars live
+/// inside the dir, so they move atomically with it (same filesystem).
+pub(crate) fn move_card_attachments(
+    data_dir: &Path,
+    from_board: &str,
+    to_board: &str,
+    card_id: &str,
+) -> Result<(), AppError> {
+    let from = attachment_dir(data_dir, from_board, card_id);
+    if !from.exists() {
+        return Ok(());
+    }
+    let to = attachment_dir(data_dir, to_board, card_id);
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    track("moved dir", &to);
+    fs::rename(&from, &to)?;
+    if let Some(parent) = from.parent() {
+        remove_dir_if_empty(parent);
+    }
+    Ok(())
+}
 
 pub fn create_attachment(
     data_dir: &Path,
@@ -19,7 +77,7 @@ pub fn create_attachment(
     content_type: &str,
     data: &[u8],
 ) -> Result<Attachment, AppError> {
-    let (board_id, list_id) = find_board_and_list(data_dir, card_id)?;
+    let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let att_id = uuid::Uuid::new_v4().to_string();
 
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
@@ -31,17 +89,16 @@ pub fn create_attachment(
         create_thumbnail(&att_dir, &att_id, data);
     }
 
-    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-    let mut card = crate::store::cards::read_card(&card_path)?;
+    // Sidecar written LAST: its presence marks the attachment complete. A crash
+    // before this leaves only the binary, which `store::gc` reclaims.
     let att = Attachment {
-        id: att_id,
+        id: att_id.clone(),
         filename: filename.to_string(),
         size: data.len() as u64,
         content_type: content_type.to_string(),
         created_at: now_timestamp(),
     };
-    card.attachments.push(att.clone());
-    write_json(&card_path, &card)?;
+    write_json(&att_dir.join(format!("{att_id}.json")), &att)?;
     Ok(att)
 }
 
@@ -50,14 +107,12 @@ pub fn get_attachment_data(
     card_id: &str,
     att_id: &str,
 ) -> Result<(Attachment, Vec<u8>), AppError> {
-    let (board_id, list_id) = find_board_and_list(data_dir, card_id)?;
-    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-    let card = crate::store::cards::read_card(&card_path)?;
-    let att = card
-        .attachments
-        .into_iter()
-        .find(|a| a.id == att_id)
-        .ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
+    let sidecar = sidecar_path(data_dir, &board_id, card_id, att_id);
+    if !sidecar.exists() {
+        return Err(AppError::NotFound("Attachment not found".into()));
+    }
+    let att: Attachment = read_json(&sidecar)?;
     let data = fs::read(attachment_dir(data_dir, &board_id, card_id).join(att_id))?;
     Ok((att, data))
 }
@@ -67,16 +122,15 @@ pub fn delete_attachment(
     card_id: &str,
     att_id: &str,
 ) -> Result<(), AppError> {
-    let (board_id, list_id) = find_board_and_list(data_dir, card_id)?;
-    let card_path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-    let mut card = crate::store::cards::read_card(&card_path)?;
-    let before = card.attachments.len();
-    card.attachments.retain(|a| a.id != att_id);
-    if card.attachments.len() == before {
+    let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
+    let att_dir = attachment_dir(data_dir, &board_id, card_id);
+    let sidecar = att_dir.join(format!("{att_id}.json"));
+    if !sidecar.exists() {
         return Err(AppError::NotFound("Attachment not found".into()));
     }
-    write_json(&card_path, &card)?;
-    let att_dir = attachment_dir(data_dir, &board_id, card_id);
+    // Remove the sidecar first (the completeness marker), then the blobs.
+    track("deleted", &sidecar);
+    fs::remove_file(&sidecar)?;
     let att_file = att_dir.join(att_id);
     let thumb_file = att_dir.join(format!("{att_id}_thumb"));
     if att_file.exists() {
@@ -151,13 +205,16 @@ mod tests {
 
         let att_path = attachment_dir(d.path(), &b.id, &c.id).join(&att.id);
         assert!(att_path.exists());
+        let sidecar = attachment_dir(d.path(), &b.id, &c.id).join(format!("{}.json", att.id));
+        assert!(sidecar.exists());
+        assert_eq!(load_attachments(d.path(), &b.id, &c.id).len(), 1);
 
-        let (board_id, list_id) = find_board_and_list(d.path(), &c.id).unwrap();
+        // Attachment metadata must NOT be persisted on the card JSON.
         let card: Card = read_json(
-            &cards_dir(d.path(), &board_id, &list_id).join(format!("{}.json", c.id)),
+            &cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id)),
         )
         .unwrap();
-        assert_eq!(card.attachments.len(), 1);
+        assert!(card.attachments.is_empty());
     }
 
     #[test]
@@ -212,15 +269,10 @@ mod tests {
 
         delete_attachment(d.path(), &c.id, &att.id).unwrap();
 
-        let att_path = attachment_dir(d.path(), &b.id, &c.id).join(&att.id);
-        assert!(!att_path.exists());
-
-        let (board_id, list_id) = find_board_and_list(d.path(), &c.id).unwrap();
-        let card: Card = read_json(
-            &cards_dir(d.path(), &board_id, &list_id).join(format!("{}.json", c.id)),
-        )
-        .unwrap();
-        assert!(card.attachments.is_empty());
+        let att_dir = attachment_dir(d.path(), &b.id, &c.id);
+        assert!(!att_dir.join(&att.id).exists());
+        assert!(!att_dir.join(format!("{}.json", att.id)).exists());
+        assert!(load_attachments(d.path(), &b.id, &c.id).is_empty());
     }
 
     #[test]

@@ -51,10 +51,23 @@ pub(crate) fn refresh_description_text(card: &mut Card) {
 
 /// Read a `Card` from disk and ensure `description_text` is current. Use this
 /// instead of `read_json::<Card>` so the lazy backfill applies uniformly.
+/// `attachments` is whatever the JSON holds (empty for sidecar-era cards,
+/// populated for pre-sidecar ones) — response builders overwrite it via
+/// `attachments::load_attachments`.
 pub(crate) fn read_card(path: &Path) -> Result<Card, AppError> {
     let mut card: Card = read_json(path)?;
     refresh_description_text(&mut card);
     Ok(card)
+}
+
+/// Persist a card to disk. Attachment metadata lives in sidecar files
+/// (see `store::attachments`), never on the card JSON, so it is stripped here
+/// before writing and restored afterwards.
+pub(crate) fn write_card(path: &Path, card: &mut Card) -> Result<(), AppError> {
+    let saved = std::mem::take(&mut card.attachments);
+    let res = write_json(path, card);
+    card.attachments = saved;
+    res
 }
 
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
@@ -65,7 +78,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
     let dir = cards_dir(data_dir, &board_id, list_id);
     fs::create_dir_all(&dir)?;
 
-    let card = Card {
+    let mut card = Card {
         id: id.clone(),
         list_id: list_id.to_string(),
         title: title.to_string(),
@@ -80,7 +93,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         due_date: None,
         checklist: Vec::new(),
     };
-    write_json(&dir.join(format!("{id}.json")), &card)?;
+    write_card(&dir.join(format!("{id}.json")), &mut card)?;
     card_index::record(&id, CardLocation::InList {
         board_id: board_id.clone(),
         list_id: list_id.to_string(),
@@ -108,7 +121,7 @@ pub fn update_card(
     checklist: Option<Vec<ChecklistItem>>,
 ) -> Result<Card, AppError> {
     let loc = card_index::locate(data_dir, card_id)?;
-    let (_board_id, old_list_id, old_path, is_orphaned) = match &loc {
+    let (source_board_id, old_list_id, old_path, is_orphaned) = match &loc {
         CardLocation::InList { board_id, list_id } => {
             let path =
                 cards_dir(data_dir, board_id, list_id).join(format!("{card_id}.json"));
@@ -160,16 +173,22 @@ pub fn update_card(
         card.position = max_pos + 1.0;
         let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
         fs::create_dir_all(&new_dir)?;
-        write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
+        write_card(&new_dir.join(format!("{card_id}.json")), &mut card)?;
         track("deleted", &old_path);
         fs::remove_file(&old_path)?;
         if let Some(parent) = old_path.parent() {
             remove_dir_if_empty(parent);
         }
+        if target_board_id != source_board_id {
+            crate::store::attachments::move_card_attachments(
+                data_dir, &source_board_id, &target_board_id, card_id,
+            )?;
+        }
         card_index::record(card_id, CardLocation::InList {
-            board_id: target_board_id,
+            board_id: target_board_id.clone(),
             list_id: target_list_id.to_string(),
         });
+        card.attachments = crate::store::attachments::load_attachments(data_dir, &target_board_id, card_id);
         return Ok(card);
     }
 
@@ -179,18 +198,25 @@ pub fn update_card(
             let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
             fs::create_dir_all(&new_dir)?;
             card.list_id = target_list_id.to_string();
-            write_json(&new_dir.join(format!("{card_id}.json")), &card)?;
+            write_card(&new_dir.join(format!("{card_id}.json")), &mut card)?;
             track("deleted", &old_path);
             fs::remove_file(&old_path)?;
+            if target_board_id != source_board_id {
+                crate::store::attachments::move_card_attachments(
+                    data_dir, &source_board_id, &target_board_id, card_id,
+                )?;
+            }
             card_index::record(card_id, CardLocation::InList {
-                board_id: target_board_id,
+                board_id: target_board_id.clone(),
                 list_id: target_list_id.to_string(),
             });
+            card.attachments = crate::store::attachments::load_attachments(data_dir, &target_board_id, card_id);
             return Ok(card);
         }
     }
 
-    write_json(&old_path, &card)?;
+    write_card(&old_path, &mut card)?;
+    card.attachments = crate::store::attachments::load_attachments(data_dir, &source_board_id, card_id);
     Ok(card)
 }
 
@@ -244,6 +270,9 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
         );
     }
     archived.extend(crate::store::walk::orphaned_cards(data_dir, board_id)?);
+    for c in &mut archived {
+        c.attachments = crate::store::attachments::load_attachments(data_dir, board_id, &c.id);
+    }
     // Descending by archival date; legacy cards without one fall back to created_at.
     archived.sort_by(|a, b| {
         let ka = a.archived_at.as_deref().unwrap_or(&a.created_at);
@@ -573,6 +602,36 @@ mod tests {
         let list2 = detail.lists.iter().find(|l| l.id == l2.id).unwrap();
         assert!(list1.cards.is_empty());
         assert_eq!(list2.cards.len(), 1);
+    }
+
+    #[test]
+    fn move_card_across_boards_relocates_attachments() {
+        let d = tmp();
+        let b1 = create_board(d.path(), "B1").unwrap();
+        let b2 = create_board(d.path(), "B2").unwrap();
+        let l1 = create_list(d.path(), &b1.id, "L1").unwrap();
+        let l2 = create_list(d.path(), &b2.id, "L2").unwrap();
+        let c = create_card(d.path(), &l1.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "f.txt", "text/plain", b"x").unwrap();
+
+        let from_dir = attachment_dir(d.path(), &b1.id, &c.id);
+        let to_dir = attachment_dir(d.path(), &b2.id, &c.id);
+        assert!(from_dir.join(&att.id).exists());
+
+        let moved = update_card(
+            d.path(), &c.id, None, None, None, Some(&l2.id), None, None, None, None,
+        )
+        .unwrap();
+
+        // Binary + sidecar followed the card to the new board; old dir gone.
+        assert!(!from_dir.exists());
+        assert!(to_dir.join(&att.id).exists());
+        assert!(to_dir.join(format!("{}.json", att.id)).exists());
+        assert_eq!(moved.attachments.len(), 1);
+        // Attachment is still fetchable after the move (resolves to new board).
+        let (meta, data) = crate::store::attachments::get_attachment_data(d.path(), &c.id, &att.id).unwrap();
+        assert_eq!(meta.filename, "f.txt");
+        assert_eq!(data, b"x");
     }
 
     #[test]

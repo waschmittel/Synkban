@@ -84,7 +84,10 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
                 card.archived = true;
                 card.archived_at = Some(now_timestamp());
                 fs::create_dir_all(&archive_dir)?;
-                write_json(&archive_dir.join(format!("{}.json", card.id)), &card)?;
+                crate::store::cards::write_card(
+                    &archive_dir.join(format!("{}.json", card.id)),
+                    &mut card,
+                )?;
                 orphaned_card_ids.push(card.id);
             }
         }

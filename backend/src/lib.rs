@@ -80,9 +80,29 @@ async fn serve_embedded(req: HttpRequest) -> HttpResponse {
     }
 }
 
+/// Run the attachment storage reconcile/GC sweep and log its result. Best-effort:
+/// a failure is logged but never blocks startup.
+fn reconcile_attachments(data_dir: &std::path::Path) {
+    match store::gc::reconcile(data_dir) {
+        Ok(actions) => {
+            let ops = store::drain_file_ops(data_dir);
+            if !ops.is_empty() {
+                println!(
+                    "[{}] RECONCILE attachments ({} action(s))\n{}",
+                    log_timestamp(),
+                    actions,
+                    ops.join("\n")
+                );
+            }
+        }
+        Err(e) => eprintln!("[{}] RECONCILE failed: {e}", log_timestamp()),
+    }
+}
+
 pub async fn run_server(host: &str, port: u16, data_dir: &str) -> std::io::Result<()> {
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir)?;
+    reconcile_attachments(&data_dir);
 
     let bind = format!("{host}:{port}");
     println!("Server running at http://{bind}");
@@ -114,6 +134,7 @@ pub async fn run_desktop_server(
 ) -> std::io::Result<()> {
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir)?;
+    reconcile_attachments(&data_dir);
     let token = token.to_string();
     let data_dir_display = data_dir.display().to_string();
 

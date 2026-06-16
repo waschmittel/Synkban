@@ -142,6 +142,9 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
             .into_iter()
             .filter(|c| !c.archived)
             .collect();
+        for c in &mut cards {
+            c.attachments = crate::store::attachments::load_attachments(data_dir, board_id, &c.id);
+        }
         cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
         lists_with_cards.push(ListWithCards {
             id: list.id,

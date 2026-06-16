@@ -6,6 +6,7 @@ pub mod attachments;
 pub mod boards;
 pub mod card_index;
 pub mod cards;
+pub mod gc;
 pub mod io;
 pub mod labels;
 pub mod lists;
