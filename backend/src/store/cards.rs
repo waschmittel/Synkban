@@ -70,6 +70,21 @@ pub(crate) fn write_card(path: &Path, card: &mut Card) -> Result<(), AppError> {
     res
 }
 
+/// Drops any `label_ids` that no longer reference a label on the card's board.
+/// Labels can be deleted while a card still references them (delete_label does
+/// not touch cards), leaving dangling IDs; this prunes them on the card's next
+/// save so the stored set stays consistent with the board's labels.
+fn prune_label_ids(data_dir: &Path, board_id: &str, card: &mut Card) {
+    if card.label_ids.is_empty() {
+        return;
+    }
+    if let Ok(bf) = crate::store::boards::read_board_file(data_dir, board_id) {
+        let valid: std::collections::HashSet<&str> =
+            bf.labels.iter().map(|l| l.id.as_str()).collect();
+        card.label_ids.retain(|id| valid.contains(id.as_str()));
+    }
+}
+
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -173,6 +188,7 @@ pub fn update_card(
         card.position = max_pos + 1.0;
         let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
         fs::create_dir_all(&new_dir)?;
+        prune_label_ids(data_dir, &target_board_id, &mut card);
         write_card(&new_dir.join(format!("{card_id}.json")), &mut card)?;
         track("deleted", &old_path);
         fs::remove_file(&old_path)?;
@@ -198,6 +214,7 @@ pub fn update_card(
             let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
             fs::create_dir_all(&new_dir)?;
             card.list_id = target_list_id.to_string();
+            prune_label_ids(data_dir, &target_board_id, &mut card);
             write_card(&new_dir.join(format!("{card_id}.json")), &mut card)?;
             track("deleted", &old_path);
             fs::remove_file(&old_path)?;
@@ -215,6 +232,7 @@ pub fn update_card(
         }
     }
 
+    prune_label_ids(data_dir, &source_board_id, &mut card);
     write_card(&old_path, &mut card)?;
     card.attachments = crate::store::attachments::load_attachments(data_dir, &source_board_id, card_id);
     Ok(card)
@@ -368,14 +386,17 @@ mod tests {
 
     #[test]
     fn update_card_label_ids() {
+        use crate::store::labels::create_label;
         let d = tmp();
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let ids = vec!["id1".into(), "id2".into()];
+        let l1 = create_label(d.path(), &b.id, "One").unwrap();
+        let l2 = create_label(d.path(), &b.id, "Two").unwrap();
+        let ids = vec![l1.id.clone(), l2.id.clone()];
         let updated =
             update_card(d.path(), &c.id, None, None, None, None, Some(&ids), None, None, None).unwrap();
-        assert_eq!(updated.label_ids, vec!["id1", "id2"]);
+        assert_eq!(updated.label_ids, vec![l1.id, l2.id]);
     }
 
     #[test]
@@ -572,6 +593,32 @@ mod tests {
         )
         .unwrap();
         assert!(cleared.checklist.is_empty());
+    }
+
+    #[test]
+    fn update_card_prunes_dead_label_ids_on_save() {
+        use crate::store::labels::{create_label, delete_label};
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let keep = create_label(d.path(), &b.id, "Keep").unwrap();
+        let gone = create_label(d.path(), &b.id, "Gone").unwrap();
+
+        update_card(
+            d.path(), &c.id, None, None, None, None,
+            Some(&[keep.id.clone(), gone.id.clone()]), None, None, None,
+        )
+        .unwrap();
+
+        // Delete one label out from under the card (leaves a dangling id).
+        delete_label(d.path(), &b.id, &gone.id).unwrap();
+
+        // Any subsequent save — even a title-only edit — prunes the dead id.
+        let updated =
+            update_card(d.path(), &c.id, Some("C2"), None, None, None, None, None, None, None)
+                .unwrap();
+        assert_eq!(updated.label_ids, vec![keep.id]);
     }
 
     #[test]

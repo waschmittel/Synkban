@@ -4,6 +4,7 @@ import { api } from "../api";
 import type { Board } from "../types";
 import ShortcutHelp from "../components/ShortcutHelp";
 import ArchivePanel from "../components/ArchivePanel";
+import WarningBanner from "../components/WarningBanner";
 import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 import { isTypingIn } from "../boardInput";
@@ -15,6 +16,9 @@ export default function Home() {
   const [archiveLoading, setArchiveLoading] = createSignal(false);
   const [showHelp, setShowHelp] = createSignal(false);
   const [showArchive, setShowArchive] = createSignal(false);
+  const [warnings, setWarnings] = createSignal<string[]>([]);
+  const refreshWarnings = () =>
+    api.getWarnings().then((r) => setWarnings(r.warnings)).catch(() => {});
   const confirm = createConfirm();
   const [pendingFocusBoardId, setPendingFocusBoardId] = createSignal<string | null>(null);
 
@@ -212,6 +216,7 @@ export default function Home() {
 
   onMount(() => {
     api.listArchivedBoards().then(boards => setArchivedBoards(boards));
+    refreshWarnings();
 
     // Reorder flush refetches when it drains; skipping the tick (without
     // consuming the mtime) lets the next poll pick the change up.
@@ -219,6 +224,7 @@ export default function Home() {
       shouldSkip: () => reorderInFlight || !!queuedReorderIds,
       onChange: async () => {
         refetch();
+        refreshWarnings();
         if (showArchive()) {
           setArchivedBoards(await api.listArchivedBoards());
         }
@@ -365,6 +371,7 @@ export default function Home() {
 
   return (
     <div class="home">
+      <WarningBanner warnings={warnings()} />
       <div class="home-header">
         <h2>Your Boards</h2>
         <button

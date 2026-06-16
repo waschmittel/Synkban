@@ -37,6 +37,7 @@ pub fn check_token_auth(cookie_value: Option<&str>, query_string: &str, token: &
 /// Registers all `/api/*` routes. Used by both web and desktop server configs and by integration tests.
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/api/changes", web::get().to(handlers::boards::check_changes))
+        .route("/api/warnings", web::get().to(handlers::boards::get_warnings))
         .route("/api/boards", web::get().to(handlers::boards::list_boards))
         .route("/api/boards", web::post().to(handlers::boards::create_board))
         .route("/api/boards/archive", web::get().to(handlers::boards::list_archived_boards))

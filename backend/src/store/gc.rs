@@ -50,7 +50,15 @@ fn migrate_board(data_dir: &Path, board_id: &str) -> Result<usize, AppError> {
     collect_json(&archived_cards_dir(data_dir, board_id), &mut card_files);
 
     for path in card_files {
-        let mut card = read_card(&path)?;
+        // A single corrupt card must not abort the whole startup sweep — skip
+        // it (with a warning) so migration/cleanup still runs for the rest.
+        let mut card = match read_card(&path) {
+            Ok(card) => card,
+            Err(e) => {
+                crate::store::io::warn_skip(data_dir, &path, "card", &e);
+                continue;
+            }
+        };
         if card.attachments.is_empty() {
             continue;
         }
@@ -307,6 +315,26 @@ mod tests {
 
         reconcile(d.path()).unwrap();
         assert!(recent.exists());
+    }
+
+    #[test]
+    fn reconcile_skips_corrupt_card_without_aborting_sweep() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        // A corrupt card sitting next to a real orphaned attachment dir.
+        fs::write(cards_dir(d.path(), &b.id, &l.id).join("broken.json"), b"{ nope").unwrap();
+        let att_dir = attachment_dir(d.path(), &b.id, &c.id);
+        fs::create_dir_all(&att_dir).unwrap();
+        let orphan = att_dir.join("44444444-4444-4444-4444-444444444444");
+        fs::write(&orphan, b"leftover").unwrap();
+        age(&orphan);
+
+        // Must not error despite the corrupt card, and still sweep the orphan.
+        let n = reconcile(d.path()).unwrap();
+        assert!(n >= 1);
+        assert!(!orphan.exists());
     }
 
     #[test]

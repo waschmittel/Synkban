@@ -122,7 +122,14 @@ pub fn reorder_boards(data_dir: &Path, ids: &[String]) -> Result<(), AppError> {
         if !board_json.exists() {
             continue;
         }
-        let mut bf: BoardFile = read_json(&board_json)?;
+        // Skip a corrupt board.json rather than failing the whole reorder.
+        let mut bf: BoardFile = match read_json(&board_json) {
+            Ok(bf) => bf,
+            Err(e) => {
+                crate::store::io::warn_skip(data_dir, &board_json, "board", &e);
+                continue;
+            }
+        };
         if bf.archived {
             continue;
         }
@@ -339,6 +346,18 @@ mod tests {
         assert_eq!(boards[0].position, 1.0);
         assert_eq!(boards[1].position, 2.0);
         assert_eq!(boards[2].position, 3.0);
+    }
+
+    #[test]
+    fn reorder_boards_skips_corrupt_board() {
+        let d = tmp();
+        let a = create_board(d.path(), "A").unwrap();
+        let b = create_board(d.path(), "B").unwrap();
+        // Corrupt B's board.json: reorder must still renumber A, not error out.
+        fs::write(board_dir(d.path(), &b.id).join("board.json"), b"{ broken").unwrap();
+        reorder_boards(d.path(), &[b.id.clone(), a.id.clone()]).unwrap();
+        let bf = read_board_file(d.path(), &a.id).unwrap();
+        assert_eq!(bf.position, 1.0);
     }
 
     #[test]

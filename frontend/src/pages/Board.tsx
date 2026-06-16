@@ -16,6 +16,7 @@ import CardDetail from "../components/CardDetail";
 import ShortcutHelp from "../components/ShortcutHelp";
 import LabelDrawer from "../components/LabelDrawer";
 import ArchivePanel from "../components/ArchivePanel";
+import WarningBanner from "../components/WarningBanner";
 import { renderTitle } from "../components/Card";
 import FilterBar from "../components/FilterBar";
 import BoardColorPicker from "../components/BoardColorPicker";
@@ -56,6 +57,9 @@ export default function BoardPage() {
   };
 
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
+  const [warnings, setWarnings] = createSignal<string[]>([]);
+  const refreshWarnings = () =>
+    api.getWarnings().then((r) => setWarnings(r.warnings)).catch(() => {});
   const [showHelp, setShowHelp] = createSignal(false);
   const [showColorPicker, setShowColorPicker] = createSignal(false);
 
@@ -86,6 +90,7 @@ export default function BoardPage() {
 
   onMount(() => {
     header.setIsOnBoard(true);
+    refreshWarnings();
 
     // Watch only this board's mtime so quiet boards don't trigger refetch when
     // another board changes. Falls back to the global mtime if the server
@@ -95,6 +100,7 @@ export default function BoardPage() {
       onChange: () => {
         focus.capturePending();
         refetch();
+        refreshWarnings();
       },
     });
 
@@ -577,6 +583,7 @@ export default function BoardPage() {
         }
       }}
     >
+      <WarningBanner warnings={warnings()} />
       <Show
         when={!board.error}
         fallback={

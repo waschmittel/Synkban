@@ -9,10 +9,39 @@ use crate::store::paths::boards_dir;
 
 thread_local! {
     static FILE_OPS: RefCell<Vec<(&'static str, PathBuf)>> = RefCell::new(Vec::new());
+    static WARNINGS: RefCell<Vec<String>> = RefCell::new(Vec::new());
 }
 
 pub(crate) fn track(op: &'static str, path: &Path) {
     FILE_OPS.with(|ops| ops.borrow_mut().push((op, path.to_path_buf())));
+}
+
+/// Record a non-fatal data-integrity warning (e.g. a corrupt file the walker
+/// skipped) for the current request. Surfaced to the UI via `collect_warnings`.
+pub(crate) fn warn(message: String) {
+    WARNINGS.with(|w| w.borrow_mut().push(message));
+}
+
+/// Drain accumulated warnings for the current thread.
+pub(crate) fn drain_warnings() -> Vec<String> {
+    WARNINGS.with(|w| w.borrow_mut().drain(..).collect())
+}
+
+/// Record a "skipped a corrupt file" warning with a path relative to the data
+/// dir and concrete remediation steps. Skipped entities stay on disk; only the
+/// UI hides them until the file is repaired. Shared by every walker/scan that
+/// tolerates a single unreadable file instead of failing the whole operation.
+pub(crate) fn warn_skip(data_dir: &Path, path: &Path, kind: &str, err: &AppError) {
+    let rel = path.strip_prefix(data_dir).unwrap_or(path);
+    warn(format!(
+        "Skipped an unreadable {kind} file ({}): {err}. \
+         The file is likely corrupted or only partially synced. \
+         To fix: restore it from a backup or your sync source (Syncthing/git/rsync), \
+         confirm it contains valid JSON, or delete the file to dismiss this warning \
+         (deleting discards that {kind}'s data). The data is still on disk and is only \
+         hidden until the file is readable.",
+        rel.display()
+    ));
 }
 
 pub fn drain_file_ops(data_dir: &Path) -> Vec<String> {

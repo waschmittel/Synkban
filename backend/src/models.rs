@@ -114,6 +114,13 @@ pub struct ChangeCheck {
     pub boards: std::collections::HashMap<String, u64>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct WarningList {
+    /// Human-readable data-integrity warnings (e.g. corrupt files the walker
+    /// skipped). Empty when everything parsed cleanly.
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateBoard {
     pub title: String,

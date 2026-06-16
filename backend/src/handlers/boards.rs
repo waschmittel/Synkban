@@ -11,6 +11,11 @@ pub async fn check_changes(data_dir: web::Data<PathBuf>) -> Result<HttpResponse,
     Ok(HttpResponse::Ok().json(crate::models::ChangeCheck { mtime, boards }))
 }
 
+pub async fn get_warnings(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
+    let warnings = store::collect_warnings(&data_dir);
+    Ok(HttpResponse::Ok().json(WarningList { warnings }))
+}
+
 pub async fn list_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
     let boards = store::list_boards(&data_dir)?;
     Ok(HttpResponse::Ok().json(boards))

@@ -35,8 +35,9 @@ pub(crate) fn load_attachments(data_dir: &Path, board_id: &str, card_id: &str) -
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json") {
-                if let Ok(att) = read_json::<Attachment>(&path) {
-                    out.push(att);
+                match read_json::<Attachment>(&path) {
+                    Ok(att) => out.push(att),
+                    Err(e) => crate::store::io::warn_skip(data_dir, &path, "attachment", &e),
                 }
             }
         }
@@ -215,6 +216,29 @@ mod tests {
         )
         .unwrap();
         assert!(card.attachments.is_empty());
+    }
+
+    #[test]
+    fn load_attachments_skips_and_warns_on_corrupt_sidecar() {
+        use crate::store::io::drain_warnings;
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let good = create_attachment(d.path(), &c.id, "ok.txt", "text/plain", b"hi").unwrap();
+
+        let _ = drain_warnings();
+        let bad = attachment_dir(d.path(), &b.id, &c.id).join("broken.json");
+        fs::write(&bad, b"{ not json").unwrap();
+
+        let loaded = load_attachments(d.path(), &b.id, &c.id);
+        assert_eq!(loaded.len(), 1, "good sidecar still loads");
+        assert_eq!(loaded[0].id, good.id);
+
+        let warnings = drain_warnings();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("broken.json"));
+        assert!(warnings[0].contains("attachment"));
     }
 
     #[test]

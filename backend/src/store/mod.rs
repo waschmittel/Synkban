@@ -20,5 +20,6 @@ pub use boards::{
 };
 pub use cards::{create_card, delete_card, get_archived_cards, update_card};
 pub use io::{audit_op, drain_file_ops, get_latest_mtime, get_per_board_mtimes};
+pub use walk::collect_warnings;
 pub use labels::{create_label, delete_label, delete_label_by_id, update_label, update_label_by_id};
 pub use lists::{create_list, delete_list, update_list};

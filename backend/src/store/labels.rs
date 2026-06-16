@@ -79,7 +79,15 @@ fn find_board_for_label(data_dir: &Path, label_id: &str) -> Result<String, AppEr
                 let board_id = entry.file_name().to_string_lossy().to_string();
                 let board_json = board_dir(data_dir, &board_id).join("board.json");
                 if board_json.exists() {
-                    let bf: BoardFile = read_json(&board_json)?;
+                    // Skip a corrupt board.json instead of failing the whole
+                    // label op — the label's real owner may be another board.
+                    let bf: BoardFile = match read_json(&board_json) {
+                        Ok(bf) => bf,
+                        Err(e) => {
+                            crate::store::io::warn_skip(data_dir, &board_json, "board", &e);
+                            continue;
+                        }
+                    };
                     if bf.labels.iter().any(|l| l.id == label_id) {
                         return Ok(board_id);
                     }
@@ -187,6 +195,20 @@ mod tests {
         let _b1 = create_board(d.path(), "Board 1").unwrap();
         let b2 = create_board(d.path(), "Board 2").unwrap();
         let label = create_label(d.path(), &b2.id, "Original").unwrap();
+        let updated = update_label_by_id(d.path(), &label.id, "Renamed").unwrap();
+        assert_eq!(updated.name, "Renamed");
+    }
+
+    #[test]
+    fn find_board_for_label_skips_corrupt_board() {
+        use std::fs;
+        use crate::store::paths::board_dir;
+        let d = tmp();
+        let corrupt = create_board(d.path(), "Corrupt").unwrap();
+        let b2 = create_board(d.path(), "Good").unwrap();
+        let label = create_label(d.path(), &b2.id, "Bug").unwrap();
+        // A corrupt board.json must not stop us finding the label's real owner.
+        fs::write(board_dir(d.path(), &corrupt.id).join("board.json"), b"{ broken").unwrap();
         let updated = update_label_by_id(d.path(), &label.id, "Renamed").unwrap();
         assert_eq!(updated.name, "Renamed");
     }

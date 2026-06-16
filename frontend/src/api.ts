@@ -18,6 +18,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   checkChanges: () => request<{ mtime: number; boards: Record<string, number> }>("/changes"),
 
+  getWarnings: () => request<{ warnings: string[] }>("/warnings"),
+
   listBoards: () => request<Board[]>("/boards"),
 
   createBoard: (title: string) =>

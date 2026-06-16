@@ -1282,6 +1282,56 @@ html.electron:not(.electron--mac) .app-header-actions {
   background: #026aa7;
 }
 
+.warning-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px;
+  padding: 12px 14px;
+  background: #fffae6;
+  border: 1px solid #ffd666;
+  border-left: 4px solid #ff9f1a;
+  border-radius: 6px;
+  color: #5c3c00;
+  font-size: 13px;
+}
+
+.warning-banner-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #ff9f1a;
+}
+
+.warning-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.warning-banner-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.45;
+}
+
+.warning-banner-list li {
+  word-break: break-word;
+}
+
+.warning-banner-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #5c3c00;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.warning-banner-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
 /* ═══ Scrollbar ═══ */
 .cards-container::-webkit-scrollbar {
   width: 8px;

@@ -35,11 +35,17 @@ pub(crate) fn board_ids(data_dir: &Path) -> Result<Vec<String>, AppError> {
     Ok(ids)
 }
 
-/// All `board.json` records (archived and active alike).
+/// All `board.json` records (archived and active alike). A board whose
+/// `board.json` cannot be parsed is skipped (with a warning) rather than
+/// failing the whole scan — one corrupt file must not hide every board.
 pub(crate) fn board_files(data_dir: &Path) -> Result<Vec<BoardFile>, AppError> {
     let mut boards = Vec::new();
     for id in board_ids(data_dir)? {
-        boards.push(read_json(&board_dir(data_dir, &id).join("board.json"))?);
+        let path = board_dir(data_dir, &id).join("board.json");
+        match read_json(&path) {
+            Ok(bf) => boards.push(bf),
+            Err(e) => crate::store::io::warn_skip(data_dir, &path, "board", &e),
+        }
     }
     Ok(boards)
 }
@@ -60,37 +66,102 @@ pub(crate) fn list_ids(data_dir: &Path, board_id: &str) -> Result<Vec<String>, A
     Ok(ids)
 }
 
-/// All `list.json` records of a board.
+/// All `list.json` records of a board. A list whose `list.json` cannot be
+/// parsed is skipped (with a warning) so one corrupt list doesn't take the
+/// whole board down with it.
 pub(crate) fn lists(data_dir: &Path, board_id: &str) -> Result<Vec<List>, AppError> {
     let mut out = Vec::new();
     for id in list_ids(data_dir, board_id)? {
-        out.push(read_json(&list_dir(data_dir, board_id, &id).join("list.json"))?);
+        let path = list_dir(data_dir, board_id, &id).join("list.json");
+        match read_json(&path) {
+            Ok(list) => out.push(list),
+            Err(e) => crate::store::io::warn_skip(data_dir, &path, "list", &e),
+        }
     }
     Ok(out)
 }
 
 /// All cards in a list (archived-in-place ones included — callers filter).
 pub(crate) fn cards(data_dir: &Path, board_id: &str, list_id: &str) -> Result<Vec<Card>, AppError> {
-    read_cards_in(&cards_dir(data_dir, board_id, list_id))
+    read_cards_in(data_dir, &cards_dir(data_dir, board_id, list_id))
 }
 
 /// All orphaned cards of a board (their list was deleted).
 pub(crate) fn orphaned_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, AppError> {
-    read_cards_in(&archived_cards_dir(data_dir, board_id))
+    read_cards_in(data_dir, &archived_cards_dir(data_dir, board_id))
 }
 
-fn read_cards_in(dir: &Path) -> Result<Vec<Card>, AppError> {
+/// Reads every `*.json` card in `dir`, skipping (with a warning) any single
+/// card file that fails to parse so the rest of the list still loads.
+fn read_cards_in(data_dir: &Path, dir: &Path) -> Result<Vec<Card>, AppError> {
     let mut out = Vec::new();
     if dir.exists() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json") {
-                out.push(read_card(&path)?);
+                match read_card(&path) {
+                    Ok(card) => out.push(card),
+                    Err(e) => crate::store::io::warn_skip(data_dir, &path, "card", &e),
+                }
             }
         }
     }
     Ok(out)
+}
+
+/// Walks the entire `boards/` tree attempting to parse every board, list, and
+/// card, and returns a deduplicated list of warnings for any file that could
+/// not be read. Drives the `GET /api/warnings` health endpoint so the UI can
+/// surface silently-skipped (corrupt/partially-synced) files to the user.
+pub fn collect_warnings(data_dir: &Path) -> Vec<String> {
+    // Clear any warnings left over from earlier work on this thread so the
+    // health check reports only what this scan finds.
+    let _ = crate::store::io::drain_warnings();
+    let _ = board_files(data_dir);
+    if let Ok(board_ids) = board_ids(data_dir) {
+        for bid in &board_ids {
+            let _ = lists(data_dir, bid);
+            if let Ok(list_ids) = list_ids(data_dir, bid) {
+                for lid in &list_ids {
+                    let _ = cards(data_dir, bid, lid);
+                }
+            }
+            let _ = orphaned_cards(data_dir, bid);
+            scan_attachment_sidecars(data_dir, bid);
+        }
+    }
+    let mut warnings = crate::store::io::drain_warnings();
+    warnings.sort();
+    warnings.dedup();
+    warnings
+}
+
+/// Try-parse every attachment sidecar under a board, warning on any that fail.
+/// Sidecars are read lazily during card responses (`attachments::load_attachments`),
+/// so the health check walks them explicitly to surface a corrupt one even when
+/// no card is being rendered.
+fn scan_attachment_sidecars(data_dir: &Path, board_id: &str) {
+    let root = board_dir(data_dir, board_id).join("attachments");
+    let Ok(card_dirs) = fs::read_dir(&root) else {
+        return;
+    };
+    for cd in card_dirs.flatten() {
+        if !cd.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let Ok(files) = fs::read_dir(cd.path()) else {
+            continue;
+        };
+        for f in files.flatten() {
+            let path = f.path();
+            if path.extension().is_some_and(|e| e == "json") {
+                if let Err(e) = read_json::<crate::models::Attachment>(&path) {
+                    crate::store::io::warn_skip(data_dir, &path, "attachment", &e);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -147,5 +218,66 @@ mod tests {
         let found = cards(d.path(), &b.id, &l.id).unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].id, c.id);
+    }
+
+    #[test]
+    fn corrupt_board_json_is_skipped_not_fatal() {
+        let d = tmp();
+        let good = create_board(d.path(), "Good").unwrap();
+        // A second board dir with a marker file present but unparseable.
+        let bad = boards_dir(d.path()).join("corrupt");
+        fs::create_dir_all(&bad).unwrap();
+        fs::write(bad.join("board.json"), b"{ not valid json").unwrap();
+
+        let boards = board_files(d.path()).unwrap();
+        assert_eq!(boards.len(), 1, "good board still loads");
+        assert_eq!(boards[0].id, good.id);
+    }
+
+    #[test]
+    fn corrupt_card_is_skipped_not_fatal() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let good = create_card(d.path(), &l.id, "Good").unwrap();
+        fs::write(cards_dir(d.path(), &b.id, &l.id).join("broken.json"), b"{ oops").unwrap();
+
+        let found = cards(d.path(), &b.id, &l.id).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, good.id);
+    }
+
+    #[test]
+    fn collect_warnings_reports_corrupt_files_and_is_clean_otherwise() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        create_card(d.path(), &l.id, "C").unwrap();
+        assert!(collect_warnings(d.path()).is_empty(), "healthy tree has no warnings");
+
+        fs::write(cards_dir(d.path(), &b.id, &l.id).join("broken.json"), b"nope").unwrap();
+        let warnings = collect_warnings(d.path());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("broken.json"));
+        assert!(warnings[0].contains("card"));
+        // Re-running does not accumulate duplicates across calls.
+        assert_eq!(collect_warnings(d.path()).len(), 1);
+    }
+
+    #[test]
+    fn collect_warnings_includes_corrupt_attachment_sidecar() {
+        use crate::store::attachments::create_attachment;
+        use crate::store::paths::attachment_dir;
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        create_attachment(d.path(), &c.id, "ok.txt", "text/plain", b"hi").unwrap();
+        assert!(collect_warnings(d.path()).is_empty());
+
+        fs::write(attachment_dir(d.path(), &b.id, &c.id).join("broken.json"), b"x").unwrap();
+        let warnings = collect_warnings(d.path());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("attachment"));
     }
 }

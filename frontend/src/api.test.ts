@@ -123,6 +123,13 @@ describe("board operations", () => {
     expect(fn).toHaveBeenCalledWith("/api/changes", expect.anything());
   });
 
+  it("getWarnings calls correct endpoint", async () => {
+    const fn = mockFetch({ json: () => Promise.resolve({ warnings: ["bad card"] }) });
+    const result = await api.getWarnings();
+    expect(result).toEqual({ warnings: ["bad card"] });
+    expect(fn).toHaveBeenCalledWith("/api/warnings", expect.anything());
+  });
+
   it("getArchivedCards uses board-scoped path", async () => {
     const fn = mockFetch({ json: () => Promise.resolve([]) });
     await api.getArchivedCards("board-1");
