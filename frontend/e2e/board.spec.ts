@@ -178,6 +178,39 @@ test("edit card title in detail modal and save", async ({ page, request }) => {
   await expect(page.locator(".card", { hasText: "New title" })).toBeVisible();
 });
 
+test("dirtiness reflects serialized state: reverting an edit clears it", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Dirty Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Original" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Original" }).click();
+
+  const titleInput = page.locator(".modal-title-input");
+  await expect(titleInput).toBeVisible();
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Editing marks dirty.
+  await titleInput.fill("Changed");
+  await expect(page.locator(".unsaved-indicator")).toBeVisible();
+
+  // Reverting back to the persisted value clears dirty (no boolean flag).
+  await titleInput.fill("Original");
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Closing now skips the unsaved-changes guard entirely.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".unsaved-dialog")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+});
+
 test("archive card via keyboard and restore it from archive modal", async ({
   page,
   request,
