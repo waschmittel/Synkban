@@ -1,10 +1,13 @@
 # Synkban
 
-A local-first, syncable kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk. Builds into a single self-contained binary with the frontend embedded at compile time.
+A **local-first, keyboard-driven, syncable** (via any third party file sync) kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk.
 
 ![demo](demo.gif)
 
-Regenerate the demo with `./record-demo.sh` (requires `ffmpeg` and a built release binary).
+Can be run in two ways:
+
+* Standalone Electron app
+* Web Server for deployment behind an authenticating proxy
 
 ## Features
 
