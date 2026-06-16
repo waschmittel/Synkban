@@ -265,22 +265,23 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .board-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
 }
 
 /* Board cards on home */
 .board-card {
   background: linear-gradient(135deg, #0079bf, #0067a3);
-  border-radius: var(--radius-lg);
-  padding: 18px 18px 16px;
-  min-height: 112px;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  min-height: 0;
   cursor: pointer;
   transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   box-shadow: var(--shadow-md);
   text-decoration: none;
   overflow: hidden;
@@ -351,14 +352,14 @@ html.electron:not(.electron--mac) .app-header-actions {
 .add-board {
   background: rgba(255, 255, 255, 0.12);
   border: 2px dashed rgba(255, 255, 255, 0.35);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   text-align: left;
-  padding: 18px;
-  min-height: 112px;
+  padding: 12px 16px;
+  min-height: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -376,6 +377,24 @@ html.electron:not(.electron--mac) .app-header-actions {
 .add-board:focus {
   outline: 3px solid rgba(255, 255, 255, 0.85);
   outline-offset: 3px;
+}
+
+.board-card.board-dragging {
+  opacity: 0.4;
+}
+
+/* Horizontal insertion bar floating in the gap between list rows (centred on
+   its `top` via translateY(-50%)). White core + dark ring so it stays visible
+   whatever colour the boards are. */
+.board-drop-line {
+  position: absolute;
+  height: 4px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 5;
 }
 
 .add-board-form {

@@ -1,4 +1,4 @@
-import { createSignal, createResource, createEffect, untrack, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createResource, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
 import { api } from "../api";
 import type { Board } from "../types";
@@ -18,14 +18,18 @@ export default function Home() {
   const confirm = createConfirm();
   const [pendingFocusBoardId, setPendingFocusBoardId] = createSignal<string | null>(null);
 
-  // Restore focus to a reordered board after the resource re-renders.
+  // Restore focus to a reordered board after the resource re-renders. The
+  // optimistic mutate() AND the later refetch() each recreate the <For> DOM
+  // nodes, so re-focus on every boards() change while a reorder is pending;
+  // only clear the pending id once the reorder fully settles (otherwise the
+  // refetch would land focus on a recreated node with no id left to target).
   createEffect(() => {
     boards();
-    const id = untrack(pendingFocusBoardId);
+    const id = pendingFocusBoardId();
     if (!id) return;
-    setPendingFocusBoardId(null);
     requestAnimationFrame(() => {
       (document.querySelector(`[data-board-id="${id}"]`) as HTMLElement | null)?.focus();
+      if (!reorderInFlight && !queuedReorderIds) setPendingFocusBoardId(null);
     });
   });
 
@@ -84,6 +88,116 @@ export default function Home() {
     queuedReorderIds = reordered.map((b) => b.id);
     flushReorder();
     return true;
+  };
+
+  // --- Drag & drop reordering (native HTML5 DnD) ---
+  // Module-scoped (not a signal) so dragover/drop on the grid can read it
+  // synchronously without reactive churn. The grid only acts on board drags.
+  let draggingBoardId: string | null = null;
+  // Floating insertion bar, positioned in the grid gap (not glued to a card
+  // edge). Coords are relative to the `.board-grid` (which is position:relative).
+  const [dropLine, setDropLine] = createSignal<
+    { left: number; top: number; width: number } | null
+  >(null);
+  const GAP_HALF = 5; // half of the 10px list gap
+
+  const clearDropMarkers = () => {
+    setDropLine(null);
+    document
+      .querySelectorAll(".board-drop-before, .board-drop-after")
+      .forEach((el) => el.classList.remove("board-drop-before", "board-drop-after"));
+  };
+
+  // Real board cards in DOM order, excluding the one being dragged and the
+  // "add board" tile.
+  const boardCardsInOrder = () =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".board-card[data-board-id]:not(.board-dragging)"
+      )
+    );
+
+  // Insertion index for the vertical list: insert before the first card whose
+  // vertical midpoint the cursor is above.
+  const dropIndexAt = (cards: HTMLElement[], y: number) => {
+    for (let i = 0; i < cards.length; i++) {
+      const r = cards[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return i;
+    }
+    return cards.length;
+  };
+
+  const handleBoardDragStart = (e: DragEvent, boardId: string) => {
+    draggingBoardId = boardId;
+    e.dataTransfer!.setData("application/board-id", boardId);
+    e.dataTransfer!.effectAllowed = "move";
+    const el = e.currentTarget as HTMLElement;
+    requestAnimationFrame(() => el.classList.add("board-dragging"));
+  };
+
+  const handleBoardDragEnd = (e: DragEvent) => {
+    (e.currentTarget as HTMLElement).classList.remove("board-dragging");
+    clearDropMarkers();
+    draggingBoardId = null;
+  };
+
+  const handleGridDragOver = (e: DragEvent) => {
+    if (!draggingBoardId) return;
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = "move";
+    const cards = boardCardsInOrder();
+    const idx = dropIndexAt(cards, e.clientY);
+    clearDropMarkers();
+    const gridRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (idx < cards.length) {
+      const target = cards[idx];
+      target.classList.add("board-drop-before");
+      const r = target.getBoundingClientRect();
+      setDropLine({
+        left: r.left - gridRect.left,
+        top: r.top - gridRect.top - GAP_HALF,
+        width: r.width,
+      });
+    } else {
+      const last = cards[cards.length - 1];
+      if (!last) return;
+      last.classList.add("board-drop-after");
+      const r = last.getBoundingClientRect();
+      setDropLine({
+        left: r.left - gridRect.left,
+        top: r.bottom - gridRect.top + GAP_HALF,
+        width: r.width,
+      });
+    }
+  };
+
+  const handleGridDrop = (e: DragEvent) => {
+    if (!draggingBoardId) return;
+    e.preventDefault();
+    const cards = boardCardsInOrder();
+    const idx = dropIndexAt(cards, e.clientY);
+    const beforeId = idx < cards.length ? cards[idx].getAttribute("data-board-id") : null;
+    reorderBoardByDrop(draggingBoardId, beforeId);
+    clearDropMarkers();
+    draggingBoardId = null;
+  };
+
+  // Reorder the data array by inserting `boardId` before `beforeId` (or at the
+  // end when null). Shares the optimistic mutate + serialized PUT queue with
+  // the keyboard path so rapid drag/key mixes never race the backend.
+  const reorderBoardByDrop = (boardId: string, beforeId: string | null) => {
+    const list = boards();
+    if (!list) return;
+    const moved = list.find((b) => b.id === boardId);
+    if (!moved) return;
+    const reordered = list.filter((b) => b.id !== boardId);
+    const at = beforeId ? reordered.findIndex((b) => b.id === beforeId) : -1;
+    reordered.splice(at < 0 ? reordered.length : at, 0, moved);
+    if (reordered.every((b, i) => b.id === list[i].id)) return;
+    setPendingFocusBoardId(boardId);
+    mutate(reordered);
+    queuedReorderIds = reordered.map((b) => b.id);
+    flushReorder();
   };
 
   const openArchive = async () => {
@@ -287,13 +401,28 @@ export default function Home() {
           </div>
         }
       >
-        <div class="board-grid">
+        <div class="board-grid" onDragOver={handleGridDragOver} onDrop={handleGridDrop}>
+          <Show when={dropLine()}>
+            {(line) => (
+              <div
+                class="board-drop-line"
+                style={{
+                  left: `${line().left}px`,
+                  top: `${line().top}px`,
+                  width: `${line().width}px`,
+                }}
+              />
+            )}
+          </Show>
           <For each={boards()}>
             {(board) => (
               <A
                 href={`/board/${board.id}`}
                 class="board-card"
                 data-board-id={board.id}
+                draggable={true}
+                onDragStart={(e) => handleBoardDragStart(e, board.id)}
+                onDragEnd={handleBoardDragEnd}
                 style={board.color ? { "background": board.color } : {}}
               >
                 <span class="board-card-link">{board.title}</span>
