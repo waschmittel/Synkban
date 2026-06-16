@@ -116,6 +116,44 @@ test("add list and card through the UI, persists after reload", async ({
   ).toBeVisible();
 });
 
+test("add-card draft survives cancel, clears after create, is per-list", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Draft Board" } })
+  ).json();
+  const listA = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "A" } })
+  ).json();
+  await request.post(`/api/boards/${board.id}/lists`, { data: { title: "B" } });
+
+  await page.goto(`/board/${board.id}`);
+  const la = page.locator(`.list[data-list-id="${listA.id}"]`);
+  const lb = page.locator(".list", { hasText: "B" });
+
+  // Type a draft in list A and cancel via Escape.
+  await la.locator(".add-trigger").click();
+  await la.locator(".add-form input").fill("Half typed");
+  await la.locator(".add-form input").press("Escape");
+  await expect(la.locator(".add-form")).toHaveCount(0);
+
+  // Reopening list A restores the draft.
+  await la.locator(".add-trigger").click();
+  await expect(la.locator(".add-form input")).toHaveValue("Half typed");
+
+  // List B is unaffected (per-list draft, not global).
+  await lb.locator(".add-trigger").click();
+  await expect(lb.locator(".add-form input")).toHaveValue("");
+  await lb.locator(".add-form input").press("Escape");
+
+  // Creating the card from list A clears its draft.
+  await la.locator(".add-form input").press("Enter");
+  await expect(la.locator(".card", { hasText: "Half typed" })).toBeVisible();
+  await la.locator(".add-trigger").click();
+  await expect(la.locator(".add-form input")).toHaveValue("");
+});
+
 test("edit card title in detail modal and save", async ({ page, request }) => {
   const board = await (
     await request.post("/api/boards", { data: { title: "Edit Board" } })

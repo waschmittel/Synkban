@@ -4,15 +4,30 @@ interface Props {
   placeholder: string;
   buttonText: string;
   onAdd: (value: string) => void;
+  draftKey?: string;
 }
 
-export default function AddForm(props: Props) {
-  const [active, setActive] = createSignal(false);
-  const [value, setValue] = createSignal("");
+const drafts = new Map<string, string>();
 
+export default function AddForm(props: Props) {
+  const readDraft = () => (props.draftKey ? drafts.get(props.draftKey) ?? "" : "");
+  const writeDraft = (v: string) => {
+    if (!props.draftKey) return;
+    if (v) drafts.set(props.draftKey, v);
+    else drafts.delete(props.draftKey);
+  };
+
+  const [active, setActive] = createSignal(false);
+  const [value, setValue] = createSignal(readDraft());
+
+  const updateValue = (v: string) => {
+    setValue(v);
+    writeDraft(v);
+  };
+
+  // Cancel keeps the draft so reopening the form restores the text.
   const close = () => {
     setActive(false);
-    setValue("");
   };
 
   const handleSubmit = (e: Event) => {
@@ -20,7 +35,7 @@ export default function AddForm(props: Props) {
     const v = value().trim();
     if (!v) return;
     props.onAdd(v);
-    setValue("");
+    updateValue("");
     setActive(false);
   };
 
@@ -36,7 +51,7 @@ export default function AddForm(props: Props) {
     <Show
       when={active()}
       fallback={
-        <button class="add-trigger" onClick={() => setActive(true)}>
+        <button class="add-trigger" onClick={() => { setValue(readDraft()); setActive(true); }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
@@ -51,7 +66,7 @@ export default function AddForm(props: Props) {
           type="text"
           placeholder={props.placeholder}
           value={value()}
-          onInput={(e) => setValue(e.currentTarget.value)}
+          onInput={(e) => updateValue(e.currentTarget.value)}
         />
         <div class="add-form-actions">
           <button type="submit" class="btn btn-primary">

@@ -172,6 +172,7 @@ export default function List(props: Props) {
       <AddForm
         placeholder="Card title..."
         buttonText="Add card"
+        draftKey={`card:${props.list.id}`}
         onAdd={(title) => props.onAddCard(props.list.id, title)}
       />
     </div>
