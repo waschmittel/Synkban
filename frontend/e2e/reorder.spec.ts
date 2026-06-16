@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { touchDrag } from "./touchHelpers";
 
 // The e2e backend is shared across spec files running in parallel, so other
 // boards may exist. Scope every assertion to the ids this test created by
@@ -116,4 +117,27 @@ test("drag and drop reorders boards and persists", async ({ page, request }) => 
   await expect.poll(() => persistedOrder(request, [A, B, C])).toEqual([C, A, B]);
   await page.reload();
   await expect.poll(() => relativeOrder(page, [A, B, C])).toEqual([C, A, B]);
+});
+
+// Touch reorder of boards lives here (not touch.spec.ts) so it runs serially with
+// the mouse board-reorder tests above: PUT /api/boards/order renumbers ALL boards,
+// so two board reorders racing on the shared backend would clobber each other.
+test.describe("touch", () => {
+  test.use({ hasTouch: true, viewport: { width: 1400, height: 900 } });
+
+  test("touch drag reorders boards and persists", async ({ page, request }) => {
+    const ts = Date.now();
+    const [A, B, C] = await makeBoards(request, [`tdnd-A-${ts}`, `tdnd-B-${ts}`, `tdnd-C-${ts}`]);
+    await page.goto("/");
+    await expect.poll(() => relativeOrder(page, [A, B, C])).toEqual([A, B, C]);
+
+    // Long-press C, drag onto the upper part of A (fy < row midpoint 0.5 → insert
+    // before A) → [C, A, B]. touchDrag keeps the target mid-viewport.
+    await touchDrag(page, `.board-card[data-board-id="${C}"]`, `.board-card[data-board-id="${A}"]`, 0.5, 0.25);
+
+    await expect.poll(() => relativeOrder(page, [A, B, C])).toEqual([C, A, B]);
+    await expect.poll(() => persistedOrder(request, [A, B, C])).toEqual([C, A, B]);
+    await page.reload();
+    await expect.poll(() => relativeOrder(page, [A, B, C])).toEqual([C, A, B]);
+  });
 });

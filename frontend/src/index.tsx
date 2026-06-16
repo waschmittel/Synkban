@@ -3,6 +3,7 @@ import { Router, Route } from "@solidjs/router";
 import App from "./App";
 import Home from "./pages/Home";
 import BoardPage from "./pages/Board";
+import { installTouchDrag } from "./touchDrag";
 import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
 import "./styles/app.css";
@@ -17,6 +18,9 @@ if (typeof navigator !== "undefined" && /Electron\//.test(navigator.userAgent)) 
     document.documentElement.classList.add("electron--mac");
   }
 }
+
+// Bridge touch gestures to the native HTML5 drag events the reorder handlers use.
+installTouchDrag();
 
 render(
   () => (

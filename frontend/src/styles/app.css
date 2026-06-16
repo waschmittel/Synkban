@@ -1013,6 +1013,20 @@ html.electron:not(.electron--mac) .app-header-actions {
   display: none;
 }
 
+/* Ghost element that follows the finger during a touch drag (see touchDrag.ts).
+   pointer-events:none so elementFromPoint sees the drop target underneath. */
+.touch-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.85;
+  box-shadow: var(--shadow-lg);
+  transform-origin: top left;
+  will-change: transform;
+}
+
 .drop-placeholder {
   height: 4px;
   background: var(--color-primary);
