@@ -179,7 +179,7 @@ test("immediate reopen after Ctrl+S shows the saved description", async ({ page,
   }
 });
 
-test("immediate reopen after close shows checklist items saved inside the modal", async ({
+test("immediate reopen after save shows checklist items persisted via Save", async ({
   page,
   request,
 }) => {
@@ -191,8 +191,9 @@ test("immediate reopen after close shows checklist items saved inside the modal"
   await page.keyboard.press("Enter");
   await expect(page.locator(".checklist-item")).toHaveCount(1);
 
-  // Close (checklist saves immediately, not via Save) and reopen at once.
-  await page.locator(".modal-footer .btn-cancel").click();
+  // Checklist persists as card content via Save. Save (closes) and reopen at
+  // once — the refetch must settle before unmount so the reopen isn't stale.
+  await page.keyboard.press("Control+s");
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await page.locator(".card", { hasText: "Task card" }).click();
   await expect(page.locator(".checklist-item", { hasText: "step one" })).toHaveCount(1);

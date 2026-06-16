@@ -9,7 +9,7 @@ import {
 } from "solid-js";
 import { useParams, useNavigate, A } from "@solidjs/router";
 import { api } from "../api";
-import type { Card as CardType } from "../types";
+import type { Card as CardType, ChecklistItem } from "../types";
 import List from "../components/List";
 import AddForm from "../components/AddForm";
 import CardDetail from "../components/CardDetail";
@@ -423,9 +423,10 @@ export default function BoardPage() {
     title: string,
     description: string,
     labelIds: string[],
-    dueDate: string | null
+    dueDate: string | null,
+    checklist: ChecklistItem[]
   ) => {
-    await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate });
+    await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate, checklist });
     try { await refetch(); } catch { /* board error surfaces via resource */ }
     setSelectedCard(null);
     focus.preserve(id);
@@ -433,9 +434,9 @@ export default function BoardPage() {
 
   const handleModalClose = async () => {
     const cardId = focus.lastFocused();
-    // Checklist/attachment edits save immediately inside the modal; refetch so
-    // card badges (and an immediate re-open) reflect them without waiting for
-    // the next poll.
+    // Attachment edits save immediately inside the modal; refetch so card
+    // badges (and an immediate re-open) reflect them without waiting for the
+    // next poll. (Checklist edits persist via Save, not on close.)
     try { await refetch(); } catch { /* board error surfaces via resource */ }
     setSelectedCard(null);
     if (cardId) focus.preserve(cardId);

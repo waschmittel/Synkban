@@ -91,6 +91,7 @@ export const api = {
       label_ids?: string[];
       archived?: boolean;
       due_date?: string | null;
+      checklist?: ChecklistItem[];
     }
   ) =>
     request<Card>(`/cards/${id}`, {
@@ -112,31 +113,6 @@ export const api = {
 
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
-
-  addChecklistItem: (cardId: string, text: string) =>
-    request<ChecklistItem>(`/cards/${cardId}/checklist`, {
-      method: "POST",
-      body: JSON.stringify({ text }),
-    }),
-
-  updateChecklistItem: (
-    cardId: string,
-    itemId: string,
-    data: { text?: string; done?: boolean; pos?: number }
-  ) =>
-    request<ChecklistItem>(`/cards/${cardId}/checklist/${itemId}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  deleteChecklistItem: (cardId: string, itemId: string) =>
-    request<void>(`/cards/${cardId}/checklist/${itemId}`, { method: "DELETE" }),
-
-  setChecklistAll: (cardId: string, done: boolean) =>
-    request<Card>(`/cards/${cardId}/checklist`, {
-      method: "PUT",
-      body: JSON.stringify({ done }),
-    }),
 
   createLabel: (boardId: string, name: string) =>
     request<Label>(`/boards/${boardId}/labels`, {

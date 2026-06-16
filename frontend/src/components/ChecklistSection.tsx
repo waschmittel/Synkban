@@ -13,8 +13,8 @@ interface Props {
   addInputRef?: (el: HTMLInputElement) => void;
 }
 
-/// Checklist in the card detail modal. Every change saves immediately via the
-/// parent's handlers (optimistic local update + API call). Items are
+/// Checklist in the card detail modal. Edits mutate the parent's local state
+/// only and persist as part of the card Save (no immediate API call). Items are
 /// keyboard-first: tabindex=0, ↑↓ to move, Space toggles, Enter edits,
 /// Shift+↑↓ reorders, Delete/Backspace asks for inline confirmation.
 /// Items can also be reordered via native HTML5 drag & drop.

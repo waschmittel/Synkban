@@ -152,6 +152,7 @@ pub struct UpdateCard {
     pub archived: Option<bool>,
     #[serde(default, deserialize_with = "deserialize_double_option")]
     pub due_date: Option<Option<String>>,
+    pub checklist: Option<Vec<ChecklistItem>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,23 +163,6 @@ pub struct CreateLabel {
 #[derive(Debug, Deserialize)]
 pub struct UpdateLabel {
     pub name: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateChecklistItem {
-    pub text: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateChecklistItem {
-    pub text: Option<String>,
-    pub done: Option<bool>,
-    pub pos: Option<usize>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct SetChecklistAll {
-    pub done: bool,
 }
 
 #[derive(Debug, Deserialize)]

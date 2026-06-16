@@ -292,7 +292,7 @@ mod tests {
         let l = create_list(d.path(), &b.id, "List").unwrap();
         let c1 = create_card(d.path(), &l.id, "Visible").unwrap();
         let c2 = create_card(d.path(), &l.id, "Archived").unwrap();
-        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None).unwrap();
+        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None, None).unwrap();
 
         let detail = get_board(d.path(), &b.id).unwrap();
         assert_eq!(detail.lists[0].cards.len(), 1);

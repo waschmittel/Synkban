@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::errors::AppError;
-use crate::models::Card;
+use crate::models::{Card, ChecklistItem};
 use crate::store::card_index::{self, CardLocation};
 use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::lists::find_board_for_list;
@@ -57,24 +57,6 @@ pub(crate) fn read_card(path: &Path) -> Result<Card, AppError> {
     Ok(card)
 }
 
-/// Resolve a card's board id and on-disk JSON path, wherever it lives
-/// (in a list or orphaned in `archived_cards/`).
-pub(crate) fn locate_card_path(
-    data_dir: &Path,
-    card_id: &str,
-) -> Result<(String, std::path::PathBuf), AppError> {
-    match card_index::locate(data_dir, card_id)? {
-        CardLocation::InList { board_id, list_id } => {
-            let path = cards_dir(data_dir, &board_id, &list_id).join(format!("{card_id}.json"));
-            Ok((board_id, path))
-        }
-        CardLocation::Orphaned { board_id } => {
-            let path = archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
-            Ok((board_id, path))
-        }
-    }
-}
-
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -123,6 +105,7 @@ pub fn update_card(
     label_ids: Option<&[String]>,
     archived: Option<bool>,
     due_date: Option<Option<&str>>,
+    checklist: Option<Vec<ChecklistItem>>,
 ) -> Result<Card, AppError> {
     let loc = card_index::locate(data_dir, card_id)?;
     let (_board_id, old_list_id, old_path, is_orphaned) = match &loc {
@@ -161,6 +144,9 @@ pub fn update_card(
     }
     if let Some(dd) = due_date {
         card.due_date = dd.map(|s| s.to_string());
+    }
+    if let Some(items) = checklist {
+        card.checklist = items;
     }
 
     // Restoring an orphaned card requires a target list.
@@ -325,7 +311,7 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "Old").unwrap();
         let updated =
-            update_card(d.path(), &c.id, Some("New"), None, None, None, None, None, None).unwrap();
+            update_card(d.path(), &c.id, Some("New"), None, None, None, None, None, None, None).unwrap();
         assert_eq!(updated.title, "New");
     }
 
@@ -336,7 +322,7 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
         let updated =
-            update_card(d.path(), &c.id, None, Some("desc"), None, None, None, None, None).unwrap();
+            update_card(d.path(), &c.id, None, Some("desc"), None, None, None, None, None, None).unwrap();
         assert_eq!(updated.description, "desc");
     }
 
@@ -347,7 +333,7 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
         let updated =
-            update_card(d.path(), &c.id, None, None, Some(5.5), None, None, None, None).unwrap();
+            update_card(d.path(), &c.id, None, None, Some(5.5), None, None, None, None, None).unwrap();
         assert_eq!(updated.position, 5.5);
     }
 
@@ -359,7 +345,7 @@ mod tests {
         let c = create_card(d.path(), &l.id, "C").unwrap();
         let ids = vec!["id1".into(), "id2".into()];
         let updated =
-            update_card(d.path(), &c.id, None, None, None, None, Some(&ids), None, None).unwrap();
+            update_card(d.path(), &c.id, None, None, None, None, Some(&ids), None, None, None).unwrap();
         assert_eq!(updated.label_ids, vec!["id1", "id2"]);
     }
 
@@ -371,14 +357,14 @@ mod tests {
         let c = create_card(d.path(), &l.id, "C").unwrap();
 
         let updated =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
         assert!(updated.archived);
         let detail = get_board(d.path(), &b.id).unwrap();
         assert!(detail.lists[0].cards.is_empty());
         assert_eq!(get_archived_cards(d.path(), &b.id).unwrap().len(), 1);
 
         let restored =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None).unwrap();
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None, None).unwrap();
         assert!(!restored.archived);
         assert_eq!(get_board(d.path(), &b.id).unwrap().lists[0].cards.len(), 1);
     }
@@ -392,11 +378,11 @@ mod tests {
         assert!(c.archived_at.is_none());
 
         let archived =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
         assert!(archived.archived_at.is_some());
 
         let restored =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None).unwrap();
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None, None).unwrap();
         assert!(restored.archived_at.is_none());
     }
 
@@ -408,10 +394,10 @@ mod tests {
         let c1 = create_card(d.path(), &l.id, "First").unwrap();
         let c2 = create_card(d.path(), &l.id, "Second").unwrap();
 
-        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None).unwrap();
+        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None, None).unwrap();
         // Second-resolution timestamps: ensure c1 archives in a later second.
         std::thread::sleep(std::time::Duration::from_millis(1100));
-        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None).unwrap();
+        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None, None).unwrap();
 
         let archived = get_archived_cards(d.path(), &b.id).unwrap();
         let titles: Vec<&str> = archived.iter().map(|c| c.title.as_str()).collect();
@@ -434,6 +420,7 @@ mod tests {
             None,
             None,
             Some(Some("2024-06-15")),
+            None,
         )
         .unwrap();
         assert_eq!(updated.due_date, Some("2024-06-15".into()));
@@ -455,10 +442,11 @@ mod tests {
             None,
             None,
             Some(Some("2024-06-15")),
+            None,
         )
         .unwrap();
         let updated =
-            update_card(d.path(), &c.id, None, None, None, None, None, None, Some(None)).unwrap();
+            update_card(d.path(), &c.id, None, None, None, None, None, None, Some(None), None).unwrap();
         assert!(updated.due_date.is_none());
     }
 
@@ -478,6 +466,7 @@ mod tests {
             None,
             None,
             Some(Some("2024-06-15")),
+            None,
         )
         .unwrap();
         let updated = update_card(
@@ -490,9 +479,70 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         assert_eq!(updated.due_date, Some("2024-06-15".into()));
+    }
+
+    #[test]
+    fn update_card_checklist_replaces_items() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let items = vec![
+            ChecklistItem { id: "i1".into(), text: "a".into(), done: false },
+            ChecklistItem { id: "i2".into(), text: "b".into(), done: true },
+        ];
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(items),
+        )
+        .unwrap();
+        assert_eq!(updated.checklist.len(), 2);
+        assert_eq!(updated.checklist[0].text, "a");
+        assert!(updated.checklist[1].done);
+
+        // Omitting checklist leaves it unchanged.
+        let again = update_card(
+            d.path(),
+            &c.id,
+            Some("New"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(again.checklist.len(), 2);
+
+        // Passing an empty vec clears it.
+        let cleared = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(Vec::new()),
+        )
+        .unwrap();
+        assert!(cleared.checklist.is_empty());
     }
 
     #[test]
@@ -513,6 +563,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         assert_eq!(moved.list_id, l2.id);
@@ -527,7 +578,7 @@ mod tests {
     #[test]
     fn update_card_not_found() {
         let d = tmp();
-        let err = update_card(d.path(), "fake", Some("X"), None, None, None, None, None, None)
+        let err = update_card(d.path(), "fake", Some("X"), None, None, None, None, None, None, None)
             .unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
@@ -548,7 +599,7 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
         delete_card(d.path(), &c.id).unwrap();
         assert!(get_archived_cards(d.path(), &b.id).unwrap().is_empty());
     }
@@ -563,7 +614,7 @@ mod tests {
         let att_dir = attachment_dir(d.path(), &b.id, &c.id);
         assert!(att_dir.exists());
 
-        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
         delete_card(d.path(), &c.id).unwrap();
         assert!(!att_dir.exists());
     }
@@ -590,7 +641,7 @@ mod tests {
         let c1 = create_card(d.path(), &l1.id, "InList").unwrap();
         let _c2 = create_card(d.path(), &l2.id, "Orphaned").unwrap();
 
-        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None).unwrap();
+        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None, None).unwrap();
         delete_list(d.path(), &l2.id).unwrap();
 
         assert_eq!(get_archived_cards(d.path(), &b.id).unwrap().len(), 2);
@@ -606,7 +657,7 @@ mod tests {
 
         let l2 = create_list(d.path(), &b.id, "L2").unwrap();
         let err =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None)
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None, None)
                 .unwrap_err();
         assert!(matches!(err, AppError::BadRequest(_)));
 
@@ -619,6 +670,7 @@ mod tests {
             Some(&l2.id),
             None,
             Some(false),
+            None,
             None,
         )
         .unwrap();
@@ -679,6 +731,7 @@ mod tests {
             Some(&l2.id),
             None,
             Some(false),
+            None,
             None,
         )
         .unwrap();

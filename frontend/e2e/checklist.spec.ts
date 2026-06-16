@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 
 async function seedCard(request: APIRequestContext, boardTitle: string) {
   const board = await (
@@ -13,8 +13,23 @@ async function seedCard(request: APIRequestContext, boardTitle: string) {
   return { board, list, card };
 }
 
-// Checklist saves are optimistic — the PUT may still be in flight when the UI
-// already shows the new order. Poll the API before reloading the page.
+// Add checklist items through the modal UI (the only way now — checklist is
+// card content, persisted via the card Save, not via dedicated endpoints).
+async function addItems(page: Page, texts: string[]) {
+  const addInput = page.locator(".checklist-add-input");
+  for (const t of texts) {
+    await addInput.fill(t);
+    await addInput.press("Enter");
+  }
+  await expect(page.locator(".checklist-item")).toHaveCount(texts.length);
+}
+
+// Save the card (persists checklist) and wait for the modal to close.
+async function saveCard(page: Page) {
+  await page.locator(".modal-footer .btn-primary").click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+}
+
 async function expectPersistedOrder(
   request: APIRequestContext,
   boardId: string,
@@ -28,7 +43,7 @@ async function expectPersistedOrder(
     .toEqual(expected);
 }
 
-test("add checklist items, toggle one, card badge shows done/total", async ({
+test("add checklist items, toggle one, card badge shows done/total after save", async ({
   page,
   request,
 }) => {
@@ -37,13 +52,7 @@ test("add checklist items, toggle one, card badge shows done/total", async ({
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Task card" }).click();
 
-  const addInput = page.locator(".checklist-add-input");
-  await addInput.fill("Step one");
-  await addInput.press("Enter");
-  await expect(page.locator(".checklist-item")).toHaveCount(1);
-  await addInput.fill("Step two");
-  await addInput.press("Enter");
-  await expect(page.locator(".checklist-item")).toHaveCount(2);
+  await addItems(page, ["Step one", "Step two"]);
 
   // Items keep insertion order.
   await expect(page.locator(".checklist-item").nth(0)).toContainText("Step one");
@@ -52,9 +61,8 @@ test("add checklist items, toggle one, card badge shows done/total", async ({
   await page.locator(".checklist-item", { hasText: "Step one" }).locator(".checklist-checkbox").check();
   await expect(page.locator(".checklist-progress")).toHaveText("1/2");
 
-  // Close modal — checklist saves immediately, badge on card shows count.
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  // Checklist persists via Save — the badge then reflects it.
+  await saveCard(page);
   await expect(page.locator(".checklist-badge")).toHaveText("1/2");
 
   // Persists across reload.
@@ -62,15 +70,32 @@ test("add checklist items, toggle one, card badge shows done/total", async ({
   await expect(page.locator(".checklist-badge")).toHaveText("1/2");
 });
 
-test("check all and uncheck all", async ({ page, request }) => {
-  const { board, card } = await seedCard(request, "CheckAll Board");
-  for (const text of ["a", "b", "c"]) {
-    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
-  }
+test("closing without saving discards checklist edits", async ({ page, request }) => {
+  const { board } = await seedCard(request, "Discard Board");
 
   await page.goto(`/board/${board.id}`);
-  await expect(page.locator(".checklist-badge")).toHaveText("0/3");
   await page.locator(".card", { hasText: "Task card" }).click();
+
+  await addItems(page, ["throwaway"]);
+
+  // Closing with unsaved checklist edits prompts the unsaved guard; discard.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".unsaved-dialog")).toBeVisible();
+  await page.locator(".unsaved-dialog .btn", { hasText: "Discard" }).click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+
+  // No badge — the item was never persisted.
+  await expect(page.locator(".checklist-badge")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator(".checklist-badge")).toHaveCount(0);
+});
+
+test("check all and uncheck all", async ({ page, request }) => {
+  const { board } = await seedCard(request, "CheckAll Board");
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+  await addItems(page, ["a", "b", "c"]);
   await expect(page.locator(".checklist-progress")).toHaveText("0/3");
 
   await page.locator(".checklist-toggle-all", { hasText: "Check all" }).click();
@@ -79,7 +104,7 @@ test("check all and uncheck all", async ({ page, request }) => {
     await expect(cb).toBeChecked();
   }
 
-  await page.keyboard.press("Escape");
+  await saveCard(page);
   const badge = page.locator(".checklist-badge");
   await expect(badge).toHaveText("3/3");
   await expect(badge).toHaveClass(/checklist-badge--complete/);
@@ -87,6 +112,8 @@ test("check all and uncheck all", async ({ page, request }) => {
   await page.locator(".card", { hasText: "Task card" }).click();
   await page.locator(".checklist-toggle-all", { hasText: "Uncheck all" }).click();
   await expect(page.locator(".checklist-progress")).toHaveText("0/3");
+  await saveCard(page);
+  await expect(badge).toHaveText("0/3");
 });
 
 test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
@@ -136,8 +163,9 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   await expect(page.locator(".checklist-item", { hasText: "kb two" })).toBeFocused();
   await expect(page.locator(".checklist-progress")).toHaveText("1/1");
 
-  // Close and verify the badge shows the complete state.
-  await page.keyboard.press("Escape");
+  // Save via Ctrl+S, then verify the badge shows the complete state.
+  await page.keyboard.press("Control+s");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
   const badge = page.locator(".checklist-badge");
   await expect(badge).toHaveText("1/1");
   await expect(badge).toHaveClass(/checklist-badge--complete/);
@@ -147,13 +175,11 @@ test("delete confirmation can be cancelled via Escape and No", async ({
   page,
   request,
 }) => {
-  const { board, card } = await seedCard(request, "Confirm Board");
-  for (const text of ["keep me", "other"]) {
-    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
-  }
+  const { board } = await seedCard(request, "Confirm Board");
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Task card" }).click();
+  await addItems(page, ["keep me", "other"]);
 
   const first = page.locator(".checklist-item", { hasText: "keep me" });
 
@@ -187,13 +213,11 @@ test("reorder items with Shift+Arrow keys, persists across reload", async ({
   page,
   request,
 }) => {
-  const { board, card } = await seedCard(request, "Reorder KB Board");
-  for (const text of ["a", "b", "c"]) {
-    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
-  }
+  const { board } = await seedCard(request, "Reorder KB Board");
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Task card" }).click();
+  await addItems(page, ["a", "b", "c"]);
 
   const items = page.locator(".checklist-item");
   await items.nth(0).focus();
@@ -216,6 +240,7 @@ test("reorder items with Shift+Arrow keys, persists across reload", async ({
   await expect(items.nth(0)).toContainText("b");
   await expect(items.nth(2)).toContainText("c");
 
+  await saveCard(page);
   await expectPersistedOrder(request, board.id, ["b", "a", "c"]);
   await page.reload();
   await page.locator(".card", { hasText: "Task card" }).click();
@@ -225,13 +250,11 @@ test("reorder items with Shift+Arrow keys, persists across reload", async ({
 });
 
 test("reorder items via drag and drop", async ({ page, request }) => {
-  const { board, card } = await seedCard(request, "Reorder DnD Board");
-  for (const text of ["a", "b", "c"]) {
-    await request.post(`/api/cards/${card.id}/checklist`, { data: { text } });
-  }
+  const { board } = await seedCard(request, "Reorder DnD Board");
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Task card" }).click();
+  await addItems(page, ["a", "b", "c"]);
 
   const items = page.locator(".checklist-item");
   // Drag "a" onto the top half of "c" → insert before c: b, a, c.
@@ -256,6 +279,7 @@ test("reorder items via drag and drop", async ({ page, request }) => {
   await expect(items.nth(1)).toContainText("a");
   await expect(items.nth(2)).toContainText("c");
 
+  await saveCard(page);
   await expectPersistedOrder(request, board.id, ["b", "a", "c"]);
   await page.reload();
   await page.locator(".card", { hasText: "Task card" }).click();
