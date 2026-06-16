@@ -23,21 +23,36 @@ async function addCard(list: Locator, title: string, page: Page) {
   await page.keyboard.press("Escape");
 }
 
+async function createBoard(page: Page, title: string) {
+  await page.locator(".add-board, .empty-state .btn-primary").first().click();
+  await slowFill(page.locator(".add-board-form input"), title);
+  await page.locator(".add-board-form input").press("Enter");
+  await expect(page.locator(".board-card", { hasText: title })).toBeVisible();
+  await pause(page, 500);
+}
+
 test("record demo", async ({ page }) => {
-  // --- Home: create a board ---
+  // --- Home: create two boards (second one makes the board switcher dock appear) ---
   await page.goto("/");
   await pause(page, 1000);
 
-  await page.locator(".add-board, .empty-state .btn-primary").first().click();
-  await slowFill(page.locator(".add-board-form input"), "Project Phoenix");
-  await page.locator(".add-board-form input").press("Enter");
+  await createBoard(page, "Project Phoenix");
+  await createBoard(page, "Marketing Sprint");
 
   const boardCard = page.locator(".board-card", { hasText: "Project Phoenix" });
-  await expect(boardCard).toBeVisible();
   await pause(page);
   await boardCard.click();
   await expect(page).toHaveURL(/\/board\/.+/);
   await pause(page, 1000);
+
+  // --- Recolor the board with the free color picker ---
+  await page.locator(".board-color-btn").click();
+  await pause(page, 500);
+  await page.locator(".board-color-input").fill("#6c5ce7");
+  await pause(page, 800);
+  // Close the dropdown by clicking the board background.
+  await page.locator(".board-page").click({ position: { x: 5, y: 5 } });
+  await pause(page);
 
   // --- Lists ---
   for (const title of ["To Do", "In Progress", "Done"]) {
@@ -88,6 +103,14 @@ test("record demo", async ({ page }) => {
   await page.locator(".label-picker-item", { hasText: "Design" }).click();
   await pause(page, 400);
   await page.locator(".label-picker-item", { hasText: "Urgent" }).click();
+  await pause(page, 400);
+  // Inline label creation — define a new label without leaving the card.
+  await slowFill(page.locator(".label-create-input"), "Polish");
+  await page.locator(".label-create-btn").click();
+  await expect(
+    page.locator(".label-assigned-chip", { hasText: "Polish" })
+  ).toBeVisible();
+  await pause(page);
   await page.locator(".label-add-btn").click();
   await pause(page);
 
@@ -157,5 +180,16 @@ test("record demo", async ({ page }) => {
   await pause(page, 1000);
   await page.locator(".filter-input-clear").click();
   await page.keyboard.press("f");
+  await pause(page, 1000);
+
+  // --- Board switcher: jump to the other board via the dock, then cycle back ---
+  await page
+    .locator(".board-dock-dot[aria-current='true'] ~ .board-dock-dot")
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/board\/.+/);
   await pause(page, 1200);
+  // Keyboard cycle back to the previous board.
+  await page.keyboard.press(",");
+  await pause(page, 1400);
 });
