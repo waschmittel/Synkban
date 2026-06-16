@@ -20,6 +20,9 @@ jobs:
     env:
       # electron-builder: skip code signing when no cert is configured.
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # Pushed tag (e.g. v0.2.0) becomes the build version; empty on manual
+      # dispatch so build.sh falls back to a dated snapshot.
+      SYNKBAN_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
     steps:
       - uses: actions/checkout@v4
         with:

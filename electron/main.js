@@ -6,6 +6,15 @@ const crypto = require('crypto');
 let mainWindow = null;
 let backendProcess = null;
 
+// Build version written by build.sh (release tag or dated snapshot).
+// Falls back to the package.json version for unstamped dev runs.
+let appVersion;
+try {
+  appVersion = require('./app-version.json').version;
+} catch {
+  appVersion = app.getVersion();
+}
+
 function getBackendPath() {
   if (app.isPackaged) {
     const ext = process.platform === 'win32' ? '.exe' : '';
@@ -80,7 +89,13 @@ async function createWindow() {
   mainWindow.loadURL(`${appOrigin}/?token=${token}`);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  app.setAboutPanelOptions({
+    applicationName: 'Synkban',
+    applicationVersion: appVersion,
+  });
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   backendProcess?.kill();

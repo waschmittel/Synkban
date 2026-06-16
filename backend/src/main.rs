@@ -1,4 +1,9 @@
 fn main() -> std::io::Result<()> {
+    if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
+        println!("synkban {}", synkban::VERSION);
+        return Ok(());
+    }
+
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let port: u16 = std::env::var("PORT")
         .unwrap_or_else(|_| "8080".into())

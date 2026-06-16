@@ -10,6 +10,9 @@ use include_dir::{include_dir, Dir};
 use std::path::PathBuf;
 use std::sync::mpsc;
 
+/// Build version: the release tag or a dated snapshot, baked in by build.rs.
+pub const VERSION: &str = env!("SYNKBAN_VERSION");
+
 pub fn log_timestamp() -> String {
     let d = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

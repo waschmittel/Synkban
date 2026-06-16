@@ -2055,6 +2055,14 @@ html.electron:not(.electron--mac) .app-header-actions {
   gap: 0 24px;
 }
 
+.shortcut-help-footer {
+  padding: 8px 24px 12px;
+  border-top: 1px solid #ebedf0;
+  font-size: 11px;
+  color: #97a0af;
+  text-align: right;
+}
+
 .shortcut-section {
   padding-top: 16px;
 }

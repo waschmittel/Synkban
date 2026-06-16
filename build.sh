@@ -28,6 +28,12 @@ for arg in "$@"; do
     esac
 done
 
+# Version string: the exact tag at HEAD when releasing, else a dated snapshot.
+# Overridable via the SYNKBAN_VERSION env var (CI passes the pushed tag here).
+VERSION="${SYNKBAN_VERSION:-$(git -C "$ROOT" describe --tags --exact-match HEAD 2>/dev/null || echo "snap-$(date -u +%Y-%m-%d)")}"
+export SYNKBAN_VERSION="$VERSION"
+echo "=== Synkban version: $VERSION ==="
+
 echo "=== Building frontend ==="
 cd "$ROOT/frontend"
 pnpm install
@@ -37,6 +43,13 @@ echo ""
 echo "=== Embedding frontend into backend ==="
 rm -rf "$ROOT/backend/static"
 cp -r "$ROOT/frontend/dist" "$ROOT/backend/static"
+
+# Stamp the embedded web manifest with the build version (portable in-place sed).
+manifest="$ROOT/backend/static/manifest.webmanifest"
+if [ -f "$manifest" ]; then
+    tmp="$(mktemp)"
+    sed "s/__APP_VERSION__/$VERSION/g" "$manifest" > "$tmp" && mv "$tmp" "$manifest"
+fi
 
 echo ""
 echo "=== Building backend ==="
@@ -67,6 +80,7 @@ if [ "$DESKTOP" = true ]; then
     echo ""
     echo "=== Building desktop app (Electron) ==="
     cd "$ROOT/electron"
+    printf '{ "version": "%s" }\n' "$VERSION" > app-version.json
     pnpm install
     pnpm run dist
 fi

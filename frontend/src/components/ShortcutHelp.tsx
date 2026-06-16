@@ -150,6 +150,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["?"]} desc="Show / hide this help" />
           </Section>
         </div>
+        <div class="shortcut-help-footer">Synkban {__APP_VERSION__}</div>
       </div>
     </div>
   );

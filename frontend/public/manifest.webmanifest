@@ -1,6 +1,7 @@
 {
   "name": "Synkban",
   "short_name": "Synkban",
+  "version": "__APP_VERSION__",
   "description": "Local-first, syncable kanban board",
   "start_url": "/",
   "scope": "/",

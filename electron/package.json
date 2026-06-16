@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.synkban.app",
     "productName": "Synkban",
+    "artifactName": "${productName}-${env.SYNKBAN_VERSION}-${os}-${arch}.${ext}",
     "npmRebuild": false,
     "mac": {
       "category": "public.app-category.productivity",
