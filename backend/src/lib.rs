@@ -66,9 +66,17 @@ async fn serve_embedded(req: HttpRequest) -> HttpResponse {
     let path = req.path().trim_start_matches('/');
 
     if let Some(file) = STATIC_DIR.get_file(path) {
-        let mime = mime_guess::from_path(path).first_or_octet_stream();
+        // mime_guess has no entry for `.webmanifest`; browsers require the
+        // proper type or they reject the PWA manifest.
+        let mime = if path.ends_with(".webmanifest") {
+            "application/manifest+json".to_string()
+        } else {
+            mime_guess::from_path(path)
+                .first_or_octet_stream()
+                .to_string()
+        };
         return HttpResponse::Ok()
-            .content_type(mime.as_ref())
+            .content_type(mime)
             .body(file.contents());
     }
 

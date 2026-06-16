@@ -19,6 +19,18 @@ if (typeof navigator !== "undefined" && /Electron\//.test(navigator.userAgent)) 
   }
 }
 
+// Register the service worker so the app is installable on Android.
+// Skipped in the Electron shell, which is already a native window.
+if (
+  typeof navigator !== "undefined" &&
+  "serviceWorker" in navigator &&
+  !/Electron\//.test(navigator.userAgent)
+) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
 // Bridge touch gestures to the native HTML5 drag events the reorder handlers use.
 installTouchDrag();
 
