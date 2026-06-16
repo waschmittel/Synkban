@@ -22,6 +22,8 @@ pub(crate) struct BoardFile {
     pub color: Option<String>,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
     #[serde(default)]
     pub position: f64,
 }
@@ -34,6 +36,7 @@ impl From<BoardFile> for Board {
             created_at: b.created_at,
             color: b.color,
             archived: b.archived,
+            archived_at: b.archived_at,
             position: b.position,
         }
     }
@@ -65,7 +68,12 @@ pub fn list_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
 
 pub fn list_archived_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
     let mut boards = scan_boards(data_dir, true)?;
-    boards.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    // Descending by archival date; legacy boards without one fall back to created_at.
+    boards.sort_by(|a, b| {
+        let ka = a.archived_at.as_deref().unwrap_or(&a.created_at);
+        let kb = b.archived_at.as_deref().unwrap_or(&b.created_at);
+        kb.cmp(ka)
+    });
     Ok(boards)
 }
 
@@ -90,6 +98,7 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
         labels: Vec::new(),
         color: None,
         archived: false,
+        archived_at: None,
         position: max_pos + 1.0,
     };
     write_board_file(data_dir, &bf)?;
@@ -170,6 +179,11 @@ pub fn update_board(
         bf.color = Some(c.to_string());
     }
     if let Some(a) = archived {
+        if a && !bf.archived {
+            bf.archived_at = Some(now_timestamp());
+        } else if !a {
+            bf.archived_at = None;
+        }
         bf.archived = a;
     }
     write_board_file(data_dir, &bf)?;
@@ -355,6 +369,32 @@ mod tests {
         update_board(d.path(), &b.id, None, None, Some(false)).unwrap();
         assert_eq!(list_boards(d.path()).unwrap().len(), 1);
         assert!(list_archived_boards(d.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn archive_sets_archived_at_and_restore_clears_it() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        assert!(b.archived_at.is_none());
+        let archived = update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        assert!(archived.archived_at.is_some());
+        let restored = update_board(d.path(), &b.id, None, None, Some(false)).unwrap();
+        assert!(restored.archived_at.is_none());
+    }
+
+    #[test]
+    fn list_archived_boards_sorted_descending_by_archival_date() {
+        let d = tmp();
+        let a = create_board(d.path(), "A").unwrap();
+        let b = create_board(d.path(), "B").unwrap();
+
+        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        update_board(d.path(), &a.id, None, None, Some(true)).unwrap();
+
+        let archived = list_archived_boards(d.path()).unwrap();
+        let titles: Vec<&str> = archived.iter().map(|b| b.title.as_str()).collect();
+        assert_eq!(titles, vec!["A", "B"]);
     }
 
     #[test]

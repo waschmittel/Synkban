@@ -42,6 +42,8 @@ pub struct Board {
     pub color: Option<String>,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
     #[serde(default)]
     pub position: f64,
 }
@@ -72,6 +74,8 @@ pub struct Card {
     pub label_ids: Vec<String>,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
     #[serde(default)]
     pub attachments: Vec<Attachment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

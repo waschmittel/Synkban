@@ -82,6 +82,7 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
             if path.extension().is_some_and(|e| e == "json") {
                 let mut card = crate::store::cards::read_card(&path)?;
                 card.archived = true;
+                card.archived_at = Some(now_timestamp());
                 fs::create_dir_all(&archive_dir)?;
                 write_json(&archive_dir.join(format!("{}.json", card.id)), &card)?;
                 orphaned_card_ids.push(card.id);

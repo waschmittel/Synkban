@@ -24,6 +24,7 @@ export interface Board {
   created_at: string;
   color?: string;
   archived: boolean;
+  archived_at?: string;
   position: number;
 }
 
@@ -37,6 +38,7 @@ export interface Card {
   created_at: string;
   label_ids: string[];
   archived: boolean;
+  archived_at?: string;
   attachments: Attachment[];
   due_date?: string;
   checklist: ChecklistItem[];

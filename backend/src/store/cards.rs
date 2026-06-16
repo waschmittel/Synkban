@@ -93,6 +93,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         created_at: now_timestamp(),
         label_ids: Vec::new(),
         archived: false,
+        archived_at: None,
         attachments: Vec::new(),
         due_date: None,
         checklist: Vec::new(),
@@ -151,6 +152,11 @@ pub fn update_card(
         card.label_ids = ids.to_vec();
     }
     if let Some(a) = archived {
+        if a && !card.archived {
+            card.archived_at = Some(now_timestamp());
+        } else if !a {
+            card.archived_at = None;
+        }
         card.archived = a;
     }
     if let Some(dd) = due_date {
@@ -252,7 +258,12 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
         );
     }
     archived.extend(crate::store::walk::orphaned_cards(data_dir, board_id)?);
-    archived.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    // Descending by archival date; legacy cards without one fall back to created_at.
+    archived.sort_by(|a, b| {
+        let ka = a.archived_at.as_deref().unwrap_or(&a.created_at);
+        let kb = b.archived_at.as_deref().unwrap_or(&b.created_at);
+        kb.cmp(ka)
+    });
     Ok(archived)
 }
 
@@ -370,6 +381,41 @@ mod tests {
             update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None).unwrap();
         assert!(!restored.archived);
         assert_eq!(get_board(d.path(), &b.id).unwrap().lists[0].cards.len(), 1);
+    }
+
+    #[test]
+    fn archive_sets_archived_at_and_restore_clears_it() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        assert!(c.archived_at.is_none());
+
+        let archived =
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None).unwrap();
+        assert!(archived.archived_at.is_some());
+
+        let restored =
+            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None).unwrap();
+        assert!(restored.archived_at.is_none());
+    }
+
+    #[test]
+    fn get_archived_cards_sorted_descending_by_archival_date() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c1 = create_card(d.path(), &l.id, "First").unwrap();
+        let c2 = create_card(d.path(), &l.id, "Second").unwrap();
+
+        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None).unwrap();
+        // Second-resolution timestamps: ensure c1 archives in a later second.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None).unwrap();
+
+        let archived = get_archived_cards(d.path(), &b.id).unwrap();
+        let titles: Vec<&str> = archived.iter().map(|c| c.title.as_str()).collect();
+        assert_eq!(titles, vec!["First", "Second"]);
     }
 
     #[test]
