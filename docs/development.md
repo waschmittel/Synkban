@@ -1,5 +1,13 @@
 # Development
 
+## Prerequisites
+
+| Tool                              | Version | Purpose                                |
+| --------------------------------- | ------- | -------------------------------------- |
+| [Rust](https://rustup.rs/)        | 1.70+   | Backend compilation                    |
+| [Node.js](https://nodejs.org/)    | 18+     | Frontend build                         |
+| [Docker](https://www.docker.com/) | any     | Optional, for containerized deployment |
+
 ## Setup
 
 ```bash
@@ -28,6 +36,20 @@ pnpm run dev
 ```
 
 Open <http://localhost:3000>. The Vite dev server proxies all `/api` requests to the backend.
+
+## Build
+
+```bash
+./build.sh
+```
+
+This script:
+
+1. Builds the frontend (`pnpm install && pnpm run build` → `frontend/dist/`)
+2. Copies `frontend/dist/` → `backend/static/`
+3. Compiles the backend in release mode, embedding static files into the binary
+
+Output: `backend/target/release/synkban` — a single binary you can copy anywhere and run.
 
 ## API Reference
 
@@ -269,6 +291,85 @@ sudo xattr -cr /Applications/Synkban.app
 ### Static file embedding
 
 The `include_dir!` macro embeds the entire `backend/static/` directory into the binary at compile time. The `serve_embedded` handler serves these files with correct MIME types, falling back to `index.html` for client-side routes (SPA fallback).
+
+## Data storage
+
+Data is stored as JSON files in a nested directory structure under `DATA_DIR` (see the [README](../README.md#configuration) for how the effective `DATA_DIR` is resolved):
+
+```
+data/
+└── boards/
+    └── {board-id}/
+        ├── board.json
+        ├── lists/
+        │   └── {list-id}/
+        │       ├── list.json
+        │       └── cards/
+        │           └── {card-id}.json
+        ├── archived_cards/                # orphaned cards (their list was deleted)
+        │   └── {card-id}.json
+        └── attachments/
+            └── {card-id}/
+                ├── {att-id}                # raw bytes (no extension)
+                └── {att-id}_thumb          # JPEG, only for image attachments
+```
+
+Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are cleaned up automatically when their last child is removed.
+
+### board.json
+
+```json
+{
+  "id": "uuid",
+  "title": "My Board",
+  "created_at": "2026-05-13 14:08:21",
+  "labels": [{ "id": "uuid", "name": "Bug", "color": "#ffb3b3" }],
+  "color": "#0079bf",
+  "archived": false,
+  "position": 1.0
+}
+```
+
+### list.json
+
+```json
+{
+  "id": "uuid",
+  "board_id": "uuid",
+  "title": "To Do",
+  "position": 1.0,
+  "created_at": "2026-05-13 14:08:21"
+}
+```
+
+### {card-id}.json
+
+```json
+{
+  "id": "uuid",
+  "list_id": "uuid",
+  "title": "My Card",
+  "description": "{\"type\":\"doc\",\"content\":[...]}",
+  "position": 1.0,
+  "created_at": "2026-05-13 14:08:21",
+  "label_ids": ["uuid", "uuid"],
+  "archived": false,
+  "attachments": [
+    { "id": "uuid", "filename": "spec.pdf", "size": 12345, "content_type": "application/pdf", "created_at": "2026-05-13 14:08:21" }
+  ],
+  "due_date": "2026-06-15"
+}
+```
+
+The `description` field stores a ProseMirror document as a JSON string. Empty descriptions are stored as `""`. ProseMirror is safe by design — it uses a schema-constrained document model, not raw HTML.
+
+### Backup / Migration
+
+Data is plain JSON files. To back up: copy the `data/` directory. To migrate: move the directory to the new host and point `DATA_DIR` at it.
+
+### Position field
+
+Lists and cards use a `position: f64` field for ordering. New items get `max_position + 1.0`. Reordering sets position to the midpoint between neighbors (fractional indexing). This avoids bulk-updating all positions on every reorder.
 
 ## Testing
 

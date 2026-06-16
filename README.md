@@ -24,14 +24,6 @@ Can be run in two ways:
 - **Single binary** — frontend assets embedded at compile time via `include_dir`
 - **Desktop mode** — optional Electron wrapper that bundles the binary + a native window (`./build.sh --desktop`)
 
-## Prerequisites
-
-| Tool                              | Version | Purpose                                |
-| --------------------------------- | ------- | -------------------------------------- |
-| [Rust](https://rustup.rs/)        | 1.70+   | Backend compilation                    |
-| [Node.js](https://nodejs.org/)    | 18+     | Frontend build                         |
-| [Docker](https://www.docker.com/) | any     | Optional, for containerized deployment |
-
 ## Quick Start
 
 ```bash
@@ -50,35 +42,31 @@ Dev setup, API reference, project structure, architecture notes, and testing are
 
 ➡️ **[Development guide](docs/development.md)**
 
-## Build
-
-```bash
-./build.sh
-```
-
-This script:
-
-1. Builds the frontend (`pnpm install && pnpm run build` → `frontend/dist/`)
-2. Copies `frontend/dist/` → `backend/static/`
-3. Compiles the backend in release mode, embedding static files into the binary
-
-Output: `backend/target/release/synkban` — a single binary you can copy anywhere and run.
-
 ## Configuration
 
 All configuration via environment variables:
 
-| Variable   | Default     | Description                                    |
-| ---------- | ----------- | ---------------------------------------------- |
-| `HOST`     | `127.0.0.1` | Bind address                                   |
-| `PORT`     | `8080`      | Bind port                                      |
-| `DATA_DIR` | `./data`    | Path to data directory (created automatically) |
-
-Example:
+| Variable   | Default     | Description                                      |
+| ---------- | ----------- | ------------------------------------------------ |
+| `HOST`     | `127.0.0.1` | Bind address                                     |
+| `PORT`     | `8080`      | Bind port                                        |
+| `DATA_DIR` | `./data`    | **Path to the data directory** (created if absent) |
 
 ```bash
 HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./synkban
 ```
+
+### How the effective `DATA_DIR` is determined
+
+`DATA_DIR` is the one setting that decides **where all your boards live**, so it's worth knowing how it's resolved:
+
+- **Web server mode** (`./synkban`, Docker) — reads the `DATA_DIR` env var. If unset, defaults to `./data` (relative to the working directory). Created automatically on first run.
+- **Desktop mode** (Electron app) — Electron **overrides** `DATA_DIR` with the per-user application data directory and passes it to the bundled binary, so any inherited env var is ignored. Locations:
+  - macOS — `~/Library/Application Support/Synkban`
+  - Windows — `%APPDATA%\Synkban`
+  - Linux — `~/.config/Synkban`
+
+Data is plain JSON files: to back up, copy the directory; to migrate, move it to the new host and point `DATA_DIR` at it. The on-disk layout and file formats are documented in the [development guide](docs/development.md#data-storage).
 
 ## Docker
 
@@ -112,82 +100,3 @@ The Dockerfile is a multi-stage build:
 Synkban's web server has **no authentication of its own** (single-user MVP), so run it behind an authenticating reverse proxy on an internal network with no published ports. Full step-by-step setup with Docker Compose + Caddy (login form + long-lived session cookie via the `caddy-security` plugin):
 
 ➡️ **[Self-hosting behind Caddy + caddy-security](docs/self-hosting-caddy-security.md)**
-
-## Data Storage
-
-Data is stored as JSON files in a nested directory structure under `DATA_DIR`:
-
-```
-data/
-└── boards/
-    └── {board-id}/
-        ├── board.json
-        ├── lists/
-        │   └── {list-id}/
-        │       ├── list.json
-        │       └── cards/
-        │           └── {card-id}.json
-        ├── archived_cards/                # orphaned cards (their list was deleted)
-        │   └── {card-id}.json
-        └── attachments/
-            └── {card-id}/
-                ├── {att-id}                # raw bytes (no extension)
-                └── {att-id}_thumb          # JPEG, only for image attachments
-```
-
-Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are cleaned up automatically when their last child is removed.
-
-### board.json
-
-```json
-{
-  "id": "uuid",
-  "title": "My Board",
-  "created_at": "2026-05-13 14:08:21",
-  "labels": [{ "id": "uuid", "name": "Bug", "color": "#ffb3b3" }],
-  "color": "#0079bf",
-  "archived": false,
-  "position": 1.0
-}
-```
-
-### list.json
-
-```json
-{
-  "id": "uuid",
-  "board_id": "uuid",
-  "title": "To Do",
-  "position": 1.0,
-  "created_at": "2026-05-13 14:08:21"
-}
-```
-
-### {card-id}.json
-
-```json
-{
-  "id": "uuid",
-  "list_id": "uuid",
-  "title": "My Card",
-  "description": "{\"type\":\"doc\",\"content\":[...]}",
-  "position": 1.0,
-  "created_at": "2026-05-13 14:08:21",
-  "label_ids": ["uuid", "uuid"],
-  "archived": false,
-  "attachments": [
-    { "id": "uuid", "filename": "spec.pdf", "size": 12345, "content_type": "application/pdf", "created_at": "2026-05-13 14:08:21" }
-  ],
-  "due_date": "2026-06-15"
-}
-```
-
-The `description` field stores a ProseMirror document as a JSON string. Empty descriptions are stored as `""`. ProseMirror is safe by design — it uses a schema-constrained document model, not raw HTML.
-
-### Backup / Migration
-
-Data is plain JSON files. To back up: copy the `data/` directory. To migrate: move the directory to the new host and point `DATA_DIR` at it.
-
-### Position field
-
-Lists and cards use a `position: f64` field for ordering. New items get `max_position + 1.0`. Reordering sets position to the midpoint between neighbors (fractional indexing). This avoids bulk-updating all positions on every reorder.
