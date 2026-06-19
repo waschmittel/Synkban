@@ -20,6 +20,19 @@ const focusInsideModal = (page: Page) =>
       document.activeElement !== document.body
   );
 
+// A real 1x1 PNG so server-side thumbnail generation succeeds.
+const PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64"
+);
+
+async function attachPng(request: APIRequestContext, cardId: string, filename: string) {
+  await request.post(`/api/cards/${cardId}/attachments?filename=${filename}`, {
+    data: PIXEL_PNG,
+    headers: { "content-type": "image/png" },
+  });
+}
+
 test("unsaved dialog: cancel via Escape keeps modal keyboard alive and guard intact", async ({
   page,
   request,
@@ -291,4 +304,90 @@ test("link dialog keeps focus when opened over the card modal", async ({ page, r
   await page.locator(".link-dialog .btn-primary", { hasText: "Apply" }).click();
   await expect(page.locator(".link-dialog-overlay")).toHaveCount(0);
   await expect(page.locator('.ProseMirror a[href="https://example.com"]')).toBeVisible();
+});
+
+// ImagePreviewOverlay is nested inside the card modal. Escape must close the
+// preview only (not the modal), and focus must stay inside the modal — the
+// preview's focus trap composes with the modal's via DOM containment.
+test("image preview overlay: Escape closes preview only, focus stays in modal", async ({
+  page,
+  request,
+}) => {
+  const { board, card } = await seedCard(request, "Preview Board");
+  await attachPng(request, card.id, "pixel.png");
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+  await expect(page.locator(".attachment-item--image")).toBeVisible();
+
+  // Open the preview.
+  await page.locator(".attachment-thumb").click();
+  await expect(page.locator(".image-preview-overlay")).toBeVisible();
+
+  // Escape closes the preview but leaves the card modal open.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".image-preview-overlay")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+  await expect.poll(() => focusInsideModal(page)).toBe(true);
+
+  // A second Escape now closes the modal itself (no unsaved changes).
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+});
+
+// ShortcutHelp opens as a Board-level sibling of the card modal. Its Escape
+// must close only the help overlay (dialogKeys owns it on top of the stack),
+// leaving the modal open with focus still inside it.
+test("shortcut help over card modal: Escape closes help only, modal survives", async ({
+  page,
+  request,
+}) => {
+  const { board } = await seedCard(request, "Help Over Modal");
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+
+  // Move focus off the auto-focused title input onto a modal button so the
+  // single-letter `?` shortcut fires (it's suppressed while typing).
+  await page.locator(".modal-close").focus();
+  await page.keyboard.press("?");
+
+  await expect(page.locator(".shortcut-help-overlay")).toBeVisible();
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".shortcut-help-overlay")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+  await expect.poll(() => focusInsideModal(page)).toBe(true);
+});
+
+// ConfirmDialog (archive-card flow) auto-focuses its Confirm button so Enter
+// confirms and Escape cancels — both owned via dialogKeys even before the
+// rAF-deferred auto-focus lands.
+test("archive confirm dialog auto-focuses confirm; Escape cancels, Enter archives", async ({
+  page,
+  request,
+}) => {
+  const { board } = await seedCard(request, "Confirm Board");
+  await page.goto(`/board/${board.id}`);
+
+  const card = page.locator(".card", { hasText: "Task card" });
+  await card.focus();
+  await page.keyboard.press("Delete");
+
+  const dialog = page.locator(".unsaved-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".btn-primary", { hasText: "Archive" })).toBeFocused();
+
+  // Escape cancels — card stays.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(card).toBeVisible();
+
+  // Re-open and confirm with Enter — card is archived (removed from the list).
+  await card.focus();
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".unsaved-dialog")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".unsaved-dialog")).toHaveCount(0);
+  await expect(page.locator(".card", { hasText: "Task card" })).toHaveCount(0);
 });
