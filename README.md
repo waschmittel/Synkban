@@ -14,7 +14,7 @@ Can be run in two ways:
 - **Boards** — create, rename, recolor, archive/restore, reorder
 - **Lists** — add to boards, reorder via drag-and-drop or keyboard, delete (archives any cards)
 - **Cards** — drag within/across lists, archive/restore, permanent delete
-- **Card detail** — modal with title (markdown bold/italic), rich text description (ProseMirror), labels, due date, file attachments (≤50 MB) with image thumbnails + preview
+- **Card detail** — modal with title (markdown bold/italic), rich text description (ProseMirror), labels, due date, checklist, file attachments (≤50 MB) with image thumbnails + preview
 - **Labels** — per-board colored tags; auto-assigned palette; filter cards by label
 - **Filter** — search cards by text + label inside a board
 - **Archive** — soft-delete for boards and cards (separate undo flows)

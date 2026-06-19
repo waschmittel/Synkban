@@ -15,7 +15,6 @@
 npm install -g pnpm
 
 # Install dependencies and approve build scripts (required for pnpm 10+)
-pnpm install && pnpm approve-builds --all
 cd frontend && pnpm install && pnpm approve-builds --all
 cd ../electron && pnpm install && pnpm approve-builds --all
 ```
@@ -59,7 +58,8 @@ Base URL: `/api`
 
 | Method | Path       | Response            | Description                                                                                                                                                                   |
 | ------ | ---------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/changes` | `{ mtime: number }` | Newest file mtime in `DATA_DIR`. The UI polls this every 15 s and only refetches the board when it changes — so external edits (rsync, Syncthing, etc.) flow through cheaply. |
+| GET    | `/changes`  | `{ mtime: number }`        | Newest file mtime in `DATA_DIR`. The UI polls this every 15 s and only refetches the board when it changes — so external edits (rsync, Syncthing, etc.) flow through cheaply. |
+| GET    | `/warnings` | `{ warnings: string[] }`   | Data-integrity warnings — relative paths of corrupt/unreadable JSON files the walker skipped. Polled alongside `/changes` and surfaced in a dismissible banner. |
 
 ### Boards
 
@@ -95,7 +95,7 @@ Base URL: `/api`
 | ------ | --------------------------- | --------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/boards/:board_id/archive` | —                                                                                 | `Card[]`     | List archived cards on a board                                                                                                                                                     |
 | POST   | `/lists/:list_id/cards`     | `{ title }`                                                                       | `Card` (201) | Add card to list                                                                                                                                                                   |
-| PUT    | `/cards/:id`                | `{ title?, description?, position?, list_id?, label_ids?, archived?, due_date? }` | `Card`       | Update card fields. Set `list_id` to move; `due_date` accepts `null` to clear, omitted to leave unchanged. Restoring an orphaned card (whose list was deleted) requires `list_id`. |
+| PUT    | `/cards/:id`                | `{ title?, description?, position?, list_id?, label_ids?, archived?, due_date?, checklist? }` | `Card`       | Update card fields. Set `list_id` to move; `due_date` accepts `null` to clear, omitted to leave unchanged; `checklist` replaces the whole array. Restoring an orphaned card (whose list was deleted) requires `list_id`. |
 | DELETE | `/cards/:id`                | —                                                                                 | 204          | Permanently delete card (rejected with 400 if not archived)                                                                                                                        |
 
 ### Attachments
@@ -124,26 +124,36 @@ interface Attachment {
   created_at: string;
 }
 
+interface ChecklistItem {
+  id: string;       // minted client-side
+  text: string;
+  done: boolean;
+}
+
 interface Board {
   id: string;
   title: string;
   created_at: string;
   color?: string;
   archived: boolean;
+  archived_at?: string;   // UTC, set on archive
   position: number;
 }
 
 interface Card {
   id: string;
   list_id: string;
-  title: string;          // supports **bold** and *italic*
-  description: string;    // ProseMirror doc JSON or empty string
+  title: string;            // supports **bold** and *italic*
+  description: string;      // ProseMirror doc JSON or empty string
+  description_text: string; // server-derived plain text (used by filter)
   position: number;
   created_at: string;
   label_ids: string[];
   archived: boolean;
+  archived_at?: string;     // UTC, set on archive
   attachments: Attachment[];
-  due_date?: string;      // YYYY-MM-DD
+  due_date?: string;        // YYYY-MM-DD
+  checklist: ChecklistItem[];
 }
 
 interface ListWithCards {
@@ -188,14 +198,17 @@ tc/
 │   │   ├── models.rs                 # Data structs + request/response types
 │   │   ├── errors.rs                 # AppError → HTTP error responses
 │   │   ├── store/                    # File-based JSON storage layer (modular)
-│   │   │   ├── mod.rs                # Re-exports the flat public API
+│   │   │   ├── mod.rs                # Re-exports the flat public API + collect_warnings
 │   │   │   ├── paths.rs              # Path helpers (no I/O)
-│   │   │   ├── io.rs                 # JSON read/write, file-op tracking, timestamps, mtime walk
+│   │   │   ├── io.rs                 # JSON read/write, file-op + warning tracking, timestamps, mtime walk
+│   │   │   ├── walk.rs              # The only fs::read_dir walker over the boards/ tree
 │   │   │   ├── boards.rs             # Board CRUD + BoardFile (on-disk shape)
 │   │   │   ├── labels.rs             # Label CRUD (stored inside board.json)
 │   │   │   ├── lists.rs              # List CRUD (delete archives contained cards)
 │   │   │   ├── cards.rs              # Card CRUD, archive/orphan logic
-│   │   │   └── attachments.rs        # Attachment binaries + thumbnails
+│   │   │   ├── card_index.rs        # Card-location lookup across the tree
+│   │   │   ├── attachments.rs        # Attachment binaries + thumbnails + sidecar metadata
+│   │   │   └── gc.rs                 # Startup reconcile/GC for attachment storage
 │   │   └── handlers/
 │   │       ├── mod.rs
 │   │       ├── boards.rs             # Board + change-poll + archive handlers
@@ -214,14 +227,25 @@ tc/
 │   └── src/
 │       ├── index.tsx                 # App bootstrap, router setup, Electron detection
 │       ├── App.tsx                   # Layout shell (header + content + label drawer trigger)
-│       ├── LabelContext.tsx          # Cross-component state (drawer open, board title, rename mode)
+│       ├── LabelDrawerContext.tsx    # Label-drawer open/close state
+│       ├── BoardHeaderContext.tsx    # Header board title + inline rename state
 │       ├── api.ts                    # Typed fetch wrapper for all API endpoints
 │       ├── types.ts                  # TypeScript interfaces matching backend models
 │       ├── boardInput.ts             # isInInput guard (skip shortcuts inside inputs/modals)
+│       ├── shortcutRouter.ts         # Global keyboard shortcut dispatch
 │       ├── mdInput.ts                # **bold**/*italic* Ctrl+B/I shortcut helper
+│       ├── autolink.ts               # URL autolink helper for the editor
 │       ├── proseEditor.ts            # ProseMirror schema + createCardEditor()
 │       ├── positions.ts              # Fractional indexing math
 │       ├── filter.ts                 # Card-filter predicate
+│       ├── changePoller.ts           # mtime poll protocol (Home + Board)
+│       ├── focusTrap.ts              # Dialog focus containment
+│       ├── focusRestoration.ts       # Card focus restoration across refetch
+│       ├── dialogKeys.ts             # Capture-phase dialog key-ownership stack
+│       ├── overlayLayers.ts          # Overlay stacking registry
+│       ├── rovingFocus.ts            # ↑↓ roving focus helper
+│       ├── touchDrag.ts              # Touch drag-and-drop support
+│       ├── confirm.tsx               # Imperative confirm() helper
 │       ├── pages/
 │       │   ├── Home.tsx              # Board grid: create / archive / restore / reorder
 │       │   └── Board.tsx             # Board view coordinator
@@ -232,16 +256,18 @@ tc/
 │       │   ├── CardDetail.tsx        # Card edit modal (composes the sections below)
 │       │   ├── CardLabelSection.tsx  #   – assigned chips + picker
 │       │   ├── DueDateSection.tsx    #   – ISO date input + native picker
+│       │   ├── ChecklistSection.tsx  #   – flat checklist (persisted on card Save)
 │       │   ├── AttachmentsSection.tsx #  – attachments list + upload
 │       │   ├── ImagePreviewOverlay.tsx # – lightbox for image attachments
 │       │   ├── UnsavedDialog.tsx     #   – Save/Discard/Cancel guard
 │       │   ├── LabelDrawer.tsx       # Right-side label CRUD drawer
-│       │   ├── ArchiveCardsModal.tsx # Archived-cards modal (restore/delete)
+│       │   ├── ArchivePanel.tsx      # Shared archived-cards/boards modal (restore/delete)
 │       │   ├── FilterBar.tsx         # Card filter (text + label chips)
 │       │   ├── BoardColorPicker.tsx  # Header color button + grid dropdown
 │       │   ├── ConfirmDialog.tsx     # Reusable confirm/cancel dialog
+│       │   ├── WarningBanner.tsx     # Data-integrity warning banner
 │       │   └── ShortcutHelp.tsx      # ? help modal
-│       ├── *.test.ts                 # Vitest unit tests (filter, positions, mdInput, boardInput, api)
+│       ├── *.test.ts                 # Vitest unit tests (filter, positions, mdInput, boardInput, changePoller, rovingFocus, shortcutRouter, proseEditor, api, Card)
 │       └── styles/
 │           └── app.css               # All styles: layout, cards, modal, drawer, ProseMirror editor
 │
@@ -249,7 +275,7 @@ tc/
 │   ├── main.js                       # Electron main process (spawns Rust binary with token auth)
 │   └── package.json                  # electron-builder config + extraResources
 │
-├── tests/                            # Playwright end-to-end tests (browser)
+├── frontend/e2e/                     # Playwright end-to-end tests (boots release binary on :8091)
 ├── build.sh                          # Production build (web by default; `--desktop` packages Electron)
 ├── docker-build.sh                   # Docker image build helper
 ├── Dockerfile                        # Multi-stage: node → rust → debian-slim
@@ -311,8 +337,11 @@ data/
         └── attachments/
             └── {card-id}/
                 ├── {att-id}                # raw bytes (no extension)
-                └── {att-id}_thumb          # JPEG, only for image attachments
+                ├── {att-id}_thumb          # JPEG, only for image attachments
+                └── {att-id}.json           # metadata sidecar — source of truth, NOT the card JSON
 ```
+
+Attachments are NOT stored in the card JSON. Each upload is a file trio (binary + optional thumbnail + `.json` sidecar); card responses populate `attachments` from the sidecars. A startup reconcile/GC (`store/gc.rs`) migrates legacy embedded metadata and drops orphaned/partial files (guarded by a 5-minute mtime grace window so in-flight syncs aren't mistaken for garbage).
 
 Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are cleaned up automatically when their last child is removed.
 
@@ -354,14 +383,12 @@ Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are
   "created_at": "2026-05-13 14:08:21",
   "label_ids": ["uuid", "uuid"],
   "archived": false,
-  "attachments": [
-    { "id": "uuid", "filename": "spec.pdf", "size": 12345, "content_type": "application/pdf", "created_at": "2026-05-13 14:08:21" }
-  ],
-  "due_date": "2026-06-15"
+  "due_date": "2026-06-15",
+  "checklist": [{ "id": "uuid", "text": "Step one", "done": false }]
 }
 ```
 
-The `description` field stores a ProseMirror document as a JSON string. Empty descriptions are stored as `""`. ProseMirror is safe by design — it uses a schema-constrained document model, not raw HTML.
+The `description` field stores a ProseMirror document as a JSON string. Empty descriptions are stored as `""`. ProseMirror is safe by design — it uses a schema-constrained document model, not raw HTML. `attachments` and `description_text` are **not** on disk in the card file — attachments come from their sidecars, `description_text` is derived from `description` at read time.
 
 ### Backup / Migration
 
@@ -380,8 +407,10 @@ cd backend && cargo test
 # Frontend unit tests (Vitest)
 cd frontend && pnpm test
 
-# End-to-end (Playwright; expects backend + frontend dev servers running)
-pnpm playwright test
+# End-to-end (Playwright; boots the release binary on :8091 with a temp DATA_DIR)
+cd frontend && pnpm run test:e2e
 ```
 
-Backend tests live alongside the code (`#[cfg(test)] mod tests` per storage submodule, plus `backend/tests/integration.rs` for HTTP-level coverage). Frontend tests cover utilities (`positions`, `filter`, `mdInput`, `boardInput`), the API client, and `renderTitle`.
+The e2e suite lives in `frontend/e2e/` (config `frontend/playwright.config.ts`). It needs `backend/target/release/synkban` to exist and `pnpm exec playwright install chromium` once per machine; `./build.sh` runs it automatically.
+
+Backend tests live alongside the code (`#[cfg(test)] mod tests` per storage submodule, plus `backend/tests/integration.rs` for HTTP-level coverage). Frontend unit tests cover utilities (`positions`, `filter`, `mdInput`, `boardInput`, `changePoller`, `rovingFocus`, `shortcutRouter`, `proseEditor`), the API client, and `renderTitle`.
