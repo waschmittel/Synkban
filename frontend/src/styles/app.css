@@ -1954,6 +1954,28 @@ html.electron:not(.electron--mac) .app-header-actions {
   flex-shrink: 0;
 }
 
+.label-create-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 16px;
+  padding: 5px 12px;
+  background: var(--color-surface-2);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.label-create-toggle:hover {
+  background: #ebecf0;
+  color: #172b4d;
+  border-color: #6b778c;
+}
+
 .label-create {
   display: flex;
   gap: 6px;

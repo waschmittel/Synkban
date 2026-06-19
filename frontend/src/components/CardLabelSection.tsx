@@ -1,4 +1,4 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createEffect, createSignal } from "solid-js";
 import type { Label } from "../types";
 import { renderTitle } from "./Card";
 import { handleMarkdownShortcut } from "../mdInput";
@@ -23,8 +23,28 @@ export default function CardLabelSection(props: Props) {
 
   const [newName, setNewName] = createSignal("");
   const [creating, setCreating] = createSignal(false);
+  // The inline create form is hidden until the user clicks "Create label";
+  // opening the picker only reveals the existing-label grid, not a text input.
+  const [showCreate, setShowCreate] = createSignal(false);
   let areaRef: HTMLDivElement | undefined;
   let addBtnRef: HTMLButtonElement | undefined;
+  let createInputRef: HTMLInputElement | undefined;
+
+  // Reveal the inline create form and focus its input synchronously. Solid
+  // mounts the input during this signal write, so focusing it now (rather than
+  // on the next animation frame) wins the race against the focusout microtask
+  // fired when the toggle button this click removes leaves the DOM — otherwise
+  // that handler sees an empty activeElement and closes the whole picker.
+  const openCreate = () => {
+    setShowCreate(true);
+    createInputRef?.focus();
+  };
+
+  // Collapse the create form whenever the picker closes so the next open
+  // (this card or another) starts from the existing-label grid.
+  createEffect(() => {
+    if (!props.pickerOpen) setShowCreate(false);
+  });
 
   const submitNew = async () => {
     const name = newName().trim();
@@ -50,6 +70,21 @@ export default function CardLabelSection(props: Props) {
     queueMicrotask(() => {
       if (props.pickerOpen && !areaRef?.contains(document.activeElement)) {
         props.onClosePicker();
+      }
+    });
+  };
+
+  // Collapse just the create form (back to the "Create label" toggle) when
+  // focus leaves the form but stays elsewhere in the picker — e.g. clicking a
+  // label in the grid. Same microtask/activeElement guard as handleFocusOut.
+  const handleCreateFocusOut = (e: FocusEvent) => {
+    const form = e.currentTarget as HTMLElement;
+    const next = e.relatedTarget as Node | null;
+    if (next && form.contains(next)) return;
+    queueMicrotask(() => {
+      if (showCreate() && !form.contains(document.activeElement)) {
+        setShowCreate(false);
+        setNewName("");
       }
     });
   };
@@ -122,30 +157,48 @@ export default function CardLabelSection(props: Props) {
               </For>
             </div>
           </Show>
-          <form
-            class="label-create"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submitNew();
-            }}
+          <Show
+            when={showCreate()}
+            fallback={
+              <button
+                class="label-create-toggle"
+                type="button"
+                onClick={openCreate}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Create label
+              </button>
+            }
           >
-            <input
-              class="label-create-input"
-              placeholder="New label name…"
-              value={newName()}
-              disabled={creating()}
-              onInput={(e) => setNewName(e.currentTarget.value)}
-              onKeyDown={(e) => handleMarkdownShortcut(e)}
-              ref={(el) => requestAnimationFrame(() => el.focus())}
-            />
-            <button
-              type="submit"
-              class="label-create-btn"
-              disabled={!newName().trim() || creating()}
+            <form
+              class="label-create"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submitNew();
+              }}
+              onFocusOut={handleCreateFocusOut}
             >
-              Create
-            </button>
-          </form>
+              <input
+                class="label-create-input"
+                placeholder="New label name…"
+                value={newName()}
+                disabled={creating()}
+                onInput={(e) => setNewName(e.currentTarget.value)}
+                onKeyDown={(e) => handleMarkdownShortcut(e)}
+                ref={(el) => (createInputRef = el)}
+              />
+              <button
+                type="submit"
+                class="label-create-btn"
+                disabled={!newName().trim() || creating()}
+              >
+                Create
+              </button>
+            </form>
+          </Show>
         </Show>
       </div>
     </>

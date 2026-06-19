@@ -310,8 +310,10 @@ test("create a new label inline in card detail and auto-assign it", async ({
   await page.locator(".card", { hasText: "Labelled card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  // Open the label picker and create a brand-new label inline.
+  // Open the label picker, reveal the create form, then create a label inline.
   await page.locator(".label-add-btn").click();
+  await expect(page.locator(".label-create")).toHaveCount(0);
+  await page.locator(".label-create-toggle").click();
   await page.locator(".label-create-input").fill("Urgent");
   await page.locator(".label-create-btn").click();
 
@@ -346,11 +348,41 @@ test("inline label create form closes when focus leaves the label area", async (
   await page.locator(".card", { hasText: "Blur card" }).click();
 
   await page.locator(".label-add-btn").click();
+  await page.locator(".label-create-toggle").click();
   await expect(page.locator(".label-create")).toBeVisible();
 
   // Moving focus out of the label area (to the title input) closes the picker.
   await page.locator(".modal-title-input").focus();
   await expect(page.locator(".label-create")).toHaveCount(0);
+});
+
+test("inline create form collapses to the toggle when it loses focus inside the picker", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Collapse Board" } })
+  ).json();
+  await request.post(`/api/boards/${board.id}/labels`, { data: { name: "Existing" } });
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Collapse card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Collapse card" }).click();
+
+  // Open the picker and reveal the create input.
+  await page.locator(".label-add-btn").click();
+  await page.locator(".label-create-toggle").click();
+  await expect(page.locator(".label-create")).toBeVisible();
+
+  // Click a label in the grid: focus leaves the create form but stays in the
+  // picker — the form collapses back to the toggle, picker stays open.
+  await page.locator(".label-picker-item", { hasText: "Existing" }).click();
+  await expect(page.locator(".label-create")).toHaveCount(0);
+  await expect(page.locator(".label-create-toggle")).toBeVisible();
+  await expect(page.locator(".label-picker")).toBeVisible();
 });
 
 test("board deleted while open shows not-found state after poll refetch", async ({
@@ -456,4 +488,50 @@ test("dock dots highlight the active board, show its name, and navigate on click
   await dotB.click();
   await expect(page).toHaveURL(new RegExp(`/board/${b.id}$`));
   await expect(dotB).toHaveClass(/board-dock-dot--active/);
+});
+
+test("New-label input stays hidden until Create label is clicked, on every card", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Picker Default Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "First card" } });
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Second card" } });
+
+  await page.goto(`/board/${board.id}`);
+
+  // First card: opening the picker shows the create toggle, NOT the input.
+  await page.locator(".card", { hasText: "First card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+  await page.locator(".label-add-btn").click();
+  await expect(page.locator(".label-create-toggle")).toBeVisible();
+  await expect(page.locator(".label-create")).toHaveCount(0);
+
+  // Clicking the toggle reveals the input.
+  await page.locator(".label-create-toggle").click();
+  await expect(page.locator(".label-create")).toBeVisible();
+
+  // Close and open a different card: picker must again start with the input
+  // hidden behind the toggle (the regression: it leaked open across cards).
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "Second card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+  await page.locator(".label-add-btn").click();
+  await expect(page.locator(".label-create-toggle")).toBeVisible();
+  await expect(page.locator(".label-create")).toHaveCount(0);
+
+  // Reopening the picker on the same card after closing it also resets.
+  await page.locator(".label-create-toggle").click();
+  await expect(page.locator(".label-create")).toBeVisible();
+  await page.locator(".label-add-btn").click(); // "Done" — close picker
+  await expect(page.locator(".label-create")).toHaveCount(0);
+  await page.locator(".label-add-btn").click(); // reopen picker
+  await expect(page.locator(".label-create-toggle")).toBeVisible();
+  await expect(page.locator(".label-create")).toHaveCount(0);
 });
