@@ -16,6 +16,7 @@ import { addListNodes, sinkListItem, liftListItem } from "prosemirror-schema-lis
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { toggleMark } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
+import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
 import {
   MenuItem,
   Dropdown,
@@ -204,7 +205,11 @@ export function createCardEditor(
 
   const state = EditorState.create({
     doc: initialDoc,
-    plugins: [listKeymap, ...exampleSetup({ schema, menuBar: true, menuContent })],
+    plugins: [
+      listKeymap,
+      autolinkInputRules(schema),
+      ...exampleSetup({ schema, menuBar: true, menuContent }),
+    ],
   });
 
   const view: EditorView = new EditorView(target, {
@@ -214,6 +219,7 @@ export function createCardEditor(
       view.updateState(newState);
       if (tr.docChanged) onChange(newState.doc);
     },
+    handlePaste: handleAutolinkPaste(schema),
     attributes: { class: "prosemirror-editor" },
   });
   return view;
