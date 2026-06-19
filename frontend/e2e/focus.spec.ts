@@ -259,3 +259,36 @@ test("archive modal keeps keyboard after inline delete-confirm cancel", async ({
   await page.keyboard.press("Escape");
   await expect(page.locator(".archive-modal-overlay")).toHaveCount(0);
 });
+
+// Regression: the link dialog portals to <body>, outside the card modal's
+// focus trap. Previously the trap reclaimed focus the instant the dialog's
+// input focused, so the dialog was unusable. The overlay-layer stack now lets
+// the trap yield to overlays stacked above it (even portaled ones).
+test("link dialog keeps focus when opened over the card modal", async ({ page, request }) => {
+  const { board } = await seedCard(request, "Link Board");
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Task card" }).click();
+
+  // Type text and select it so the link menu item is enabled.
+  await page.locator(".ProseMirror").click();
+  await page.keyboard.type("example");
+  await page.keyboard.press("ControlOrMeta+a");
+
+  await page.locator('[title="Add or remove link"]').click();
+
+  const input = page.locator(".link-dialog-input");
+  await expect(input).toBeVisible();
+
+  // The trap must NOT have pulled focus back into the modal title input.
+  await expect(input).toBeFocused();
+
+  // Focus stays put long enough to actually type a URL.
+  await input.fill("https://example.com");
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("https://example.com");
+
+  // Applying the link closes the dialog and marks the selection.
+  await page.locator(".link-dialog .btn-primary", { hasText: "Apply" }).click();
+  await expect(page.locator(".link-dialog-overlay")).toHaveCount(0);
+  await expect(page.locator('.ProseMirror a[href="https://example.com"]')).toBeVisible();
+});

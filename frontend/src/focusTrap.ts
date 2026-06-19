@@ -1,3 +1,5 @@
+import { registerOverlay, focusInHigherLayer } from "./overlayLayers";
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), ' +
   'select:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
@@ -39,6 +41,9 @@ export function focusTrap(root: HTMLElement): () => void {
     if (!root.isConnected) return;
     const active = document.activeElement;
     if (active && active !== document.body && root.contains(active)) return;
+    // An overlay stacked above us (possibly portaled outside our subtree) owns
+    // focus — don't yank it back.
+    if (focusInHigherLayer(root, active)) return;
     for (let i = history.length - 1; i >= 0; i--) {
       const el = history[i];
       if (el.isConnected && root.contains(el)) {
@@ -85,10 +90,12 @@ export function focusTrap(root: HTMLElement): () => void {
   });
   observer.observe(root, { childList: true, subtree: true });
 
+  const unregister = registerOverlay(root);
   document.addEventListener("focusin", onFocusIn);
   root.addEventListener("focusout", onFocusOut);
   root.addEventListener("keydown", onKeyDown);
   return () => {
+    unregister();
     observer.disconnect();
     document.removeEventListener("focusin", onFocusIn);
     root.removeEventListener("focusout", onFocusOut);

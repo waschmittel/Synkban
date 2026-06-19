@@ -17,6 +17,7 @@ import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { toggleMark } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
+import { registerOverlay } from "./overlayLayers";
 import {
   MenuItem,
   Dropdown,
@@ -117,13 +118,14 @@ function showLinkDialog(view: EditorView, markType: MarkType, prefillUrl: string
   dialog.appendChild(actions);
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
+  const unregister = registerOverlay(overlay);
 
   requestAnimationFrame(() => {
     input.focus();
     if (prefillUrl) input.select();
   });
 
-  const close = () => overlay.remove();
+  const close = () => { unregister(); overlay.remove(); };
 
   const submit = () => {
     const raw = input.value.trim();
