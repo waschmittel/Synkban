@@ -7,14 +7,28 @@
 /// focus. This is the layering invariant that lets focusTrap compose with
 /// overlays it doesn't contain.
 
-const layers: HTMLElement[] = [];
+interface Layer {
+  el: HTMLElement;
+  /// Called when this layer becomes the topmost again because a layer stacked
+  /// above it closed — lets a lower focus trap reclaim focus that orphaned on
+  /// <body> when the higher overlay (possibly outside its DOM subtree) was
+  /// removed without notifying it.
+  onResume?: () => void;
+}
+
+const layers: Layer[] = [];
 
 /// Register an overlay element. Returns a dispose fn to pop it off the stack.
-export function registerOverlay(el: HTMLElement): () => void {
-  layers.push(el);
+/// `onResume` fires when a higher layer closes and this becomes topmost again.
+export function registerOverlay(el: HTMLElement, onResume?: () => void): () => void {
+  layers.push({ el, onResume });
   return () => {
-    const i = layers.indexOf(el);
-    if (i !== -1) layers.splice(i, 1);
+    const i = layers.findIndex((l) => l.el === el);
+    if (i === -1) return;
+    const wasTop = i === layers.length - 1;
+    layers.splice(i, 1);
+    // A higher layer just closed — the new topmost layer reclaims focus.
+    if (wasTop && layers.length > 0) layers[layers.length - 1].onResume?.();
   };
 }
 
@@ -23,9 +37,9 @@ export function registerOverlay(el: HTMLElement): () => void {
 /// in a registered overlay counts as higher.
 export function focusInHigherLayer(root: HTMLElement, node: Node | null): boolean {
   if (!node) return false;
-  const rootIdx = layers.indexOf(root);
+  const rootIdx = layers.findIndex((l) => l.el === root);
   for (let i = layers.length - 1; i > rootIdx; i--) {
-    if (layers[i].contains(node)) return true;
+    if (layers[i].el.contains(node)) return true;
   }
   return false;
 }

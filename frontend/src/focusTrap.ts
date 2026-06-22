@@ -90,7 +90,9 @@ export function focusTrap(root: HTMLElement): () => void {
   });
   observer.observe(root, { childList: true, subtree: true });
 
-  const unregister = registerOverlay(root);
+  // restore() runs on the next frame so it can't race a higher overlay's own
+  // close-time focus moves; aligns with the rAF used elsewhere here.
+  const unregister = registerOverlay(root, () => requestAnimationFrame(restore));
   document.addEventListener("focusin", onFocusIn);
   root.addEventListener("focusout", onFocusOut);
   root.addEventListener("keydown", onKeyDown);
