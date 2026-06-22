@@ -125,7 +125,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Ctrl", "L"]} desc="Focus labels" />
             <Row keys={["Ctrl", "D"]} desc="Focus description" />
             <Row keys={["Ctrl", "C"]} desc="Focus checklist" />
-            <Row keys={["Ctrl", "A"]} desc="Add attachment" />
+            <Row keys={["Ctrl", "O"]} desc="Add attachment" />
             <Row keys={["Ctrl", "U"]} desc="Open due date picker" />
             <Row keys={["f"]} desc="Toggle filter bar" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />

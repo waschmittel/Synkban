@@ -446,9 +446,9 @@ test("card-detail Ctrl+A opens the attachment file picker", async ({
   await page.locator(".card", { hasText: "Attach card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  // Ctrl+A triggers the hidden file input's click → a native file chooser.
+  // Ctrl+O triggers the hidden file input's click → a native file chooser.
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Control+o");
   const chooser = await fileChooserPromise;
   expect(chooser).toBeTruthy();
 });
