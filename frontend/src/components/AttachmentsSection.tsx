@@ -19,6 +19,7 @@ interface Props {
   onUpload: (file: File) => void;
   onDelete: (attId: string) => void;
   onPreview: (att: Attachment) => void;
+  fileInputRef?: (el: HTMLInputElement) => void;
 }
 
 /// Attachments list + "Add attachment" file picker. Image attachments
@@ -126,6 +127,7 @@ export default function AttachmentsSection(props: Props) {
           style={{ display: "none" }}
           onChange={handleFileInput}
           disabled={props.uploading}
+          ref={(el) => props.fileInputRef?.(el)}
         />
       </label>
     </>

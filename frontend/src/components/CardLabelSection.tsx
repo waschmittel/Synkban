@@ -11,6 +11,7 @@ interface Props {
   onTogglePicker: () => void;
   onClosePicker: () => void;
   onCreateLabel: (name: string) => void | Promise<void>;
+  addBtnRef?: (el: HTMLButtonElement) => void;
 }
 
 /// Renders the assigned-label chips above the title and (when open) the
@@ -119,9 +120,9 @@ export default function CardLabelSection(props: Props) {
           </For>
           <button
             class="label-add-btn"
-            ref={addBtnRef}
+            ref={(el) => { addBtnRef = el; props.addBtnRef?.(el); }}
             onClick={props.onTogglePicker}
-            title={props.pickerOpen ? "Hide label picker (L)" : "Add/remove labels (L)"}
+            title={props.pickerOpen ? "Hide label picker (Ctrl+L)" : "Add/remove labels (Ctrl+L)"}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />

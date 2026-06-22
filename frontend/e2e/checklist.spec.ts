@@ -127,9 +127,9 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   await page.keyboard.press("Enter");
   await expect(page.locator(".modal-title-input")).toBeFocused();
 
-  // Leave the title input, then `c` focuses the checklist add input.
+  // Leave the title input, then Ctrl+C focuses the checklist add input.
   await page.keyboard.press("Tab");
-  await page.keyboard.press("c");
+  await page.keyboard.press("Control+c");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 
   await page.keyboard.type("kb one");

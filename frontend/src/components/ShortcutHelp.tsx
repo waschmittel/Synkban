@@ -120,11 +120,13 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Ctrl", "B"]} desc="Bold selection (title)" />
             <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
-            <Row keys={["Ctrl", "Shift"]} desc="Toggle title / editor focus" />
             <Row keys={["Enter"]} desc="Title → focus editor" />
-            <Row keys={["l"]} desc="Toggle label picker" />
-            <Row keys={["d"]} desc="Focus due date input" />
-            <Row keys={["c"]} desc="Focus checklist add input" />
+            <Row keys={["Ctrl", "T"]} desc="Focus title" />
+            <Row keys={["Ctrl", "L"]} desc="Focus labels" />
+            <Row keys={["Ctrl", "D"]} desc="Focus description" />
+            <Row keys={["Ctrl", "C"]} desc="Focus checklist" />
+            <Row keys={["Ctrl", "A"]} desc="Add attachment" />
+            <Row keys={["Ctrl", "U"]} desc="Open due date picker" />
             <Row keys={["f"]} desc="Toggle filter bar" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
           </Section>

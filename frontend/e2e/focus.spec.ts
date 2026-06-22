@@ -125,7 +125,7 @@ test("modal shortcuts still work after dialog round-trip", async ({ page, reques
   // Focus restored to the title input — leave it, then use a modal shortcut.
   await expect(page.locator(".modal-title-input")).toBeFocused();
   await page.keyboard.press("Tab");
-  await page.keyboard.press("c");
+  await page.keyboard.press("Control+c");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 });
 

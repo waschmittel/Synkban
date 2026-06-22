@@ -385,6 +385,67 @@ test("inline create form collapses to the toggle when it loses focus inside the 
   await expect(page.locator(".label-picker")).toBeVisible();
 });
 
+test("card-detail Ctrl-modifier shortcuts focus each section", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Shortcut Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Shortcut card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Shortcut card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+
+  // Title input is auto-focused on open. Ctrl+D → description editor.
+  await page.keyboard.press("Control+d");
+  await expect(page.locator(".editor-wrapper .ProseMirror")).toBeFocused();
+
+  // Ctrl+T → back to title.
+  await page.keyboard.press("Control+t");
+  await expect(page.locator(".modal-title-input")).toBeFocused();
+
+  // Ctrl+C → checklist add input.
+  await page.keyboard.press("Control+c");
+  await expect(page.locator(".checklist-add-input")).toBeFocused();
+
+  // Ctrl+U → due-date input (also calls showPicker(), tolerated if it throws).
+  await page.keyboard.press("Control+u");
+  await expect(page.locator(".due-date-input")).toBeFocused();
+
+  // Ctrl+L → opens the label picker and focuses the add-label button.
+  await page.keyboard.press("Control+l");
+  await expect(page.locator(".label-add-btn")).toBeFocused();
+  await expect(page.locator(".label-add-btn")).toHaveText(/Done/);
+});
+
+test("card-detail Ctrl+A opens the attachment file picker", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Attach Shortcut Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Attach card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Attach card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+
+  // Ctrl+A triggers the hidden file input's click → a native file chooser.
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.keyboard.press("Control+a");
+  const chooser = await fileChooserPromise;
+  expect(chooser).toBeTruthy();
+});
+
 test("board deleted while open shows not-found state after poll refetch", async ({
   page,
   request,
