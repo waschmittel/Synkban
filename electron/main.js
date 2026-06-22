@@ -8,11 +8,14 @@ let backendProcess = null;
 
 // Build version written by build.sh (release tag or dated snapshot).
 // Falls back to the package.json version for unstamped dev runs.
-let appVersion;
+let appVersion, buildStamp;
 try {
-  appVersion = require('./app-version.json').version;
+  const v = require('./app-version.json');
+  appVersion = v.version;
+  buildStamp = [v.build, v.commit].filter(Boolean).join(' · ');
 } catch {
   appVersion = app.getVersion();
+  buildStamp = '';
 }
 
 function getBackendPath() {
@@ -93,6 +96,7 @@ app.whenReady().then(() => {
   app.setAboutPanelOptions({
     applicationName: 'Synkban',
     applicationVersion: appVersion,
+    version: buildStamp,
   });
   createWindow();
 });

@@ -80,7 +80,8 @@ if [ "$DESKTOP" = true ]; then
     echo ""
     echo "=== Building desktop app (Electron) ==="
     cd "$ROOT/electron"
-    printf '{ "version": "%s" }\n' "$VERSION" > app-version.json
+    COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    printf '{ "version": "%s", "build": "%s", "commit": "%s" }\n' "$VERSION" "$(date -u '+%Y-%m-%d %H:%M UTC')" "$COMMIT" > app-version.json
     pnpm install
     pnpm run dist
 fi
