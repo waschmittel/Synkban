@@ -1708,6 +1708,12 @@ html.electron:not(.electron--mac) .app-header-actions {
   font-weight: 600;
 }
 
+.editor-wrapper .ProseMirror a {
+  color: #0079bf;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ProseMirror menu bar */
 .editor-wrapper .ProseMirror-menubar-wrapper {
   border: none;
@@ -2681,6 +2687,13 @@ html.electron:not(.electron--mac) .app-header-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  align-items: center;
+}
+
+/* Push Apply/Cancel to the right, leaving Remove on the left edge. */
+.link-dialog-remove {
+  margin-right: auto;
+  color: #b04632;
 }
 
 /* ═══ Due Date Badge (card list view) ═══ */

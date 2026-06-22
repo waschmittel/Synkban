@@ -446,6 +446,112 @@ test("card-detail Ctrl+A opens the attachment file picker", async ({
   expect(chooser).toBeTruthy();
 });
 
+test("clicking a link in the description opens it in a new tab", async ({
+  page,
+  context,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Link Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  const card = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Link card" } })
+  ).json();
+
+  // Seed a description containing a link mark (the editor's serialized shape).
+  const doc = {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            marks: [{ type: "link", attrs: { href: "https://example.com/", title: null } }],
+            text: "example link",
+          },
+        ],
+      },
+    ],
+  };
+  await request.put(`/api/cards/${card.id}`, {
+    data: { description: JSON.stringify(doc) },
+  });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Link card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+
+  const link = page.locator(".editor-wrapper .ProseMirror a", { hasText: "example link" });
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", /noopener/);
+
+  // Clicking opens a new browser tab (window.open _blank) rather than
+  // navigating the editor or placing the cursor.
+  const popupPromise = context.waitForEvent("page");
+  await link.click();
+  const popup = await popupPromise;
+  expect(popup.url()).toBe("https://example.com/");
+  await popup.close();
+});
+
+test("Cmd/Ctrl+clicking a description link edits or removes it", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Link Edit Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  const card = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Edit link card" } })
+  ).json();
+  const doc = {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            marks: [{ type: "link", attrs: { href: "https://example.com/", title: null } }],
+            text: "example link",
+          },
+        ],
+      },
+    ],
+  };
+  await request.put(`/api/cards/${card.id}`, { data: { description: JSON.stringify(doc) } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Edit link card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+
+  const link = page.locator(".editor-wrapper .ProseMirror a", { hasText: "example link" });
+
+  // Cmd/Ctrl+click opens the edit dialog prefilled with the current URL (it
+  // does NOT open a new tab).
+  await link.click({ modifiers: ["ControlOrMeta"] });
+  const urlInput = page.locator(".link-dialog-input");
+  await expect(urlInput).toHaveValue("https://example.com/");
+
+  // Editing the URL and applying rewrites the link's href in place.
+  await urlInput.fill("https://changed.example.org/");
+  await page.locator(".link-dialog .btn-primary").click();
+  await expect(link).toHaveAttribute("href", "https://changed.example.org/");
+
+  // Reopen and remove: the anchor is gone but its text survives.
+  await link.click({ modifiers: ["ControlOrMeta"] });
+  await page.locator(".link-dialog-remove").click();
+  await expect(page.locator(".editor-wrapper .ProseMirror a")).toHaveCount(0);
+  await expect(page.locator(".editor-wrapper .ProseMirror")).toContainText("example link");
+});
+
 test("board deleted while open shows not-found state after poll refetch", async ({
   page,
   request,

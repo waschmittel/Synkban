@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
@@ -81,7 +81,15 @@ async function createWindow() {
 
   const appOrigin = `http://127.0.0.1:${port}`;
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Links in card descriptions open via window.open(_blank). Hand external
+  // http/https/mailto URLs to the OS default browser instead of spawning a
+  // child BrowserWindow; deny everything else.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^(https?:|mailto:)/i.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (new URL(url).origin !== appOrigin) {
@@ -101,10 +109,33 @@ app.whenReady().then(() => {
   createWindow();
 });
 
+function killBackend() {
+  if (backendProcess && !backendProcess.killed) {
+    try {
+      backendProcess.kill();
+    } catch {
+      /* already gone */
+    }
+    backendProcess = null;
+  }
+}
+
 app.on('window-all-closed', () => {
-  backendProcess?.kill();
+  killBackend();
   app.quit();
 });
+
+// Kill the spawned backend whenever the main process goes away — not just on
+// window-all-closed. Force-quit, an external SIGTERM (e.g. a test harness
+// closing the app), or any quit path would otherwise orphan the Rust child.
+app.on('before-quit', killBackend);
+process.on('exit', killBackend);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => {
+    killBackend();
+    process.exit(0);
+  });
+}
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
