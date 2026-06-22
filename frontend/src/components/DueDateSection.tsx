@@ -4,6 +4,11 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   inputRef?: (el: HTMLInputElement) => void;
+  /// Exposes a function that opens the native date picker. The picker lives on
+  /// the hidden `type="date"` input (text inputs have no showPicker), so the
+  /// parent's Ctrl/Cmd+U shortcut must go through this rather than the visible
+  /// input it focuses.
+  openPickerRef?: (open: () => void) => void;
 }
 
 /// ISO-text date input (`YYYY-MM-DD`) with a calendar button that opens
@@ -35,7 +40,17 @@ export default function DueDateSection(props: Props) {
           onInput={(e) => props.onChange(e.currentTarget.value)}
         />
         <input
-          ref={pickerRef!}
+          ref={(el) => {
+            pickerRef = el;
+            props.openPickerRef?.(() => {
+              try {
+                el.showPicker?.();
+              } catch {
+                // showPicker throws without a user gesture in some browsers;
+                // the focused text input is then the fallback.
+              }
+            });
+          }}
           type="date"
           class="due-date-picker-hidden"
           value={props.value}

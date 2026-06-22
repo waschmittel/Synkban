@@ -397,6 +397,13 @@ test("card-detail Ctrl-modifier shortcuts focus each section", async ({
   ).json();
   await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Shortcut card" } });
 
+  // Neuter showPicker so Ctrl+U's real native date picker doesn't open and
+  // steal window focus from later shortcuts in this sequence (picker behaviour
+  // is asserted separately). This test only checks section focus.
+  await page.addInitScript(() => {
+    HTMLInputElement.prototype.showPicker = function () {};
+  });
+
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Shortcut card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
@@ -413,7 +420,7 @@ test("card-detail Ctrl-modifier shortcuts focus each section", async ({
   await page.keyboard.press("Control+c");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 
-  // Ctrl+U → due-date input (also calls showPicker(), tolerated if it throws).
+  // Ctrl+U → due-date input (also opens the picker; stubbed above).
   await page.keyboard.press("Control+u");
   await expect(page.locator(".due-date-input")).toBeFocused();
 
@@ -444,6 +451,43 @@ test("card-detail Ctrl+A opens the attachment file picker", async ({
   await page.keyboard.press("Control+a");
   const chooser = await fileChooserPromise;
   expect(chooser).toBeTruthy();
+});
+
+test("card-detail Ctrl+U focuses the due-date input and opens the picker", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Due Shortcut Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Due card" } });
+
+  // Record showPicker() invocations (the native picker UI itself isn't
+  // observable). showPicker only exists on date/color/file inputs, so a call
+  // on the type="date" input proves Ctrl+U hit the right element — the bug was
+  // it targeting the type="text" input, where showPicker is a no-op.
+  await page.addInitScript(() => {
+    (window as any).__pickerOpens = [];
+    HTMLInputElement.prototype.showPicker = function () {
+      (window as any).__pickerOpens.push(this.type);
+    };
+  });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Due card" }).click();
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+
+  await page.keyboard.press("Control+u");
+
+  // The visible text input gets focus…
+  await expect(page.locator(".due-date-input")).toBeFocused();
+  // …and the native picker was opened on the date input.
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__pickerOpens))
+    .toContain("date");
 });
 
 test("clicking a link in the description opens it in a new tab", async ({
