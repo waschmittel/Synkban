@@ -256,12 +256,12 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 - `toml` — read/write `~/.config/synkban/synkban.toml`
 
 ### Desktop shell (`electron/package.json`)
-- `electron` v34 — Chromium-based desktop window
-- `electron-builder` v25 — cross-platform packaging (bundles Rust binary as extraResource)
+- `electron` v42 — Chromium-based desktop window
+- `electron-builder` v26 — cross-platform packaging (bundles Rust binary as extraResource)
 
 ### Frontend (package.json)
 - `solid-js` + `@solidjs/router` — UI framework + routing
-- `prosemirror-*` (13 packages) — rich text editor
+- `prosemirror-*` (10 packages) — rich text editor
 - `vite` + `vite-plugin-solid` + `typescript` — build tooling (devDependencies)
 
 ## Docker
