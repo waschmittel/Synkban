@@ -22,6 +22,7 @@ export function isInUiOverlay(target: EventTarget | null): boolean {
     !!el.closest(".label-drawer") ||
     !!el.closest(".shortcut-help-overlay") ||
     !!el.closest(".archive-overlay") ||
+    !!el.closest(".settings-overlay") ||
     !!el.closest(".filter-bar")
   );
 }

@@ -26,6 +26,7 @@ import { useLabelDrawer } from "../LabelDrawerContext";
 import { listDropPosition } from "../positions";
 import { cardMatchesFilter as filterCard } from "../filter";
 import { isTypingIn, isInUiOverlay } from "../boardInput";
+import { recordLastBoard } from "../settings";
 import { createFocusRestoration } from "../focusRestoration";
 import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
@@ -86,6 +87,14 @@ export default function BoardPage() {
     if (board.error) return;
     const b = board();
     if (b) header.setTitle(b.title);
+  });
+
+  // Remember the last board that actually loaded, for the "open last used
+  // board on startup" preference. Stale ids (deleted/archived boards) are
+  // filtered out server-side by GET /api/settings, so no clearing here.
+  createEffect(() => {
+    if (board.error) return;
+    if (board()) recordLastBoard(params.id);
   });
 
   onMount(() => {

@@ -1,3 +1,4 @@
+pub mod config;
 pub mod errors;
 pub mod handlers;
 pub mod models;
@@ -41,6 +42,8 @@ pub fn check_token_auth(cookie_value: Option<&str>, query_string: &str, token: &
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/api/changes", web::get().to(handlers::boards::check_changes))
         .route("/api/warnings", web::get().to(handlers::boards::get_warnings))
+        .route("/api/settings", web::get().to(handlers::settings::get_settings))
+        .route("/api/settings", web::put().to(handlers::settings::update_settings))
         .route("/api/boards", web::get().to(handlers::boards::list_boards))
         .route("/api/boards", web::post().to(handlers::boards::create_board))
         .route("/api/boards/archive", web::get().to(handlers::boards::list_archived_boards))

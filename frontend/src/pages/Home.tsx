@@ -28,7 +28,13 @@ export default function Home() {
   // only clear the pending id once the reorder fully settles (otherwise the
   // refetch would land focus on a recreated node with no id left to target).
   createEffect(() => {
-    boards();
+    // Reading an errored resource throws; an uncaught throw in an effect
+    // aborts the effect-queue run and kills later effects on the same tick.
+    try {
+      boards();
+    } catch {
+      return;
+    }
     const id = pendingFocusBoardId();
     if (!id) return;
     requestAnimationFrame(() => {

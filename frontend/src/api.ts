@@ -1,4 +1,4 @@
-import type { Attachment, Board, BoardDetail, Card, ChecklistItem, Label, ListWithCards } from "./types";
+import type { Attachment, Board, BoardDetail, Card, ChecklistItem, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
 
 const BASE = "/api";
 
@@ -17,6 +17,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   checkChanges: () => request<{ mtime: number; boards: Record<string, number> }>("/changes"),
+
+  getSettings: () => request<Settings>("/settings"),
+
+  updateSettings: (data: UpdateSettingsPayload) =>
+    request<Settings>("/settings", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 
   getWarnings: () => request<{ warnings: string[] }>("/warnings"),
 

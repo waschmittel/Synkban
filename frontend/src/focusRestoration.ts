@@ -31,7 +31,14 @@ export function createFocusRestoration(
   const [lastFocused, setLastFocused] = createSignal<string | null>(null);
 
   createEffect(() => {
-    watch();
+    // Reading an errored resource throws; an uncaught throw here would abort
+    // the whole effect-queue run and silently kill *later* effects watching
+    // the same resource. Nothing to restore focus onto anyway.
+    try {
+      watch();
+    } catch {
+      return;
+    }
     const cardId = untrack(pending);
     if (!cardId) return;
     setPending(null);

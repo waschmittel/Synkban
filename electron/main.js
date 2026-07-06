@@ -1,10 +1,30 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
 
 let mainWindow = null;
 let backendProcess = null;
+
+// Settings (data dir, startup view) are owned by the Rust backend, persisted
+// in ~/.config/synkban/synkban.toml. The shell only contributes what the web
+// UI can't do itself: the native directory picker and a full relaunch (the
+// backend reads its data dir once at spawn, so a change needs a restart).
+function registerSettingsIpc() {
+  ipcMain.handle('synkban:pick-data-dir', async (_event, currentDir) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose data folder',
+      defaultPath: typeof currentDir === 'string' && currentDir ? currentDir : undefined,
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('synkban:relaunch', () => {
+    app.relaunch();
+    app.quit();
+  });
+}
 
 // Build version written by build.sh (release tag or dated snapshot).
 // Falls back to the package.json version for unstamped dev runs.
@@ -27,9 +47,11 @@ function getBackendPath() {
   return path.join(__dirname, '..', 'backend', 'target', 'release', `synkban${ext}`);
 }
 
-function startBackend(token, dataDir) {
+function startBackend(token) {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env, DESKTOP_TOKEN: token, DATA_DIR: dataDir };
+    // No DATA_DIR: the binary resolves its data dir from synkban.toml (or an
+    // inherited DATA_DIR/--data-dir override in dev).
+    const env = { ...process.env, DESKTOP_TOKEN: token };
     backendProcess = spawn(getBackendPath(), [], { env });
 
     backendProcess.stdout.on('data', (data) => {
@@ -56,8 +78,7 @@ function startBackend(token, dataDir) {
 
 async function createWindow() {
   const token = crypto.randomUUID().replace(/-/g, '');
-  const dataDir = app.getPath('userData');
-  const port = await startBackend(token, dataDir);
+  const port = await startBackend(token);
 
   const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
@@ -76,6 +97,7 @@ async function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -106,6 +128,7 @@ app.whenReady().then(() => {
     applicationVersion: appVersion,
     version: buildStamp,
   });
+  registerSettingsIpc();
   createWindow();
 });
 

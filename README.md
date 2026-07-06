@@ -44,7 +44,7 @@ Dev setup, API reference, project structure, architecture notes, and testing are
 
 ## Configuration
 
-All configuration via environment variables:
+Environment variables and CLI flags:
 
 | Variable   | Default     | Description                                      |
 | ---------- | ----------- | ------------------------------------------------ |
@@ -52,19 +52,42 @@ All configuration via environment variables:
 | `PORT`     | `8080`      | Bind port                                        |
 | `DATA_DIR` | `./data`    | **Path to the data directory** (created if absent) |
 
+| Flag                | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| `--data-dir <path>` | Data directory; takes precedence over `DATA_DIR`   |
+
 ```bash
 HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./synkban
+# or
+./synkban --data-dir /var/lib/tc
 ```
 
-### How the effective `DATA_DIR` is determined
+### Config file
 
-`DATA_DIR` is the one setting that decides **where all your boards live**, so it's worth knowing how it's resolved:
+Persistent settings live in `~/.config/synkban/synkban.toml` (all platforms and modes; directory overridable via `SYNKBAN_CONFIG_DIR`):
 
-- **Web server mode** (`./synkban`, Docker) — reads the `DATA_DIR` env var. If unset, defaults to `./data` (relative to the working directory). Created automatically on first run.
-- **Desktop mode** (Electron app) — Electron **overrides** `DATA_DIR` with the per-user application data directory and passes it to the bundled binary, so any inherited env var is ignored. Locations:
-  - macOS — `~/Library/Application Support/Synkban`
-  - Windows — `%APPDATA%\Synkban`
-  - Linux — `~/.config/Synkban`
+```toml
+data_dir = "/home/me/Sync/synkban"   # optional custom data directory
+startup_view = "last"                 # "overview" (default) | "last"
+last_board_id = "…"                   # maintained automatically
+```
+
+You normally never edit it — the in-app **⚙ Settings** dialog (gear button on the board overview) writes it for you.
+
+### How the effective data directory is determined
+
+The data directory is the one setting that decides **where all your boards live**. Resolution order (identical in web server and desktop mode):
+
+1. `--data-dir` CLI flag
+2. `DATA_DIR` environment variable
+3. `data_dir` in `~/.config/synkban/synkban.toml`
+4. default: `~/.config/synkban/data/`
+
+Created automatically on first run. In the desktop app a custom folder (e.g. inside your Syncthing/Dropbox tree) can be chosen via **⚙ Settings** → *Data folder* → *Browse…*; saving restarts the app on the new folder. Existing boards are **not** moved automatically — copy the `boards/` folder yourself.
+
+### Startup view
+
+By default the app opens on the board overview. **⚙ Settings** → *On startup, open* switches to reopening the last used board instead (persisted in the config file; deep links always win, and a board that no longer exists falls back to the overview).
 
 Data is plain JSON files: to back up, copy the directory; to migrate, move it to the new host and point `DATA_DIR` at it. The on-disk layout and file formats are documented in the [development guide](docs/development.md#data-storage).
 

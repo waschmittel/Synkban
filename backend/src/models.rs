@@ -181,3 +181,23 @@ pub struct AttachmentQuery {
 pub struct ReorderBoards {
     pub ids: Vec<String>,
 }
+
+#[derive(Debug, Serialize)]
+pub struct SettingsResponse {
+    pub startup_view: String,
+    pub last_board_id: Option<String>,
+    /// Effective data dir of the running server (may come from CLI/env).
+    pub data_dir: String,
+    /// data_dir as stored in synkban.toml, if set.
+    pub configured_data_dir: Option<String>,
+    pub default_data_dir: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSettings {
+    pub startup_view: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    pub last_board_id: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    pub data_dir: Option<Option<String>>,
+}

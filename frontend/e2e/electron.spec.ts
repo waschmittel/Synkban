@@ -62,8 +62,10 @@ test.describe("electron desktop shell", () => {
   });
 
   test("description link opens via shell.openExternal, not a child window", async () => {
-    // --user-data-dir isolates getPath('userData') to a temp dir so the test's
-    // seeded board never lands in the real desktop app's data directory.
+    // --user-data-dir isolates getPath('userData'); DATA_DIR and
+    // SYNKBAN_CONFIG_DIR isolate the spawned backend (it resolves both from
+    // the environment / ~/.config/synkban otherwise), so the test's seeded
+    // board and its settings writes never land in the real user dirs.
     const userDataDir = mkdtempSync(join(tmpdir(), "synkban-electron-e2e-"));
     app = await electron.launch({
       executablePath: exe!,
@@ -71,6 +73,11 @@ test.describe("electron desktop shell", () => {
         join(__dirname, "..", "..", "electron", "main.js"),
         `--user-data-dir=${userDataDir}`,
       ],
+      env: {
+        ...process.env,
+        DATA_DIR: mkdtempSync(join(tmpdir(), "synkban-electron-e2e-data-")),
+        SYNKBAN_CONFIG_DIR: mkdtempSync(join(tmpdir(), "synkban-electron-e2e-config-")),
+      },
     });
 
     // Stub shell.openExternal in the main process and record its calls. main.js

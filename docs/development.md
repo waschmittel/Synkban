@@ -54,6 +54,13 @@ Output: `backend/target/release/synkban` — a single binary you can copy anywhe
 
 Base URL: `/api`
 
+### Settings
+
+| Method | Path        | Body                                            | Response           | Description                                                                                                                                                       |
+| ------ | ----------- | ----------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/settings` | —                                               | `SettingsResponse` | Settings from `~/.config/synkban/synkban.toml` + effective/default data dir. `last_board_id` is omitted when the board no longer exists or is archived.           |
+| PUT    | `/settings` | `{ startup_view?, last_board_id?, data_dir? }`  | `SettingsResponse` | Writes the config file. `last_board_id`/`data_dir` are double-Option: `null` clears/reverts to default, absent leaves unchanged. A `data_dir` change needs a restart. |
+
 ### Change polling
 
 | Method | Path       | Response            | Description                                                                                                                                                                   |
@@ -303,7 +310,7 @@ ProseMirror with `prosemirror-example-setup`, configured in `frontend/src/proseE
 
 ### Desktop mode
 
-When packaged with `./build.sh --desktop`, Electron generates a UUID token at launch, spawns the Rust binary with that token + a per-user `DATA_DIR`, reads a random port from stdout, then opens a window pointing at the local server. Every request must present the token (cookie or `?token=` query param), so other apps on the same machine can't reach the UI. See `electron/main.js` and `run_desktop_server` in `backend/src/lib.rs`.
+When packaged with `./build.sh --desktop`, Electron generates a UUID token at launch, spawns the Rust binary with that token (the binary resolves its data dir itself — see the [README](../README.md#configuration); a custom folder chosen in the in-app Settings dialog is persisted in `~/.config/synkban/synkban.toml` and applied after a relaunch), reads a random port from stdout, then opens a window pointing at the local server. Every request must present the token (cookie or `?token=` query param), so other apps on the same machine can't reach the UI. See `electron/main.js`, `electron/preload.js`, and `run_desktop_server` in `backend/src/lib.rs`.
 
 **macOS "App is damaged" Error:**
 Because the app is not code-signed with a Developer ID, macOS Gatekeeper may report it as "damaged". You can fix this by running:
