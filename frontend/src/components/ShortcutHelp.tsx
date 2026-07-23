@@ -84,12 +84,16 @@ export default function ShortcutHelp(props: Props) {
           <Section title="Navigation">
             <Row keys={["↑", "↓"]} desc="Move between cards" />
             <Row keys={["←", "→"]} desc="Jump to adjacent list" />
+            <Row keys={["Home"]} desc="Focus first card in list" />
+            <Row keys={["End"]} desc="Focus last card in list" />
           </Section>
           <Section title="Move Card">
             <Row keys={["Shift", "↑"]} desc="Move card up" />
             <Row keys={["Shift", "↓"]} desc="Move card down" />
             <Row keys={["Shift", "←"]} desc="Move card to prev list" />
             <Row keys={["Shift", "→"]} desc="Move card to next list" />
+            <Row keys={["Shift", "Home"]} desc="Move card to top of list" />
+            <Row keys={["Shift", "End"]} desc="Move card to bottom of list" />
           </Section>
           <Section title="Move / Rename List">
             <Row keys={["Shift", "Alt", "←"]} desc="Move list left" />

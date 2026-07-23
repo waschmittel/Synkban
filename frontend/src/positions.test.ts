@@ -4,6 +4,8 @@ import {
   withinListMoveUp,
   crossListInsertPosition,
   listDropPosition,
+  moveToTop,
+  moveToBottom,
 } from "./positions";
 
 describe("withinListMoveDown", () => {
@@ -93,5 +95,26 @@ describe("listDropPosition", () => {
 
   it("works with fractional list positions", () => {
     expect(listDropPosition([1, 1.5, 2], 1)).toBe(1.25);
+  });
+});
+
+describe("moveToTop", () => {
+  it("half of the current first position", () => {
+    expect(moveToTop(2)).toBe(1);
+    expect(moveToTop(1)).toBe(0.5);
+  });
+
+  it("works with fractional positions", () => {
+    expect(moveToTop(0.5)).toBe(0.25);
+  });
+});
+
+describe("moveToBottom", () => {
+  it("current last position + 1", () => {
+    expect(moveToBottom(3)).toBe(4);
+  });
+
+  it("works with fractional positions", () => {
+    expect(moveToBottom(2.5)).toBe(3.5);
   });
 });

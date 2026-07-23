@@ -27,6 +27,18 @@ export function crossListInsertPosition(adjPositions: number[], currentIdx: numb
   return (adjPositions[currentIdx - 1] + adjPositions[currentIdx]) / 2;
 }
 
+/// Position when moving a card to the top of its list.
+/// `firstPos` is the position of the current topmost card (a different card).
+export function moveToTop(firstPos: number): number {
+  return firstPos / 2;
+}
+
+/// Position when moving a card to the bottom of its list.
+/// `lastPos` is the position of the current bottommost card (a different card).
+export function moveToBottom(lastPos: number): number {
+  return lastPos + 1;
+}
+
 /// Position when dropping a list at `insertIndex` into a sequence of lists
 /// with the given positions (sorted ascending, dragged list excluded).
 export function listDropPosition(positions: number[], insertIndex: number): number {

@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
 import type { Card as CardType, Label } from "../types";
-import { crossListInsertPosition, listDropPosition, withinListMoveDown, withinListMoveUp } from "../positions";
+import { crossListInsertPosition, listDropPosition, moveToBottom, moveToTop, withinListMoveDown, withinListMoveUp } from "../positions";
 
 interface Props {
   card: CardType;
@@ -116,10 +116,31 @@ export default function Card(props: Props) {
         props.onMove(props.card.id, targetListId, crossListInsertPosition(adjPositions, curIdx));
         return;
       }
+      if (e.key === "Home" || e.key === "End") {
+        e.preventDefault();
+        if (!currentList) return;
+        const cards = Array.from(currentList.querySelectorAll<HTMLElement>(".card"));
+        const target = e.key === "Home" ? cards[0] : cards[cards.length - 1];
+        if (!target || target === el) return; // already at the edge
+        const targetPos = parseFloat(target.dataset.cardPosition || "0");
+        const newPos = e.key === "Home" ? moveToTop(targetPos) : moveToBottom(targetPos);
+        props.onMove(props.card.id, props.card.list_id, newPos);
+        return;
+      }
     }
 
     // Navigation (no shift)
-    if (e.key === "ArrowDown") {
+    if (e.key === "Home") {
+      e.preventDefault();
+      e.stopPropagation();
+      const cards = currentList?.querySelectorAll<HTMLElement>(".card");
+      cards?.[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      e.stopPropagation();
+      const cards = currentList?.querySelectorAll<HTMLElement>(".card");
+      cards?.[cards.length - 1]?.focus();
+    } else if (e.key === "ArrowDown") {
       e.preventDefault();
       e.stopPropagation();
       let next = el.nextElementSibling as HTMLElement | null;

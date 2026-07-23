@@ -294,6 +294,81 @@ test("Shift+ArrowRight moves card to adjacent list and persists", async ({
   await expect(inListB).toBeVisible();
 });
 
+test("Home and End focus the first and last card in the list", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "HomeEnd Nav" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  const alpha = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Alpha" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Bravo" } });
+  const charlie = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Charlie" } })
+  ).json();
+
+  await page.goto(`/board/${board.id}`);
+  const bravo = page.locator(".card", { hasText: "Bravo" });
+  await bravo.focus();
+  await expect(bravo).toBeFocused();
+
+  // Home jumps to the top card, End to the bottom card — both within the list.
+  await page.keyboard.press("Home");
+  await expect(page.locator(`.card[data-card-id="${alpha.id}"]`)).toBeFocused();
+
+  await page.keyboard.press("End");
+  await expect(page.locator(`.card[data-card-id="${charlie.id}"]`)).toBeFocused();
+});
+
+test("Shift+Home and Shift+End move a card to the top/bottom of its list", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "HomeEnd Move" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Alpha" } });
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Bravo" } });
+  const charlie = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Charlie" } })
+  ).json();
+
+  const titles = () =>
+    page.locator(`.list[data-list-id="${list.id}"] .card-title`).allTextContents();
+
+  await page.goto(`/board/${board.id}`);
+  await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
+
+  // Shift+Home sends the bottom card (Charlie) to the top; focus follows it.
+  const charlieCard = page.locator(`.card[data-card-id="${charlie.id}"]`);
+  await charlieCard.focus();
+  await page.keyboard.press("Shift+Home");
+  await expect(charlieCard).toBeFocused();
+  await expect.poll(titles).toEqual(["Charlie", "Alpha", "Bravo"]);
+
+  // No-op when already at the edge: Shift+Home on the top card changes nothing.
+  await page.keyboard.press("Shift+Home");
+  await expect(charlieCard).toBeFocused();
+  await expect.poll(titles).toEqual(["Charlie", "Alpha", "Bravo"]);
+
+  // Shift+End sends it back to the bottom.
+  await page.keyboard.press("Shift+End");
+  await expect(charlieCard).toBeFocused();
+  await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
+
+  // Order persists across a reload (positions written to disk).
+  await page.reload();
+  await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
+});
+
 test("create a new label inline in card detail and auto-assign it", async ({
   page,
   request,
