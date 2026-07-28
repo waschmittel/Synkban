@@ -18,6 +18,7 @@ fn settings_response(data_dir: &std::path::Path, cfg: &config::Config) -> Settin
     });
     SettingsResponse {
         startup_view: cfg.startup_view.clone().unwrap_or_else(|| "overview".into()),
+        theme: cfg.theme.clone().unwrap_or_else(|| "system".into()),
         last_board_id,
         data_dir: data_dir.display().to_string(),
         configured_data_dir: cfg.data_dir.clone(),
@@ -41,6 +42,13 @@ pub async fn update_settings(
             )));
         }
     }
+    if let Some(theme) = &body.theme {
+        if theme != "system" && theme != "light" && theme != "dark" {
+            return Err(AppError::BadRequest(format!(
+                "theme must be \"system\", \"light\", or \"dark\", got \"{theme}\""
+            )));
+        }
+    }
     if let Some(Some(dir)) = &body.data_dir {
         if dir.trim().is_empty() {
             return Err(AppError::BadRequest("data_dir must not be empty".into()));
@@ -50,6 +58,9 @@ pub async fn update_settings(
     let cfg = config::update(|c| {
         if let Some(view) = body.startup_view.clone() {
             c.startup_view = Some(view);
+        }
+        if let Some(theme) = body.theme.clone() {
+            c.theme = Some(theme);
         }
         if let Some(id) = body.last_board_id.clone() {
             c.last_board_id = id;

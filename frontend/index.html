@@ -11,6 +11,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Synkban" />
+    <!-- Respect the OS appearance before first paint to avoid a light flash.
+         The persisted preference (server-side) is applied by theme.ts once it
+         loads, which corrects this if the user forced light/dark. -->
+    <script>
+      try {
+        if (matchMedia("(prefers-color-scheme: dark)").matches)
+          document.documentElement.classList.add("theme-dark");
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

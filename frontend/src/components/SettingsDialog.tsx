@@ -1,9 +1,10 @@
 import { createResource, createSignal, onCleanup, Show } from "solid-js";
 import { api } from "../api";
-import type { UpdateSettingsPayload } from "../types";
+import type { Theme, UpdateSettingsPayload } from "../types";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
 import { desktopBridge } from "../settings";
+import { applyTheme } from "../theme";
 
 interface Props {
   onClose: () => void;
@@ -18,12 +19,25 @@ export default function SettingsDialog(props: Props) {
 
   // Staged edits: null = untouched, otherwise the pending value.
   const [stagedStartup, setStagedStartup] = createSignal<"overview" | "last" | null>(null);
+  const [stagedTheme, setStagedTheme] = createSignal<Theme | null>(null);
   // undefined = untouched, string = new custom dir, null = revert to default.
   const [stagedDataDir, setStagedDataDir] = createSignal<string | null | undefined>(undefined);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
   const startupView = () => stagedStartup() ?? settings()?.startup_view ?? "overview";
+  const theme = () => stagedTheme() ?? settings()?.theme ?? "system";
+
+  // Theme is previewed live (applied to <html> on selection), so a discarded
+  // dialog must roll the preview back to the persisted value.
+  const previewTheme = (t: Theme) => {
+    setStagedTheme(t);
+    applyTheme(t);
+  };
+  const revertThemePreview = () => {
+    const s = settings();
+    if (s && stagedTheme() !== null && stagedTheme() !== s.theme) applyTheme(s.theme);
+  };
   const dataDir = () => {
     const s = settings();
     if (!s) return "";
@@ -34,7 +48,15 @@ export default function SettingsDialog(props: Props) {
   const dataDirChanged = () => settings() !== undefined && dataDir() !== settings()!.data_dir;
   const dirty = () =>
     settings() !== undefined &&
-    (startupView() !== settings()!.startup_view || dataDirChanged());
+    (startupView() !== settings()!.startup_view ||
+      theme() !== settings()!.theme ||
+      dataDirChanged());
+
+  // All close paths (Cancel, X, overlay click, Escape) discard staged edits.
+  const close = () => {
+    revertThemePreview();
+    props.onClose();
+  };
 
   const browse = async () => {
     if (!desktop) return;
@@ -54,8 +76,11 @@ export default function SettingsDialog(props: Props) {
     try {
       const payload: UpdateSettingsPayload = {};
       if (startupView() !== s.startup_view) payload.startup_view = startupView();
+      if (theme() !== s.theme) payload.theme = theme();
       if (dataDirChanged()) payload.data_dir = stagedDataDir() ?? null;
       await api.updateSettings(payload);
+      // Preview already applied the theme; keep it (do not revert on close).
+      applyTheme(theme());
       if (dataDirChanged() && desktop) {
         desktop.relaunch();
         return; // app is going down; keep the dialog as-is
@@ -68,7 +93,7 @@ export default function SettingsDialog(props: Props) {
   };
 
   const handleOverlayClick = (e: MouseEvent) => {
-    if (e.target === e.currentTarget) props.onClose();
+    if (e.target === e.currentTarget) close();
   };
 
   onCleanup(
@@ -76,7 +101,7 @@ export default function SettingsDialog(props: Props) {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        props.onClose();
+        close();
       }
     })
   );
@@ -103,6 +128,24 @@ export default function SettingsDialog(props: Props) {
     </label>
   );
 
+  const ThemeChoice = (p: { value: Theme; title: string; desc: string }) => (
+    <label
+      class="settings-choice"
+      classList={{ "settings-choice--selected": theme() === p.value }}
+    >
+      <input
+        type="radio"
+        name="theme-mode"
+        checked={theme() === p.value}
+        onChange={() => previewTheme(p.value)}
+      />
+      <span class="settings-choice-text">
+        <span class="settings-choice-title">{p.title}</span>
+        <span class="settings-choice-desc">{p.desc}</span>
+      </span>
+    </label>
+  );
+
   return (
     <div
       class="settings-overlay"
@@ -112,7 +155,7 @@ export default function SettingsDialog(props: Props) {
       <div class="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="settings-header">
           <h3>Settings</h3>
-          <button class="settings-close" onClick={props.onClose} title="Close">
+          <button class="settings-close" onClick={close} title="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -122,6 +165,27 @@ export default function SettingsDialog(props: Props) {
 
         <div class="settings-body">
           <Show when={settings()} fallback={<p class="settings-hint">Loading…</p>}>
+            <section class="settings-section">
+              <h4 class="settings-section-title">Appearance</h4>
+              <div class="settings-choices">
+                <ThemeChoice
+                  value="system"
+                  title="Use system setting"
+                  desc="Match your device's light or dark appearance"
+                />
+                <ThemeChoice
+                  value="light"
+                  title="Light"
+                  desc="Always use the light theme"
+                />
+                <ThemeChoice
+                  value="dark"
+                  title="Dark"
+                  desc="Always use the dark theme"
+                />
+              </div>
+            </section>
+
             <section class="settings-section">
               <h4 class="settings-section-title">On startup, open</h4>
               <div class="settings-choices">
@@ -185,7 +249,7 @@ export default function SettingsDialog(props: Props) {
         </div>
 
         <div class="settings-footer">
-          <button class="settings-btn" onClick={props.onClose} disabled={saving()}>
+          <button class="settings-btn" onClick={close} disabled={saving()}>
             Cancel
           </button>
           <button

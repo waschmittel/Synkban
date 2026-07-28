@@ -104,7 +104,9 @@ test("record demo", async ({ page }) => {
   await pause(page, 400);
   await page.locator(".label-picker-item", { hasText: "Urgent" }).click();
   await pause(page, 400);
-  // Inline label creation — define a new label without leaving the card.
+  // Inline label creation — reveal the create form, then define a new label
+  // without leaving the card.
+  await page.locator(".label-create-toggle").click();
   await slowFill(page.locator(".label-create-input"), "Polish");
   await page.locator(".label-create-btn").click();
   await expect(
@@ -192,4 +194,32 @@ test("record demo", async ({ page }) => {
   // Keyboard cycle back to the previous board.
   await page.keyboard.press(",");
   await pause(page, 1400);
+
+  // --- Dark mode: flip the theme in Settings and show it off ---
+  // The settings gear lives on the board overview, so head there first.
+  await page.locator(".app-logo-home").click();
+  await expect(page.locator(".home")).toBeVisible();
+  await pause(page);
+
+  await page.locator(".btn-header-settings").click();
+  await expect(page.locator(".settings-dialog")).toBeVisible();
+  await pause(page);
+  // Selecting "Dark" previews live — the overview behind the dialog flips.
+  await page.getByRole("radio", { name: /Dark/ }).check();
+  await pause(page, 1100);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(".settings-overlay")).toHaveCount(0);
+  await pause(page, 800);
+
+  // Into the coloured board to show the darker board background + dark cards.
+  await page.locator(".board-card", { hasText: "Project Phoenix" }).click();
+  await expect(page).toHaveURL(/\/board\/.+/);
+  await pause(page, 1200);
+
+  // Open a card so the dark card detail is on screen.
+  await page.locator(".card", { hasText: "Design landing page" }).click();
+  await expect(page.locator(".modal-title-input")).toBeVisible();
+  await pause(page, 1600);
+  await page.keyboard.press("Escape");
+  await pause(page, 1000);
 });

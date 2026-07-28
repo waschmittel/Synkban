@@ -5,6 +5,7 @@ import Home from "./pages/Home";
 import BoardPage from "./pages/Board";
 import { installTouchDrag } from "./touchDrag";
 import { api } from "./api";
+import { applyTheme } from "./theme";
 import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
 import "./styles/app.css";
@@ -37,15 +38,19 @@ installTouchDrag();
 
 // Startup view preference: rewrite "/" to the last used board BEFORE the
 // router initializes, so this only fires on a fresh page load — in-app
-// navigation back to the overview never bounces. Deep links (any non-root
-// path) skip the settings fetch entirely, and the query string is preserved
-// for the desktop shell's initial `?token=` load. Settings come from the
-// server (~/.config/synkban/synkban.toml): localStorage can't persist them
-// because the desktop shell serves the UI from a random port each launch.
+// navigation back to the overview never bounces. The query string is
+// preserved for the desktop shell's initial `?token=` load. Settings come
+// from the server (~/.config/synkban/synkban.toml): localStorage can't persist
+// them because the desktop shell serves the UI from a random port each launch.
 async function bootstrap() {
+  // Only the redirect must run before the router mounts, so we only await
+  // settings on "/". The theme (not render-blocking) is applied afterwards
+  // from the same response, reusing it when available.
+  let pending: ReturnType<typeof api.getSettings> | null = null;
   if (window.location.pathname === "/") {
     try {
       const settings = await api.getSettings();
+      pending = Promise.resolve(settings);
       if (settings.startup_view === "last" && settings.last_board_id) {
         window.history.replaceState(
           null,
@@ -54,7 +59,7 @@ async function bootstrap() {
         );
       }
     } catch {
-      /* settings unreachable — start on the overview */
+      /* settings unreachable — start on the overview, keep OS-default theme */
     }
   }
 
@@ -67,6 +72,14 @@ async function bootstrap() {
     ),
     document.getElementById("root")!
   );
+
+  // Correct the OS-default theme set by index.html with the persisted
+  // preference. Not render-blocking, so it may resolve after first paint.
+  (pending ?? api.getSettings())
+    .then((s) => applyTheme(s.theme))
+    .catch(() => {
+      /* keep the OS-default theme applied inline in index.html */
+    });
 }
 
 bootstrap();

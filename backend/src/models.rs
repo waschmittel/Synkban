@@ -185,6 +185,8 @@ pub struct ReorderBoards {
 #[derive(Debug, Serialize)]
 pub struct SettingsResponse {
     pub startup_view: String,
+    /// "system" | "light" | "dark"
+    pub theme: String,
     pub last_board_id: Option<String>,
     /// Effective data dir of the running server (may come from CLI/env).
     pub data_dir: String,
@@ -196,6 +198,8 @@ pub struct SettingsResponse {
 #[derive(Debug, Deserialize)]
 pub struct UpdateSettings {
     pub startup_view: Option<String>,
+    /// "system" | "light" | "dark"; absent leaves the current value unchanged.
+    pub theme: Option<String>,
     #[serde(default, deserialize_with = "deserialize_double_option")]
     pub last_board_id: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_double_option")]

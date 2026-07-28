@@ -20,6 +20,8 @@
   --color-danger: #eb5a46;
   --color-success: #36b37e;
 
+  color-scheme: light;
+
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -431,13 +433,13 @@ html.electron:not(.electron--mac) .app-header-actions {
   font-size: 14px;
   outline: none;
   background: rgba(255, 255, 255, 0.9);
-  color: #172b4d;
+  color: var(--color-text);
   transition: border-color 0.15s;
 }
 
 .add-board-form input:focus {
   border-color: white;
-  background: white;
+  background: var(--color-surface);
 }
 
 .add-board-actions {
@@ -491,7 +493,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .board-title-text {
-  color: #172b4d;
+  color: var(--color-text);
   font-size: 18px;
   font-weight: 700;
   cursor: pointer;
@@ -507,7 +509,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .board-title-input {
   font-size: 18px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-text);
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid rgba(0, 0, 0, 0.2);
   border-radius: 6px;
@@ -529,7 +531,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   background: rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: 6px;
-  color: #172b4d;
+  color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
   padding: 5px 10px;
@@ -558,7 +560,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   background: rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: 6px;
-  color: #172b4d;
+  color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
   padding: 5px 10px;
@@ -597,7 +599,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  background: white;
+  background: var(--color-surface);
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
   padding: 12px;
@@ -612,14 +614,14 @@ html.electron:not(.electron--mac) .app-header-actions {
   gap: 10px;
   margin-bottom: 10px;
   font-size: 12px;
-  color: #5e6c84;
+  color: var(--color-text-muted);
 }
 
 .board-color-input {
   width: 48px;
   height: 36px;
   padding: 0;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   background: none;
   cursor: pointer;
@@ -641,19 +643,19 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .board-color-reset {
   width: 100%;
-  background: #f4f5f7;
+  background: var(--color-surface-2);
   border: none;
   border-radius: 6px;
   padding: 6px;
   font-size: 12px;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .board-color-reset:hover {
-  background: #ebecf0;
-  color: #172b4d;
+  background: var(--color-surface-3);
+  color: var(--color-text);
 }
 
 /* ═══ Label Drawer ═══ */
@@ -695,13 +697,13 @@ html.electron:not(.electron--mac) .app-header-actions {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border-bottom: 1px solid var(--color-border);
-  background: white;
+  background: var(--color-surface);
 }
 
 .label-drawer-close {
   background: none;
   border: none;
-  color: #6b778c;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -710,8 +712,8 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-drawer-close:hover {
-  color: #172b4d;
-  background: #f4f5f7;
+  color: var(--color-text);
+  background: var(--color-surface-2);
 }
 
 .label-drawer-list {
@@ -723,7 +725,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .label-drawer-empty {
   padding: 16px 20px;
   font-size: 13px;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   font-style: italic;
 }
 
@@ -736,7 +738,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-drawer-item:hover {
-  background: #ebecf0;
+  background: var(--color-surface-3);
 }
 
 .label-drawer-swatch {
@@ -750,7 +752,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .label-drawer-name {
   flex: 1;
   font-size: 14px;
-  color: #172b4d;
+  color: var(--color-text);
   cursor: pointer;
   min-width: 0;
   overflow: hidden;
@@ -765,7 +767,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .label-drawer-delete {
   background: none;
   border: none;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
@@ -779,7 +781,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-drawer-delete:hover {
-  color: #eb5a46;
+  color: var(--color-danger);
 }
 
 .label-drawer-edit-input {
@@ -789,20 +791,20 @@ html.electron:not(.electron--mac) .app-header-actions {
   padding: 4px 8px;
   font-size: 14px;
   outline: none;
-  background: white;
+  background: var(--color-surface);
 }
 
 .label-drawer-form {
   display: flex;
   gap: 8px;
   padding: 12px 20px;
-  border-top: 1px solid #dfe1e6;
-  background: white;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .label-drawer-input {
   flex: 1;
-  border: 2px solid #dfe1e6;
+  border: 2px solid var(--color-border);
   border-radius: 6px;
   padding: 7px 10px;
   font-size: 13px;
@@ -960,11 +962,11 @@ html.electron:not(.electron--mac) .app-header-actions {
   flex: 1;
   font-size: 14px;
   font-weight: 600;
-  color: #172b4d;
+  color: var(--color-text);
   padding: 2px 4px;
   border: 1px solid #0079bf;
   border-radius: 4px;
-  background: #fff;
+  background: var(--color-surface);
   outline: none;
   box-shadow: 0 0 0 1px #0079bf;
   font-family: inherit;
@@ -973,7 +975,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .list-delete {
   background: none;
   border: none;
-  color: #6b778c;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -990,7 +992,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .list-delete:hover {
   background: rgba(0, 0, 0, 0.08);
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .cards-container {
@@ -1002,7 +1004,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 /* ═══ Card ═══ */
 .card {
-  background: white;
+  background: var(--color-surface);
   border-radius: var(--radius-md);
   padding: 9px 10px 9px 12px;
   margin-bottom: 8px;
@@ -1073,7 +1075,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .card-badge {
-  color: #6b778c;
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
 }
@@ -1106,7 +1108,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .card-archive {
   background: none;
   border: none;
-  color: #6b778c;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -1117,15 +1119,15 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .card-archive:hover {
-  background: #e4e6ea;
-  color: #172b4d;
+  background: var(--color-surface-3);
+  color: var(--color-text);
 }
 
 /* ═══ Add Form ═══ */
 .add-trigger {
   background: none;
   border: none;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   padding: 8px 12px;
   width: 100%;
   text-align: left;
@@ -1140,7 +1142,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .add-trigger:hover {
   background: rgba(0, 0, 0, 0.06);
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .add-form {
@@ -1274,7 +1276,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .board-error {
   text-align: center;
   padding: 80px 20px;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .board-error h2 {
@@ -1283,7 +1285,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .board-error p {
-  color: #5e6c84;
+  color: var(--color-text-muted);
   margin-bottom: 20px;
 }
 
@@ -1419,7 +1421,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .modal-content {
-  background: white;
+  background: var(--color-surface);
   border-radius: var(--radius-xl);
   width: 680px;
   max-width: 92vw;
@@ -1467,7 +1469,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .modal-header-icon {
-  color: #6b778c;
+  color: var(--color-text-muted);
   flex-shrink: 0;
   display: flex;
 }
@@ -1491,14 +1493,14 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .modal-title-input:focus {
-  background: white;
+  background: var(--color-surface);
   box-shadow: var(--ring);
 }
 
 .modal-close {
   background: none;
   border: none;
-  color: #6b778c;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -1509,8 +1511,8 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .modal-close:hover {
-  background: #f4f5f7;
-  color: #172b4d;
+  background: var(--color-surface-2);
+  color: var(--color-text);
 }
 
 .modal-body {
@@ -1523,14 +1525,14 @@ html.electron:not(.electron--mac) .app-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6b778c;
+  color: var(--color-text-muted);
   margin-bottom: 10px;
 }
 
 .modal-label {
   font-size: 13px;
   font-weight: 600;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1570,7 +1572,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .unsaved-dialog {
-  background: white;
+  background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: 26px;
   box-shadow: var(--shadow-xl);
@@ -1585,7 +1587,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .unsaved-dialog p {
   font-size: 15px;
   font-weight: 500;
-  color: #172b4d;
+  color: var(--color-text);
   margin: 0;
 }
 
@@ -1630,12 +1632,12 @@ html.electron:not(.electron--mac) .app-header-actions {
   outline: none;
   font-size: 14px;
   line-height: 1.65;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .editor-wrapper .ProseMirror p.is-editor-empty:first-child::before {
   content: "Add a more detailed description…";
-  color: #b3bac5;
+  color: var(--color-text-subtle);
   pointer-events: none;
   float: left;
   height: 0;
@@ -1664,10 +1666,10 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .editor-wrapper .ProseMirror blockquote {
-  border-left: 3px solid #dfe1e6;
+  border-left: 3px solid var(--color-border);
   margin: 0 0 8px;
   padding-left: 14px;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
@@ -1695,7 +1697,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   border-radius: 4px;
   font-size: 13px;
   font-family: "SF Mono", "Fira Code", "Menlo", monospace;
-  color: #eb5a46;
+  color: var(--color-danger);
 }
 
 .editor-wrapper .ProseMirror pre {
@@ -1719,7 +1721,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .editor-wrapper .ProseMirror hr {
   border: none;
-  border-top: 2px solid #ebedf0;
+  border-top: 2px solid var(--color-border);
   margin: 16px 0;
 }
 
@@ -1739,7 +1741,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .editor-wrapper .ProseMirror-menubar {
-  border-bottom: 1px solid #ebedf0;
+  border-bottom: 1px solid var(--color-border);
   padding: 6px 8px;
   background: #fafbfc;
   min-height: 36px;
@@ -1763,7 +1765,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-icon:hover {
-  background: #e4e6ea;
+  background: var(--color-surface-3);
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-active {
@@ -1775,7 +1777,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menuseparator {
   width: 1px;
   height: 20px;
-  background: #dfe1e6;
+  background: var(--color-border);
   margin: 0 4px;
 }
 
@@ -1785,21 +1787,21 @@ html.electron:not(.electron--mac) .app-header-actions {
   cursor: pointer;
   transition: background 0.1s;
   background: rgba(0, 0, 0, 0.04);
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   font-weight: 500;
   font-size: 13px;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-dropdown:hover {
-  background: #e4e6ea;
-  border-color: #c1c7d0;
+  background: var(--color-surface-3);
+  border-color: var(--color-border-strong);
 }
 
 .editor-wrapper .ProseMirror-menu-dropdown-menu {
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   padding: 4px;
   min-width: 120px;
 }
@@ -1814,13 +1816,13 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .editor-wrapper .ProseMirror-menu-dropdown-item:hover,
 .editor-wrapper .ProseMirror-menu-dropdown-item:focus-within {
-  background: #e4e6ea;
+  background: var(--color-surface-3);
 }
 
 /* Placeholder for empty editor */
 .editor-wrapper .ProseMirror .ProseMirror-trailingBreak:only-child::before {
   content: "Add a more detailed description…";
-  color: #b3bac5;
+  color: var(--color-text-subtle);
   position: absolute;
   pointer-events: none;
 }
@@ -1829,7 +1831,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .editor-hint {
   margin-top: 8px;
   font-size: 11px;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
@@ -1842,9 +1844,9 @@ html.electron:not(.electron--mac) .app-header-actions {
   font-size: 11px;
   font-family: inherit;
   background: #f1f2f4;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   border-radius: 3px;
-  color: #6b778c;
+  color: var(--color-text-muted);
 }
 
 /* ═══ Selection highlight ═══ */
@@ -1919,9 +1921,9 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-add-btn:hover {
-  background: #ebecf0;
-  color: #172b4d;
-  border-color: #6b778c;
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 /* ═══ Label Picker (in CardDetail) ═══ */
@@ -1952,7 +1954,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-picker-item:hover {
-  background: #ebecf0;
+  background: var(--color-surface-3);
 }
 
 .label-picker-item--selected {
@@ -1975,7 +1977,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-picker-check {
-  color: #172b4d;
+  color: var(--color-text);
   flex-shrink: 0;
 }
 
@@ -1996,9 +1998,9 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .label-create-toggle:hover {
-  background: #ebecf0;
-  color: #172b4d;
-  border-color: #6b778c;
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 .label-create {
@@ -2011,7 +2013,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   flex: 1;
   min-width: 0;
   padding: 6px 10px;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 13px;
   color: var(--color-text);
@@ -2053,7 +2055,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .shortcut-help-modal {
-  background: white;
+  background: var(--color-surface);
   border-radius: var(--radius-xl);
   width: 480px;
   max-width: 92vw;
@@ -2069,19 +2071,19 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: center;
   justify-content: space-between;
   padding: 18px 24px 14px;
-  border-bottom: 1px solid #ebedf0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .shortcut-help-header h3 {
   font-size: 16px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .shortcut-help-close {
   background: none;
   border: none;
-  color: #6b778c;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -2090,8 +2092,8 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .shortcut-help-close:hover {
-  color: #172b4d;
-  background: #f4f5f7;
+  color: var(--color-text);
+  background: var(--color-surface-2);
 }
 
 .shortcut-help-body {
@@ -2104,9 +2106,9 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .shortcut-help-footer {
   padding: 8px 24px 12px;
-  border-top: 1px solid #ebedf0;
+  border-top: 1px solid var(--color-border);
   font-size: 11px;
-  color: #97a0af;
+  color: var(--color-text-subtle);
   text-align: right;
 }
 
@@ -2117,7 +2119,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .shortcut-section-title {
   font-size: 11px;
   font-weight: 700;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 8px;
@@ -2146,20 +2148,20 @@ html.electron:not(.electron--mac) .app-header-actions {
   font-family: inherit;
   font-weight: 600;
   background: #f1f2f4;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   border-bottom-width: 2px;
   border-radius: 4px;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .shortcut-sep {
   font-size: 11px;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   padding: 0 1px;
 }
 
 .shortcut-desc {
-  color: #5e6c84;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -2179,7 +2181,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .archive-modal {
-  background: white;
+  background: var(--color-surface);
   border-radius: var(--radius-xl);
   width: 540px;
   max-width: 92vw;
@@ -2195,10 +2197,10 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: center;
   gap: 10px;
   padding: 16px 20px;
-  border-bottom: 1px solid #ebedf0;
+  border-bottom: 1px solid var(--color-border);
   font-size: 15px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .archive-modal-header span {
@@ -2232,7 +2234,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .archive-card-title {
   flex: 1;
   font-size: 14px;
-  color: #172b4d;
+  color: var(--color-text);
   min-width: 0;
   word-break: break-word;
 }
@@ -2246,7 +2248,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .archive-confirm-text {
   font-size: 12px;
-  color: #eb5a46;
+  color: var(--color-danger);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -2279,7 +2281,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .archive-empty {
   font-size: 14px;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   font-style: italic;
   padding: 16px 0;
 }
@@ -2297,9 +2299,9 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: #f4f5f7;
+  background: var(--color-surface-2);
   border-radius: 6px;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
 }
 
 .attachment-info {
@@ -2326,14 +2328,14 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .attachment-size {
   font-size: 11px;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   flex-shrink: 0;
 }
 
 .attachment-delete {
   background: none;
   border: none;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
@@ -2343,7 +2345,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .attachment-delete:hover {
-  color: #eb5a46;
+  color: var(--color-danger);
   background: #fce4e4;
 }
 
@@ -2352,19 +2354,19 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #f4f5f7;
-  border: 1px dashed #c1c7d0;
+  background: var(--color-surface-2);
+  border: 1px dashed var(--color-border-strong);
   border-radius: 6px;
   font-size: 13px;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   cursor: pointer;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 
 .attachment-upload:hover {
-  background: #ebecf0;
-  color: #172b4d;
-  border-color: #6b778c;
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 .attachment-upload--busy {
@@ -2408,8 +2410,8 @@ html.electron:not(.electron--mac) .app-header-actions {
 .checklist-progress {
   font-size: 12px;
   font-weight: 600;
-  color: #5e6c84;
-  background: #ebecf0;
+  color: var(--color-text-muted);
+  background: var(--color-surface-3);
   border-radius: 10px;
   padding: 1px 8px;
 }
@@ -2421,19 +2423,19 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .checklist-toggle-all {
   margin-left: auto;
-  background: #f4f5f7;
-  border: 1px solid #dfe1e6;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 12px;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   padding: 2px 8px;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
 
 .checklist-toggle-all:hover {
-  background: #ebecf0;
-  color: #172b4d;
+  background: var(--color-surface-3);
+  color: var(--color-text);
 }
 
 .checklist-items {
@@ -2453,7 +2455,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .checklist-item:hover {
-  background: #f4f5f7;
+  background: var(--color-surface-2);
 }
 
 .checklist-item:focus {
@@ -2473,13 +2475,13 @@ html.electron:not(.electron--mac) .app-header-actions {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  color: #172b4d;
+  color: var(--color-text);
   cursor: pointer;
   word-break: break-word;
 }
 
 .checklist-item--done .checklist-text {
-  color: #8993a4;
+  color: var(--color-text-subtle);
   text-decoration: line-through;
 }
 
@@ -2496,7 +2498,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .checklist-delete {
   background: none;
   border: none;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
@@ -2513,7 +2515,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .checklist-delete:hover {
-  color: #eb5a46;
+  color: var(--color-danger);
   background: #fce4e4;
 }
 
@@ -2538,7 +2540,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .checklist-confirm-text {
   font-size: 12px;
-  color: #eb5a46;
+  color: var(--color-danger);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -2547,16 +2549,16 @@ html.electron:not(.electron--mac) .app-header-actions {
   width: 100%;
   font-size: 13px;
   padding: 6px 10px;
-  background: #f4f5f7;
-  border: 1px dashed #c1c7d0;
+  background: var(--color-surface-2);
+  border: 1px dashed var(--color-border-strong);
   border-radius: 6px;
-  color: #172b4d;
+  color: var(--color-text);
   outline: none;
   transition: background 0.1s, border-color 0.1s;
 }
 
 .checklist-add-input:focus {
-  background: #fff;
+  background: var(--color-surface);
   border-color: #0079bf;
   border-style: solid;
 }
@@ -2662,7 +2664,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .link-dialog {
-  background: white;
+  background: var(--color-surface);
   border-radius: 10px;
   padding: 20px;
   min-width: 360px;
@@ -2677,14 +2679,14 @@ html.electron:not(.electron--mac) .app-header-actions {
 .link-dialog-label {
   font-size: 12px;
   font-weight: 600;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .link-dialog-input {
   width: 100%;
-  border: 2px solid #dfe1e6;
+  border: 2px solid var(--color-border);
   border-radius: 6px;
   padding: 8px 12px;
   font-size: 14px;
@@ -2743,8 +2745,8 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .due-badge--future {
-  background: #f4f5f7;
-  color: #6b778c;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
 }
 
 /* ═══ Due Date Input (CardDetail) ═══ */
@@ -2759,7 +2761,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .due-date-input {
-  border: 2px solid #dfe1e6;
+  border: 2px solid var(--color-border);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 13px;
@@ -2785,9 +2787,9 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .due-date-calendar-btn {
   background: none;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 5px 6px;
   display: flex;
@@ -2804,7 +2806,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 .due-date-clear {
   background: none;
   border: none;
-  color: #8993a4;
+  color: var(--color-text-subtle);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -2813,7 +2815,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .due-date-clear:hover {
-  color: #eb5a46;
+  color: var(--color-danger);
   background: #fce4e4;
 }
 
@@ -2845,7 +2847,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .filter-text-input:focus {
   border-color: #0079bf;
-  background: white;
+  background: var(--color-surface);
 }
 
 .filter-input-clear {
@@ -2860,14 +2862,14 @@ html.electron:not(.electron--mac) .app-header-actions {
   background: rgba(0, 0, 0, 0.1);
   border-radius: 50%;
   cursor: pointer;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   padding: 0;
   transition: background 0.1s;
 }
 
 .filter-input-clear:hover {
   background: rgba(0, 0, 0, 0.2);
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .filter-labels {
@@ -2887,7 +2889,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  color: #172b4d;
+  color: var(--color-text);
   transition: background 0.1s, border-color 0.1s;
 }
 
@@ -2939,7 +2941,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .settings-dialog {
-  background: white;
+  background: var(--color-surface);
   border-radius: var(--radius-xl);
   width: 440px;
   max-width: 92vw;
@@ -2955,19 +2957,19 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: center;
   justify-content: space-between;
   padding: 18px 24px 14px;
-  border-bottom: 1px solid #ebedf0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .settings-header h3 {
   font-size: 16px;
   font-weight: 700;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .settings-close {
   background: none;
   border: none;
-  color: #6b778c;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -2976,8 +2978,8 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .settings-close:hover {
-  color: #172b4d;
-  background: #f4f5f7;
+  color: var(--color-text);
+  background: var(--color-surface-2);
 }
 
 .settings-body {
@@ -2990,13 +2992,13 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .settings-section + .settings-section {
-  border-top: 1px solid #ebedf0;
+  border-top: 1px solid var(--color-border);
 }
 
 .settings-section-title {
   font-size: 11px;
   font-weight: 700;
-  color: #5e6c84;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 10px;
@@ -3014,7 +3016,7 @@ html.electron:not(.electron--mac) .app-header-actions {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #dfe1e6;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.12s var(--ease), background 0.12s var(--ease), box-shadow 0.12s var(--ease);
@@ -3045,12 +3047,12 @@ html.electron:not(.electron--mac) .app-header-actions {
 .settings-choice-title {
   font-size: 14px;
   font-weight: 600;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .settings-choice-desc {
   font-size: 12px;
-  color: #6b778c;
+  color: var(--color-text-muted);
 }
 
 /* Data folder path box */
@@ -3058,17 +3060,17 @@ html.electron:not(.electron--mac) .app-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f4f5f7;
-  border: 1px solid #dfe1e6;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 9px 12px;
-  color: #6b778c;
+  color: var(--color-text-muted);
   margin-bottom: 10px;
 }
 
 .settings-path code {
   font-size: 12px;
-  color: #172b4d;
+  color: var(--color-text);
   overflow-wrap: anywhere;
 }
 
@@ -3085,16 +3087,16 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 .settings-hint {
   font-size: 12.5px;
-  color: #6b778c;
+  color: var(--color-text-muted);
   line-height: 1.55;
 }
 
 .settings-hint code {
-  background: #f4f5f7;
+  background: var(--color-surface-2);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 11.5px;
-  color: #172b4d;
+  color: var(--color-text);
 }
 
 .settings-note {
@@ -3120,10 +3122,10 @@ html.electron:not(.electron--mac) .app-header-actions {
 
 /* Dialog buttons */
 .settings-btn {
-  border: 1px solid #c1c7d0;
+  border: 1px solid var(--color-border-strong);
   border-radius: 6px;
-  background: white;
-  color: #172b4d;
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: 13px;
   font-weight: 600;
   padding: 7px 14px;
@@ -3132,7 +3134,7 @@ html.electron:not(.electron--mac) .app-header-actions {
 }
 
 .settings-btn:hover:not(:disabled) {
-  background: #f4f5f7;
+  background: var(--color-surface-2);
 }
 
 .settings-btn:disabled {
@@ -3156,5 +3158,290 @@ html.electron:not(.electron--mac) .app-header-actions {
   justify-content: flex-end;
   gap: 8px;
   padding: 14px 24px 18px;
-  border-top: 1px solid #ebedf0;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Dark theme
+   -----------------------------------------------------------------------
+   Applied via a single `html.theme-dark` class (theme.ts resolves the
+   "system"/"light"/"dark" preference; index.html sets the OS default before
+   first paint). Most surfaces flip automatically because the stylesheet
+   routes colours through the semantic tokens below; the rules after the token
+   block only cover bespoke light values (gradients, translucent overlays,
+   pastel boxes) that can't be expressed as a token flip.
+   ═══════════════════════════════════════════════════════════════════════ */
+html.theme-dark {
+  /* Let native controls (scrollbars, date/colour pickers, checkboxes) render
+     dark, and give bare inputs a dark field + light text for free. */
+  color-scheme: dark;
+
+  --color-text: #e6e8ec;
+  --color-text-muted: #a4adba;
+  --color-text-subtle: #737d8a;
+  --color-border: #3a414c;
+  --color-border-strong: #4b5563;
+  --color-surface: #242a33;
+  --color-surface-2: #2d333d;
+  --color-surface-3: #383f4a;
+  /* Primary blue is kept as-is (readable as a button fill with white text and
+     as borders/rings on dark); a few accent-text usages are brightened below. */
+
+  /* Deeper shadows read on dark surfaces where the light navy ones vanish. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.42);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.68), 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* ── App background & header ── */
+/* Board pages use a DARKER version of the board colour (mixed toward black)
+   instead of the light-mode tint toward white. */
+html.theme-dark body {
+  background: color-mix(in srgb, var(--board-color) 18%, #0d0e12);
+}
+
+html.theme-dark .board-page {
+  background: color-mix(in srgb, var(--board-color) 42%, #0d0f14);
+}
+
+/* Mute the header's colour into a dark, subtly tinted bar. */
+html.theme-dark .app-header {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.54)),
+    var(--board-color);
+}
+
+/* ── Board title bar (sits on the tinted board background) ── */
+html.theme-dark .board-filter-btn,
+html.theme-dark .board-archive-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--color-text);
+}
+
+html.theme-dark .board-filter-btn:hover,
+html.theme-dark .board-archive-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html.theme-dark .board-title-text:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html.theme-dark .board-title-input {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* ── Lists & cards ── */
+html.theme-dark .list {
+  background: rgba(23, 27, 33, 0.82);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+html.theme-dark .list-title:hover,
+html.theme-dark .list-title:focus {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html.theme-dark .list-delete:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html.theme-dark .card {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+html.theme-dark .card:hover {
+  background: #2b313c;
+}
+
+html.theme-dark .card:focus {
+  background: #233042;
+}
+
+html.theme-dark .add-trigger:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html.theme-dark .add-list-wrapper {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+html.theme-dark .add-list-wrapper:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+html.theme-dark .add-list-wrapper .add-form {
+  background: rgba(23, 27, 33, 0.96);
+}
+
+/* In-list card scrollbar: light thumb on the dark list. */
+html.theme-dark .cards-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+html.theme-dark .cards-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* ── Generic buttons & modals ── */
+html.theme-dark .btn:hover,
+html.theme-dark .btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html.theme-dark .modal-footer {
+  background: #1f242c;
+}
+
+html.theme-dark .label-drawer {
+  background: #1c2027;
+}
+
+/* ── ProseMirror editor ── */
+/* Keep the sticky-note feel with a dark warm tint instead of pale yellow. */
+html.theme-dark .editor-wrapper {
+  background: #2a2a20;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html.theme-dark .editor-wrapper .ProseMirror a {
+  color: #6cb0ec;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror-menubar {
+  background: #1f242c;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror-menu-active {
+  background: rgba(76, 155, 224, 0.22);
+  color: #6cb0ec;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror-menu-dropdown {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* prosemirror-menu's own stylesheet paints the dropdown popup white. */
+html.theme-dark .editor-wrapper .ProseMirror-menu-dropdown-menu {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+html.theme-dark .editor-hint kbd,
+html.theme-dark .shortcut-keys kbd {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Text selection ── */
+html.theme-dark ::selection {
+  background: rgba(76, 155, 224, 0.35);
+}
+
+/* ── Archive modal ── */
+html.theme-dark .archive-card-item,
+html.theme-dark .archive-board-item {
+  border-bottom-color: var(--color-border);
+}
+
+/* ── Attachments ── */
+html.theme-dark .attachment-filename {
+  color: #6cb0ec;
+}
+
+html.theme-dark .attachment-delete:hover,
+html.theme-dark .due-date-clear:hover {
+  background: rgba(242, 112, 93, 0.16);
+}
+
+/* ── Filter bar (on the tinted board background) ── */
+html.theme-dark .filter-text-input {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+html.theme-dark .filter-input-clear {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--color-text);
+}
+
+html.theme-dark .filter-input-clear:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+html.theme-dark .filter-label-chip {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text);
+}
+
+html.theme-dark .filter-label-chip:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+html.theme-dark .filter-label-chip--active {
+  background: color-mix(in srgb, var(--label-color) 32%, #1c2029);
+}
+
+/* ── Card-detail label picker ── */
+html.theme-dark .label-picker-item--selected {
+  background: color-mix(in srgb, var(--label-color) 30%, #1c2029);
+}
+
+/* ── Link dialog ── */
+html.theme-dark .link-dialog-error {
+  color: #f2705d;
+}
+
+html.theme-dark .link-dialog-remove {
+  color: #e8836f;
+}
+
+html.theme-dark .unsaved-indicator {
+  color: #e0b34d;
+}
+
+/* ── Settings dialog ── */
+html.theme-dark .settings-choice:hover {
+  background: var(--color-surface-2);
+}
+
+html.theme-dark .settings-choice--selected {
+  background: rgba(0, 121, 191, 0.16);
+}
+
+/* ── Amber / red info boxes: dark-tinted fills instead of pale pastels ── */
+html.theme-dark .warning-banner {
+  background: rgba(255, 159, 26, 0.12);
+  border-color: rgba(255, 159, 26, 0.32);
+  border-left-color: #ff9f1a;
+  color: #f0d9a8;
+}
+
+html.theme-dark .warning-banner-close {
+  color: #f0d9a8;
+}
+
+html.theme-dark .warning-banner-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html.theme-dark .settings-note {
+  background: rgba(245, 205, 71, 0.1);
+  border-color: rgba(245, 205, 71, 0.35);
+  color: #e6d6a2;
+}
+
+html.theme-dark .settings-error {
+  background: rgba(248, 113, 104, 0.12);
+  border-color: rgba(248, 113, 104, 0.4);
+  color: #f4b0aa;
 }

@@ -107,3 +107,39 @@ test("web mode shows the server-managed data folder", async ({ page, request }) 
   await page.locator(".settings-overlay").click({ position: { x: 5, y: 5 } });
   await expect(page.locator(".settings-overlay")).toHaveCount(0);
 });
+
+test("appearance: theme persists, previews live, and discards on Escape", async ({ page, request }) => {
+  await request.put("/api/settings", { data: { theme: "system" } });
+  await page.goto("/");
+  const html = page.locator("html");
+
+  // Force Dark via the dialog. The preview flips <html> before Save.
+  await page.locator(".btn-header-settings").click();
+  await expect(page.locator(".settings-dialog")).toBeVisible();
+  await page.getByRole("radio", { name: /Dark/ }).check();
+  await expect(html).toHaveClass(/theme-dark/);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(".settings-overlay")).toHaveCount(0);
+
+  // Persisted server-side and still applied.
+  expect((await (await request.get("/api/settings")).json()).theme).toBe("dark");
+  await expect(html).toHaveClass(/theme-dark/);
+
+  // Survives a fresh load (index.html sets the OS default, bootstrap applies
+  // the persisted "dark" — even though the test browser reports a light OS).
+  await page.goto("/");
+  await expect(html).toHaveClass(/theme-dark/);
+
+  // Preview + discard: switch to Light, Escape, and the preview rolls back to
+  // the persisted Dark — nothing is written.
+  await page.locator(".btn-header-settings").click();
+  await page.getByRole("radio", { name: /Light/ }).check();
+  await expect(html).not.toHaveClass(/theme-dark/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".settings-overlay")).toHaveCount(0);
+  await expect(html).toHaveClass(/theme-dark/);
+  expect((await (await request.get("/api/settings")).json()).theme).toBe("dark");
+
+  // Reset so later runs / other specs start from the default.
+  await request.put("/api/settings", { data: { theme: "system" } });
+});

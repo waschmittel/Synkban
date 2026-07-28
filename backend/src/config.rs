@@ -22,6 +22,9 @@ pub struct Config {
     pub startup_view: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_board_id: Option<String>,
+    /// "system" (default) | "light" | "dark"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
 }
 
 /// Serializes read-modify-write cycles from concurrent PUT /api/settings.
@@ -89,11 +92,13 @@ mod tests {
             data_dir: Some("/tmp/x".into()),
             startup_view: Some("last".into()),
             last_board_id: None,
+            theme: Some("dark".into()),
         };
         let text = toml::to_string_pretty(&config).unwrap();
         let parsed: Config = toml::from_str(&text).unwrap();
         assert_eq!(parsed.data_dir.as_deref(), Some("/tmp/x"));
         assert_eq!(parsed.startup_view.as_deref(), Some("last"));
+        assert_eq!(parsed.theme.as_deref(), Some("dark"));
         assert!(parsed.last_board_id.is_none());
         assert!(!text.contains("last_board_id"));
     }

@@ -8,6 +8,10 @@ import { join } from "node:path";
 // video of the demo script in demo/. record-demo.sh converts it to demo.gif.
 const PORT = 8092;
 const dataDir = mkdtempSync(join(tmpdir(), "synkban-demo-"));
+// Isolate the config dir too so the demo never writes the running machine's
+// real ~/.config/synkban/synkban.toml (the walkthrough sets the theme and,
+// via recordLastBoard, the last-used board).
+const configDir = mkdtempSync(join(tmpdir(), "synkban-demo-config-"));
 const binary = join(
   "..",
   "backend",
@@ -31,7 +35,7 @@ export default defineConfig({
   webServer: {
     command: binary,
     url: `http://127.0.0.1:${PORT}/api/boards`,
-    env: { PORT: String(PORT), DATA_DIR: dataDir },
+    env: { PORT: String(PORT), DATA_DIR: dataDir, SYNKBAN_CONFIG_DIR: configDir },
     reuseExistingServer: false,
   },
 });
