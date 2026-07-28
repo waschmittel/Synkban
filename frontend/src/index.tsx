@@ -10,15 +10,12 @@ import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
 import "./styles/app.css";
 
-// Mark the document so CSS can adapt the title bar for the Electron shell.
-// Electron's UA includes "Electron/<version>"; on macOS the traffic lights
-// are overlaid via `titleBarStyle: 'hiddenInset'`, so the header reserves
-// extra left padding only there.
+// Mark the document so CSS can adapt the title bar for the Electron shell,
+// where the window is frameless and .app-header doubles as the title bar: it
+// has to keep clear of the OS window controls, whose side and size the
+// stylesheet reads from the Window Controls Overlay env() vars (see app.css).
 if (typeof navigator !== "undefined" && /Electron\//.test(navigator.userAgent)) {
   document.documentElement.classList.add("electron");
-  if (navigator.platform.startsWith("Mac")) {
-    document.documentElement.classList.add("electron--mac");
-  }
 }
 
 // Register the service worker so the app is installable on Android.

@@ -6,6 +6,21 @@ const crypto = require('crypto');
 let mainWindow = null;
 let backendProcess = null;
 
+// Height of the app's own header (.app-header in frontend/src/styles/app.css).
+// The window-controls overlay is sized to match so the native controls sit in
+// the same band as the header content — keep the two in sync.
+const HEADER_HEIGHT = 52;
+
+// Diameter of the macOS traffic lights, measured off a screenshot of the real
+// window (14px — not the 12px the buttons are often quoted as). Used to centre
+// them vertically in the header; `trafficLightPosition` takes a top offset, so
+// the centre has to be worked out here.
+const TRAFFIC_LIGHT_HEIGHT = 14;
+const TRAFFIC_LIGHT_INSET = {
+  x: 14,
+  y: Math.round((HEADER_HEIGHT - TRAFFIC_LIGHT_HEIGHT) / 2),
+};
+
 // Settings (data dir, startup view) are owned by the Rust backend, persisted
 // in ~/.config/synkban/synkban.toml. The shell only contributes what the web
 // UI can't do itself: the native directory picker and a full relaunch (the
@@ -85,14 +100,21 @@ async function createWindow() {
     width: 1200,
     height: 800,
     title: 'Synkban',
-    // Seamless titlebar: macOS gets traffic-light overlay (hiddenInset),
-    // Windows/Linux get an overlay that paints native controls over the
-    // app's own header so content can extend to the very top edge.
+    // Seamless titlebar: the window is frameless and the app's own .app-header
+    // extends to the top edge, with the OS window controls drawn over it
+    // (macOS traffic lights on the left, Windows caption buttons on the right,
+    // Linux wherever the desktop environment puts them).
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    // titleBarOverlay is enabled on every platform: besides painting the
+    // controls (the colours apply on Windows/Linux only), it publishes the
+    // env(titlebar-area-*) CSS variables that app.css uses to keep the header
+    // clear of them. Without it macOS exposes no geometry and the stylesheet
+    // would be back to guessing a fixed inset. `height` matches .app-header so
+    // the controls sit in the same band as the header content.
     titleBarOverlay: isMac
-      ? undefined
-      : { color: '#00000000', symbolColor: '#ffffff', height: 36 },
-    trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
+      ? { height: HEADER_HEIGHT }
+      : { color: '#00000000', symbolColor: '#ffffff', height: HEADER_HEIGHT },
+    trafficLightPosition: isMac ? TRAFFIC_LIGHT_INSET : undefined,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

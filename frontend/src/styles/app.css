@@ -70,12 +70,20 @@ body {
 }
 
 /* Electron seamless titlebar:
-   The window has no native title bar; the colored .app-header doubles as
-   the drag region. macOS traffic lights overlay the top-left, so reserve
-   ~76px on that side. Windows/Linux use titleBarOverlay (top-right), so
-   reserve room on the right via .app-header-actions margin. */
+   The window has no native title bar; the coloured .app-header doubles as the
+   title bar and drag region, with the OS window controls painted on top of it.
+   Which side they occupy differs per platform — macOS left, Windows right,
+   Linux wherever the desktop environment puts them — so rather than hardcode a
+   side we ask the Window Controls Overlay: env(titlebar-area-x/width) describe
+   the strip actually left over for us, and the browser keeps them up to date
+   across resize, maximise and fullscreen. max() keeps the normal 16px gutter on
+   whichever side has no controls, and covers the cases where the vars are unset
+   (fullscreen hides the controls; the browser never has any).
+   Needs titleBarOverlay in electron/main.js to publish the vars. */
 html.electron .app-header {
   -webkit-app-region: drag;
+  padding-left: max(16px, env(titlebar-area-x, 0px));
+  padding-right: max(16px, 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 
 html.electron .app-header button,
@@ -83,14 +91,6 @@ html.electron .app-header a,
 html.electron .app-header input,
 html.electron .header-rename-input {
   -webkit-app-region: no-drag;
-}
-
-html.electron--mac .app-header {
-  padding-left: 84px;
-}
-
-html.electron:not(.electron--mac) .app-header-actions {
-  margin-right: 140px;
 }
 
 .app-logo {
