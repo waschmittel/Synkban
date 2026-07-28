@@ -257,7 +257,7 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 - `toml` — read/write `~/.config/synkban/synkban.toml`
 
 ### Desktop shell (`electron/package.json`)
-- `electron` v42 — Chromium-based desktop window
+- `electron` v43 — Chromium-based desktop window
 - `electron-builder` v26 — cross-platform packaging (bundles Rust binary as extraResource)
 
 ### Frontend (package.json)
