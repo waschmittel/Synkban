@@ -42,13 +42,16 @@ export default function Card(props: Props) {
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const el = e.currentTarget as HTMLElement;
+    // PageUp/PageDown are aliases for Home/End (with or without Shift): a list is
+    // a single scroll region, so "page" and "list edge" mean the same thing here.
+    const key = e.key === "PageUp" ? "Home" : e.key === "PageDown" ? "End" : e.key;
 
-    if (e.key === "Enter" || e.key === " ") {
+    if (key === "Enter" || key === " ") {
       e.preventDefault();
       props.onClick(props.card);
       return;
     }
-    if (e.key === "Delete" || e.key === "Backspace") {
+    if (key === "Delete" || key === "Backspace") {
       e.preventDefault();
       props.onArchive(props.card.id);
       return;
@@ -57,7 +60,7 @@ export default function Card(props: Props) {
     const currentList = el.closest(".list") as HTMLElement | null;
 
     // Shift+Alt+Left/Right: reorder list itself (preserve focus on the same card).
-    if (e.shiftKey && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    if (e.shiftKey && e.altKey && (key === "ArrowLeft" || key === "ArrowRight")) {
       e.preventDefault();
       e.stopPropagation();
       if (!currentList) return;
@@ -65,12 +68,12 @@ export default function Card(props: Props) {
       if (!container) return;
       const lists = Array.from(container.querySelectorAll<HTMLElement>(".list"));
       const idx = lists.indexOf(currentList);
-      if (e.key === "ArrowLeft" && idx <= 0) return;
-      if (e.key === "ArrowRight" && idx >= lists.length - 1) return;
+      if (key === "ArrowLeft" && idx <= 0) return;
+      if (key === "ArrowRight" && idx >= lists.length - 1) return;
       const otherPositions = lists
         .filter((_, i) => i !== idx)
         .map((l) => parseFloat(l.dataset.listPosition || "0"));
-      const insertAt = e.key === "ArrowLeft" ? idx - 1 : idx + 1;
+      const insertAt = key === "ArrowLeft" ? idx - 1 : idx + 1;
       const newPos = listDropPosition(otherPositions, insertAt);
       props.onMoveList(currentList.dataset.listId!, newPos);
       return;
@@ -78,7 +81,7 @@ export default function Card(props: Props) {
 
     if (e.shiftKey) {
       // Move card
-      if (e.key === "ArrowDown") {
+      if (key === "ArrowDown") {
         e.preventDefault();
         let next = el.nextElementSibling as HTMLElement | null;
         while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
@@ -90,7 +93,7 @@ export default function Card(props: Props) {
         props.onMove(props.card.id, props.card.list_id, withinListMoveDown(nextPos, afterNextPos));
         return;
       }
-      if (e.key === "ArrowUp") {
+      if (key === "ArrowUp") {
         e.preventDefault();
         let prev = el.previousElementSibling as HTMLElement | null;
         while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
@@ -102,9 +105,9 @@ export default function Card(props: Props) {
         props.onMove(props.card.id, props.card.list_id, withinListMoveUp(prevPos, beforePrevPos));
         return;
       }
-      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      if (key === "ArrowRight" || key === "ArrowLeft") {
         e.preventDefault();
-        const adjList = (e.key === "ArrowRight"
+        const adjList = (key === "ArrowRight"
           ? currentList?.nextElementSibling
           : currentList?.previousElementSibling) as HTMLElement | null;
         if (!adjList?.classList.contains("list")) return;
@@ -116,49 +119,49 @@ export default function Card(props: Props) {
         props.onMove(props.card.id, targetListId, crossListInsertPosition(adjPositions, curIdx));
         return;
       }
-      if (e.key === "Home" || e.key === "End") {
+      if (key === "Home" || key === "End") {
         e.preventDefault();
         if (!currentList) return;
         const cards = Array.from(currentList.querySelectorAll<HTMLElement>(".card"));
-        const target = e.key === "Home" ? cards[0] : cards[cards.length - 1];
+        const target = key === "Home" ? cards[0] : cards[cards.length - 1];
         if (!target || target === el) return; // already at the edge
         const targetPos = parseFloat(target.dataset.cardPosition || "0");
-        const newPos = e.key === "Home" ? moveToTop(targetPos) : moveToBottom(targetPos);
+        const newPos = key === "Home" ? moveToTop(targetPos) : moveToBottom(targetPos);
         props.onMove(props.card.id, props.card.list_id, newPos);
         return;
       }
     }
 
     // Navigation (no shift)
-    if (e.key === "Home") {
+    if (key === "Home") {
       e.preventDefault();
       e.stopPropagation();
       const cards = currentList?.querySelectorAll<HTMLElement>(".card");
       cards?.[0]?.focus();
-    } else if (e.key === "End") {
+    } else if (key === "End") {
       e.preventDefault();
       e.stopPropagation();
       const cards = currentList?.querySelectorAll<HTMLElement>(".card");
       cards?.[cards.length - 1]?.focus();
-    } else if (e.key === "ArrowDown") {
+    } else if (key === "ArrowDown") {
       e.preventDefault();
       e.stopPropagation();
       let next = el.nextElementSibling as HTMLElement | null;
       while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
       next?.focus();
-    } else if (e.key === "ArrowUp") {
+    } else if (key === "ArrowUp") {
       e.preventDefault();
       e.stopPropagation();
       let prev = el.previousElementSibling as HTMLElement | null;
       while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
       prev?.focus();
-    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    } else if (key === "ArrowRight" || key === "ArrowLeft") {
       e.preventDefault();
       // stopPropagation: prevent doc-level navigateArrow from running after
       // we focus an add-trigger on an empty adjacent list, which would skip
       // ahead to the next list.
       e.stopPropagation();
-      const adjList = (e.key === "ArrowRight"
+      const adjList = (key === "ArrowRight"
         ? currentList?.nextElementSibling
         : currentList?.previousElementSibling) as HTMLElement | null;
       if (adjList?.classList.contains("list")) {

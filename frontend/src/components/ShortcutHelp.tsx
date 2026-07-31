@@ -6,16 +6,30 @@ interface Props {
   onClose: () => void;
 }
 
-function Row(props: { keys: string[]; desc: string }) {
+function Chord(props: { keys: string[] }) {
+  return (
+    <>
+      {props.keys.map((k, i) => (
+        <>
+          {i > 0 && <span class="shortcut-sep">+</span>}
+          <kbd>{k}</kbd>
+        </>
+      ))}
+    </>
+  );
+}
+
+function Row(props: { keys: string[]; alt?: string[]; desc: string }) {
   return (
     <div class="shortcut-row">
       <span class="shortcut-keys">
-        {props.keys.map((k, i) => (
+        <Chord keys={props.keys} />
+        {props.alt && (
           <>
-            {i > 0 && <span class="shortcut-sep">+</span>}
-            <kbd>{k}</kbd>
+            <span class="shortcut-sep">/</span>
+            <Chord keys={props.alt} />
           </>
-        ))}
+        )}
       </span>
       <span class="shortcut-desc">{props.desc}</span>
     </div>
@@ -84,16 +98,16 @@ export default function ShortcutHelp(props: Props) {
           <Section title="Navigation">
             <Row keys={["↑", "↓"]} desc="Move between cards" />
             <Row keys={["←", "→"]} desc="Jump to adjacent list" />
-            <Row keys={["Home"]} desc="Focus first card in list" />
-            <Row keys={["End"]} desc="Focus last card in list" />
+            <Row keys={["Home"]} alt={["PgUp"]} desc="Focus first card in list" />
+            <Row keys={["End"]} alt={["PgDn"]} desc="Focus last card in list" />
           </Section>
           <Section title="Move Card">
             <Row keys={["Shift", "↑"]} desc="Move card up" />
             <Row keys={["Shift", "↓"]} desc="Move card down" />
             <Row keys={["Shift", "←"]} desc="Move card to prev list" />
             <Row keys={["Shift", "→"]} desc="Move card to next list" />
-            <Row keys={["Shift", "Home"]} desc="Move card to top of list" />
-            <Row keys={["Shift", "End"]} desc="Move card to bottom of list" />
+            <Row keys={["Shift", "Home"]} alt={["PgUp"]} desc="Move card to top of list" />
+            <Row keys={["Shift", "End"]} alt={["PgDn"]} desc="Move card to bottom of list" />
           </Section>
           <Section title="Move / Rename List">
             <Row keys={["Shift", "Alt", "←"]} desc="Move list left" />

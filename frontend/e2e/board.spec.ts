@@ -323,6 +323,13 @@ test("Home and End focus the first and last card in the list", async ({
 
   await page.keyboard.press("End");
   await expect(page.locator(`.card[data-card-id="${charlie.id}"]`)).toBeFocused();
+
+  // PageUp/PageDown are aliases for the same jumps.
+  await page.keyboard.press("PageUp");
+  await expect(page.locator(`.card[data-card-id="${alpha.id}"]`)).toBeFocused();
+
+  await page.keyboard.press("PageDown");
+  await expect(page.locator(`.card[data-card-id="${charlie.id}"]`)).toBeFocused();
 });
 
 test("Shift+Home and Shift+End move a card to the top/bottom of its list", async ({
@@ -361,6 +368,15 @@ test("Shift+Home and Shift+End move a card to the top/bottom of its list", async
 
   // Shift+End sends it back to the bottom.
   await page.keyboard.press("Shift+End");
+  await expect(charlieCard).toBeFocused();
+  await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
+
+  // Shift+PageUp/PageDown are aliases for the same moves.
+  await page.keyboard.press("Shift+PageUp");
+  await expect(charlieCard).toBeFocused();
+  await expect.poll(titles).toEqual(["Charlie", "Alpha", "Bravo"]);
+
+  await page.keyboard.press("Shift+PageDown");
   await expect(charlieCard).toBeFocused();
   await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
 
