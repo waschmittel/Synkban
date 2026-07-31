@@ -1,4 +1,4 @@
-import { createSignal, createResource, createEffect, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createResource, createEffect, untrack, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
 import { api } from "../api";
 import type { Board } from "../types";
@@ -9,6 +9,16 @@ import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 import { isTypingIn } from "../boardInput";
 import { createConfirm } from "../confirm";
+
+const focusedBoardId = () => {
+  const active = document.activeElement as HTMLElement | null;
+  return active?.classList.contains("board-card")
+    ? active.getAttribute("data-board-id")
+    : null;
+};
+
+const focusBoard = (id: string) =>
+  (document.querySelector(`[data-board-id="${id}"]`) as HTMLElement | null)?.focus();
 
 export default function Home() {
   const [boards, { refetch, mutate }] = createResource(() => api.listBoards());
@@ -35,10 +45,20 @@ export default function Home() {
     } catch {
       return;
     }
-    const id = pendingFocusBoardId();
+    // untrack: the effect must fire on *resource* changes only. Tracking the
+    // pending id makes setting it run the effect straight away — before the
+    // refetch it was meant to survive — and the run then clears it, so the
+    // recreated nodes are left with nothing to focus. That is what dropped
+    // focus on every poll refresh (the reorder path got away with it because
+    // its optimistic mutate() lands in the same tick).
+    const id = untrack(pendingFocusBoardId);
     if (!id) return;
+    // Synchronously first — the DOM is already patched when a user effect runs,
+    // and deferring the whole restore to the next frame leaves one frame where
+    // focus sits on <body>, long enough to swallow a fast follow-up keypress.
+    focusBoard(id);
     requestAnimationFrame(() => {
-      (document.querySelector(`[data-board-id="${id}"]`) as HTMLElement | null)?.focus();
+      focusBoard(id);
       if (!reorderInFlight && !queuedReorderIds) setPendingFocusBoardId(null);
     });
   });
@@ -68,9 +88,7 @@ export default function Home() {
   };
 
   const reorderBoardByKey = (key: string) => {
-    const focused = document.activeElement as HTMLElement | null;
-    if (!focused?.classList.contains("board-card")) return false;
-    const boardId = focused.getAttribute("data-board-id");
+    const boardId = focusedBoardId();
     const list = boards();
     if (!boardId || !list) return false;
     const idx = list.findIndex((b) => b.id === boardId);
@@ -229,6 +247,12 @@ export default function Home() {
     const stopPoller = startChangePoller({
       shouldSkip: () => reorderInFlight || !!queuedReorderIds,
       onChange: async () => {
+        // The refetch recreates the grid's <For> nodes, so an auto-refresh
+        // would otherwise drop the keyboard user's focus onto <body>. (The
+        // poller's first tick always fires — its remembered mtime starts at 0 —
+        // so this hits every Home page left open for one interval.)
+        const focused = focusedBoardId();
+        if (focused) setPendingFocusBoardId(focused);
         refetch();
         refreshWarnings();
         if (showArchive()) {

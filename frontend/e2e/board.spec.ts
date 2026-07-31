@@ -354,31 +354,29 @@ test("Shift+Home and Shift+End move a card to the top/bottom of its list", async
   await page.goto(`/board/${board.id}`);
   await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
 
-  // Shift+Home sends the bottom card (Charlie) to the top; focus follows it.
   const charlieCard = page.locator(`.card[data-card-id="${charlie.id}"]`);
   await charlieCard.focus();
-  await page.keyboard.press("Shift+Home");
-  await expect(charlieCard).toBeFocused();
-  await expect.poll(titles).toEqual(["Charlie", "Alpha", "Bravo"]);
 
+  // A move is a PUT plus a refetch that recreates the card nodes, so focus
+  // comes back asynchronously. Wait for it before pressing again: a key that
+  // lands while focus is still on <body> is delivered nowhere and the move is
+  // silently lost (the order assertion alone doesn't imply focus is back yet).
+  const move = async (key: string, expected: string[]) => {
+    await expect(charlieCard).toBeFocused();
+    await page.keyboard.press(key);
+    await expect.poll(titles).toEqual(expected);
+    await expect(charlieCard).toBeFocused();
+  };
+
+  // Shift+Home sends the bottom card (Charlie) to the top; focus follows it.
+  await move("Shift+Home", ["Charlie", "Alpha", "Bravo"]);
   // No-op when already at the edge: Shift+Home on the top card changes nothing.
-  await page.keyboard.press("Shift+Home");
-  await expect(charlieCard).toBeFocused();
-  await expect.poll(titles).toEqual(["Charlie", "Alpha", "Bravo"]);
-
+  await move("Shift+Home", ["Charlie", "Alpha", "Bravo"]);
   // Shift+End sends it back to the bottom.
-  await page.keyboard.press("Shift+End");
-  await expect(charlieCard).toBeFocused();
-  await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
-
+  await move("Shift+End", ["Alpha", "Bravo", "Charlie"]);
   // Shift+PageUp/PageDown are aliases for the same moves.
-  await page.keyboard.press("Shift+PageUp");
-  await expect(charlieCard).toBeFocused();
-  await expect.poll(titles).toEqual(["Charlie", "Alpha", "Bravo"]);
-
-  await page.keyboard.press("Shift+PageDown");
-  await expect(charlieCard).toBeFocused();
-  await expect.poll(titles).toEqual(["Alpha", "Bravo", "Charlie"]);
+  await move("Shift+PageUp", ["Charlie", "Alpha", "Bravo"]);
+  await move("Shift+PageDown", ["Alpha", "Bravo", "Charlie"]);
 
   // Order persists across a reload (positions written to disk).
   await page.reload();

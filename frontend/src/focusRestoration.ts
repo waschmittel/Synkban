@@ -23,6 +23,10 @@ export interface FocusRestoration {
   capturePending: () => void;
 }
 
+function focusCard(selector: (cardId: string) => string, cardId: string) {
+  (document.querySelector(selector(cardId)) as HTMLElement | null)?.focus();
+}
+
 export function createFocusRestoration(
   watch: Accessor<unknown>,
   selector: (cardId: string) => string = (id) => `[data-card-id="${id}"]`,
@@ -42,16 +46,18 @@ export function createFocusRestoration(
     const cardId = untrack(pending);
     if (!cardId) return;
     setPending(null);
-    requestAnimationFrame(() => {
-      (document.querySelector(selector(cardId)) as HTMLElement | null)?.focus();
-    });
+    // Synchronously first: a user effect runs with the DOM already patched, and
+    // deferring the whole restore to the next frame leaves one frame where
+    // focus sits on <body> — long enough to swallow a fast follow-up keypress
+    // (a second Shift+Arrow lands nowhere and the card doesn't move). The rAF
+    // stays as a fallback for nodes that only exist a frame later.
+    focusCard(selector, cardId);
+    requestAnimationFrame(() => focusCard(selector, cardId));
   });
 
   const preserve = (cardId: string) => {
     setPending(cardId);
-    requestAnimationFrame(() => {
-      (document.querySelector(selector(cardId)) as HTMLElement | null)?.focus();
-    });
+    requestAnimationFrame(() => focusCard(selector, cardId));
   };
 
   return {

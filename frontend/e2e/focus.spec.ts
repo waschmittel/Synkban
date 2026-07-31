@@ -391,3 +391,33 @@ test("archive confirm dialog auto-focuses confirm; Escape cancels, Enter archive
   await expect(page.locator(".unsaved-dialog")).toHaveCount(0);
   await expect(page.locator(".card", { hasText: "Task card" })).toHaveCount(0);
 });
+
+// The change poller refetches on its first tick unconditionally (its remembered
+// mtime starts at 0), and the refetch recreates the grid's <For> nodes. Home
+// used to let that drop the keyboard user's focus onto <body> — where the next
+// Shift+Arrow went nowhere — because, unlike the board page, it never captured
+// the focused card before refetching.
+test("home grid keeps keyboard focus across the auto-refresh poll", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(45_000); // the poll interval is 15s; the default 30s is tight
+
+  const board = await (
+    await request.post("/api/boards", { data: { title: `Poll Focus ${Date.now()}` } })
+  ).json();
+
+  await page.goto("/");
+  const card = page.locator(`.board-card[data-board-id="${board.id}"]`);
+  await card.focus();
+  await expect(card).toBeFocused();
+
+  // Resolves on the poll's refetch, not the initial load — that request is
+  // already done by the time we start waiting.
+  await page.waitForRequest(
+    (r) => r.method() === "GET" && new URL(r.url()).pathname === "/api/boards",
+    { timeout: 25_000 }
+  );
+
+  await expect(card).toBeFocused();
+});
