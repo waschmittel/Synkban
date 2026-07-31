@@ -53,6 +53,20 @@ try {
   buildStamp = '';
 }
 
+// On Linux the icon is a property of the window, and an AppImage that hasn't
+// been desktop-integrated has no installed .desktop entry to fall back on — so
+// without this the window shows Electron's default icon in the dock/alt-tab.
+// macOS takes it from the .app bundle, and a packaged Windows build takes it
+// from the multi-size .ico electron-builder writes into the exe (better than
+// the single downscale below), so both opt out.
+function getWindowIconPath() {
+  if (process.platform === 'darwin') return undefined;
+  if (process.platform === 'win32' && app.isPackaged) return undefined;
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '..', 'backend', 'icons', 'png', '512x512.png');
+}
+
 function getBackendPath() {
   if (app.isPackaged) {
     const ext = process.platform === 'win32' ? '.exe' : '';
@@ -105,6 +119,7 @@ async function createWindow() {
     // (macOS traffic lights on the left, Windows caption buttons on the right,
     // Linux wherever the desktop environment puts them).
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    icon: getWindowIconPath(),
     // titleBarOverlay is enabled on every platform: besides painting the
     // controls (the colours apply on Windows/Linux only), it publishes the
     // env(titlebar-area-*) CSS variables that app.css uses to keep the header
@@ -145,6 +160,10 @@ async function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Windows groups taskbar buttons (and resolves the pinned shortcut's icon) by
+  // AppUserModelID. Without this the running window is its own anonymous group
+  // with Electron's default icon instead of the installed shortcut's.
+  app.setAppUserModelId('com.synkban.app');
   app.setAboutPanelOptions({
     applicationName: 'Synkban',
     applicationVersion: appVersion,

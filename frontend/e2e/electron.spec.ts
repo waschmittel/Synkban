@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron, type ElectronApplication } from "@playwright/test";
-import { existsSync, readdirSync, mkdtempSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -146,5 +146,50 @@ test.describe("electron desktop shell", () => {
       .toEqual(["https://example.com/"]);
     // …and no child BrowserWindow was spawned (handler returned deny).
     expect(app.windows().length).toBe(windowsBefore);
+  });
+});
+
+// The Linux menu/taskbar icon is looked up by name in the hicolor theme, whose
+// index.theme only declares sizes up to 512 — electron-builder installs one
+// directory per *source* PNG, so a lone 1024px source lands in a directory no
+// desktop environment ever searches and the app shows no icon at all. These are
+// fs-only checks: they run everywhere, including where Electron itself can't.
+test.describe("desktop icon assets", () => {
+  const iconDir = join(__dirname, "..", "..", "backend", "icons", "png");
+
+  // Width/height live in the IHDR chunk at a fixed offset — enough to catch a
+  // resize that didn't match the filename electron-builder derives sizes from.
+  function pngSize(file: string): { width: number; height: number } {
+    const header = readFileSync(file).subarray(16, 24);
+    return { width: header.readUInt32BE(0), height: header.readUInt32BE(4) };
+  }
+
+  test("the linux icon set covers the hicolor sizes and every file matches its name", () => {
+    const sizes = readdirSync(iconDir)
+      .filter((f) => f.endsWith(".png"))
+      .map((f) => {
+        const { width, height } = pngSize(join(iconDir, f));
+        expect(f, `${f} must be named <size>x<size>.png`).toMatch(/^(\d+)x\1\.png$/);
+        expect({ f, width, height }).toEqual({ f, width: parseInt(f, 10), height: parseInt(f, 10) });
+        return parseInt(f, 10);
+      });
+
+    for (const required of [16, 24, 32, 48, 64, 128, 256, 512]) {
+      expect(sizes, `hicolor size ${required} is missing from ${iconDir}`).toContain(required);
+    }
+  });
+
+  test("electron-builder points at the icon set and main.js at a real dev icon", () => {
+    const pkg = JSON.parse(
+      readFileSync(join(__dirname, "..", "..", "electron", "package.json"), "utf8"),
+    );
+    // A directory, not a single png: one png makes electron-builder emit a
+    // single-entry "set" at that png's own size.
+    expect(pkg.build.linux.icon).toBe("../backend/icons/png");
+    // Electron derives the window's app_id from desktopName; the generated
+    // .desktop file's StartupWMClass follows it, and the two must agree or the
+    // running window is never linked to its launcher entry (= no dock icon).
+    expect(pkg.desktopName).toBe("synkban.desktop");
+    expect(existsSync(join(iconDir, "512x512.png"))).toBe(true);
   });
 });
