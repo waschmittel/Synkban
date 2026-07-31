@@ -1,6 +1,7 @@
 import { onCleanup } from "solid-js";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
+import { accelLabel } from "../platform";
 
 interface Props {
   onClose: () => void;
@@ -134,18 +135,17 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Esc"]} desc="Close archive" />
           </Section>
           <Section title="Card Detail">
-            <Row keys={["Ctrl", "S"]} desc="Save" />
-            <Row keys={["Ctrl", "B"]} desc="Bold selection (title)" />
-            <Row keys={["Ctrl", "I"]} desc="Italic selection (title)" />
+            <Row keys={[accelLabel, "S"]} desc="Save" />
+            <Row keys={[accelLabel, "B"]} desc="Bold selection (title)" />
+            <Row keys={[accelLabel, "I"]} desc="Italic selection (title)" />
             <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
             <Row keys={["Enter"]} desc="Title → focus editor" />
-            <Row keys={["Ctrl", "T"]} desc="Focus title" />
-            <Row keys={["Ctrl", "L"]} desc="Focus labels" />
-            <Row keys={["Ctrl", "D"]} desc="Focus description" />
-            <Row keys={["Ctrl", "C"]} desc="Focus checklist" />
-            <Row keys={["Ctrl", "O"]} desc="Add attachment" />
-            <Row keys={["Ctrl", "U"]} desc="Open due date picker" />
-            <Row keys={["f"]} desc="Toggle filter bar" />
+            <Row keys={[accelLabel, "E"]} desc="Focus title (edit)" />
+            <Row keys={[accelLabel, "G"]} desc="Focus labels" />
+            <Row keys={[accelLabel, "D"]} desc="Focus description" />
+            <Row keys={[accelLabel, "L"]} desc="Focus checklist (list)" />
+            <Row keys={[accelLabel, "O"]} desc="Add attachment (open file)" />
+            <Row keys={[accelLabel, "U"]} desc="Open due date picker" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
           </Section>
           <Section title="Checklist">
@@ -157,8 +157,8 @@ export default function ShortcutHelp(props: Props) {
           <Section title="Description Editor">
             <Row keys={["Tab"]} desc="Nest list item (indent)" />
             <Row keys={["Shift", "Tab"]} desc="Outdent list item" />
-            <Row keys={["Ctrl", "]"]} desc="Nest list item (alt)" />
-            <Row keys={["Ctrl", "["]} desc="Outdent list item (alt)" />
+            <Row keys={[accelLabel, "]"]} desc="Nest list item (alt)" />
+            <Row keys={[accelLabel, "["]} desc="Outdent list item (alt)" />
             <Row keys={["Enter"]} desc="Split list item" />
           </Section>
           <Section title="Attachments">

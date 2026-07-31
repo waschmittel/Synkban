@@ -125,11 +125,11 @@ test("modal shortcuts still work after dialog round-trip", async ({ page, reques
   // Focus restored to the title input — leave it, then use a modal shortcut.
   await expect(page.locator(".modal-title-input")).toBeFocused();
   await page.keyboard.press("Tab");
-  await page.keyboard.press("Control+c");
+  await page.keyboard.press("ControlOrMeta+l");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 });
 
-test("Ctrl+S saves; Ctrl+Enter neither saves nor closes", async ({ page, request }) => {
+test("Accel+S saves; accel+Enter neither saves nor closes", async ({ page, request }) => {
   const { board } = await seedCard(request, "Save Board");
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Task card" }).click();
@@ -137,12 +137,12 @@ test("Ctrl+S saves; Ctrl+Enter neither saves nor closes", async ({ page, request
   await page.locator(".ProseMirror").click();
   await page.keyboard.type("hello description");
 
-  // Ctrl+Enter must not save/close anymore (ProseMirror would insert a hard
+  // Accel+Enter must not save/close anymore (ProseMirror would insert a hard
   // break right before the save, corrupting the description).
-  await page.keyboard.press("Control+Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.locator(".modal-overlay")).toHaveCount(1);
 
-  await page.keyboard.press("Control+s");
+  await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
   // Persisted.
@@ -150,7 +150,7 @@ test("Ctrl+S saves; Ctrl+Enter neither saves nor closes", async ({ page, request
   await expect(page.locator(".ProseMirror")).toContainText("hello description");
 });
 
-test("Ctrl+S saves without adding a line break to the description", async ({
+test("Accel+S saves without adding a line break to the description", async ({
   page,
   request,
 }) => {
@@ -160,7 +160,7 @@ test("Ctrl+S saves without adding a line break to the description", async ({
 
   await page.locator(".ProseMirror").click();
   await page.keyboard.type("single line");
-  await page.keyboard.press("Control+s");
+  await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
   await page.locator(".card", { hasText: "Task card" }).click();
@@ -172,16 +172,16 @@ test("Ctrl+S saves without adding a line break to the description", async ({
 // Regression: the modal must only unmount after the board refetch resolves.
 // Previously the modal closed first with the refetch still in flight, so an
 // immediate re-open snapshotted the stale (empty) card from board().
-test("immediate reopen after Ctrl+S shows the saved description", async ({ page, request }) => {
+test("immediate reopen after accel+S shows the saved description", async ({ page, request }) => {
   const { board } = await seedCard(request, "Reopen Board");
   await page.goto(`/board/${board.id}`);
 
   for (let i = 1; i <= 3; i++) {
     await page.locator(".card", { hasText: "Task card" }).click();
     await page.locator(".ProseMirror").click();
-    await page.keyboard.press("Control+a");
+    await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.type(`description v${i}`);
-    await page.keyboard.press("Control+s");
+    await page.keyboard.press("ControlOrMeta+s");
     await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
     // Reopen immediately — no waiting for any refetch to settle.
@@ -206,7 +206,7 @@ test("immediate reopen after save shows checklist items persisted via Save", asy
 
   // Checklist persists as card content via Save. Save (closes) and reopen at
   // once — the refetch must settle before unmount so the reopen isn't stale.
-  await page.keyboard.press("Control+s");
+  await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await page.locator(".card", { hasText: "Task card" }).click();
   await expect(page.locator(".checklist-item", { hasText: "step one" })).toHaveCount(1);

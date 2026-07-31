@@ -127,9 +127,9 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   await page.keyboard.press("Enter");
   await expect(page.locator(".modal-title-input")).toBeFocused();
 
-  // Leave the title input, then Ctrl+C focuses the checklist add input.
+  // Leave the title input, then accel+L focuses the checklist add input.
   await page.keyboard.press("Tab");
-  await page.keyboard.press("Control+c");
+  await page.keyboard.press("ControlOrMeta+l");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 
   await page.keyboard.type("kb one");
@@ -163,8 +163,8 @@ test("keyboard-only: add, toggle, navigate, delete checklist items", async ({
   await expect(page.locator(".checklist-item", { hasText: "kb two" })).toBeFocused();
   await expect(page.locator(".checklist-progress")).toHaveText("1/1");
 
-  // Save via Ctrl+S, then verify the badge shows the complete state.
-  await page.keyboard.press("Control+s");
+  // Save via accel+S, then verify the badge shows the complete state.
+  await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   const badge = page.locator(".checklist-badge");
   await expect(badge).toHaveText("1/1");

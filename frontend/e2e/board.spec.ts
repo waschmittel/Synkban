@@ -474,7 +474,7 @@ test("inline create form collapses to the toggle when it loses focus inside the 
   await expect(page.locator(".label-picker")).toBeVisible();
 });
 
-test("card-detail Ctrl-modifier shortcuts focus each section", async ({
+test("card-detail accelerator shortcuts focus each section", async ({
   page,
   request,
 }) => {
@@ -486,7 +486,7 @@ test("card-detail Ctrl-modifier shortcuts focus each section", async ({
   ).json();
   await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Shortcut card" } });
 
-  // Neuter showPicker so Ctrl+U's real native date picker doesn't open and
+  // Neuter showPicker so accel+U's real native date picker doesn't open and
   // steal window focus from later shortcuts in this sequence (picker behaviour
   // is asserted separately). This test only checks section focus.
   await page.addInitScript(() => {
@@ -497,29 +497,64 @@ test("card-detail Ctrl-modifier shortcuts focus each section", async ({
   await page.locator(".card", { hasText: "Shortcut card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  // Title input is auto-focused on open. Ctrl+D → description editor.
-  await page.keyboard.press("Control+d");
+  // Title input is auto-focused on open. Accel+D → description editor.
+  await page.keyboard.press("ControlOrMeta+d");
   await expect(page.locator(".editor-wrapper .ProseMirror")).toBeFocused();
 
-  // Ctrl+T → back to title.
-  await page.keyboard.press("Control+t");
+  // Accel+E → back to title.
+  await page.keyboard.press("ControlOrMeta+e");
   await expect(page.locator(".modal-title-input")).toBeFocused();
 
-  // Ctrl+C → checklist add input.
-  await page.keyboard.press("Control+c");
+  // Accel+L → checklist add input (L = list; C would steal copy).
+  await page.keyboard.press("ControlOrMeta+l");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 
-  // Ctrl+U → due-date input (also opens the picker; stubbed above).
-  await page.keyboard.press("Control+u");
+  // Accel+U → due-date input (also opens the picker; stubbed above).
+  await page.keyboard.press("ControlOrMeta+u");
   await expect(page.locator(".due-date-input")).toBeFocused();
 
-  // Ctrl+L → opens the label picker and focuses the add-label button.
-  await page.keyboard.press("Control+l");
+  // Accel+G → opens the label picker and focuses the add-label button.
+  await page.keyboard.press("ControlOrMeta+g");
   await expect(page.locator(".label-add-btn")).toBeFocused();
   await expect(page.locator(".label-add-btn")).toHaveText(/Done/);
 });
 
-test("card-detail Ctrl+A opens the attachment file picker", async ({
+// Regression: the checklist shortcut used to be Ctrl/Cmd+C and fired even
+// while typing, so every copy made inside the modal was preventDefault()ed
+// and silently produced an empty clipboard. No modal shortcut may claim a
+// text-editing key. Asserted on the keydown's defaultPrevented (deterministic,
+// unlike reading the real clipboard) with both modifiers, since Ctrl is the
+// accelerator off macOS and a text-editing modifier on it.
+test("card-detail leaves Ctrl+C and Cmd+C to the browser", async ({ page, request }) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Copy Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Copy card" } });
+
+  await page.addInitScript(() => {
+    (window as any).__cPrevented = [];
+    // window sees the event after SolidJS's document-delegated handler.
+    window.addEventListener("keydown", (e) => {
+      if (e.key.toLowerCase() === "c") (window as any).__cPrevented.push(e.defaultPrevented);
+    });
+  });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Copy card" }).click();
+  await expect(page.locator(".modal-title-input")).toBeFocused();
+
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Meta+c");
+
+  await expect(page.locator(".modal-title-input")).toBeFocused();
+  await expect(page.locator(".checklist-add-input")).not.toBeFocused();
+  expect(await page.evaluate(() => (window as any).__cPrevented)).toEqual([false, false]);
+});
+
+test("card-detail Ctrl/Cmd+O opens the attachment file picker", async ({
   page,
   request,
 }) => {
@@ -535,14 +570,14 @@ test("card-detail Ctrl+A opens the attachment file picker", async ({
   await page.locator(".card", { hasText: "Attach card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  // Ctrl+O triggers the hidden file input's click → a native file chooser.
+  // Accel+O triggers the hidden file input's click → a native file chooser.
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.keyboard.press("Control+o");
+  await page.keyboard.press("ControlOrMeta+o");
   const chooser = await fileChooserPromise;
   expect(chooser).toBeTruthy();
 });
 
-test("card-detail Ctrl+U focuses the due-date input and opens the picker", async ({
+test("card-detail Ctrl/Cmd+U focuses the due-date input and opens the picker", async ({
   page,
   request,
 }) => {
@@ -556,7 +591,7 @@ test("card-detail Ctrl+U focuses the due-date input and opens the picker", async
 
   // Record showPicker() invocations (the native picker UI itself isn't
   // observable). showPicker only exists on date/color/file inputs, so a call
-  // on the type="date" input proves Ctrl+U hit the right element — the bug was
+  // on the type="date" input proves accel+U hit the right element — the bug was
   // it targeting the type="text" input, where showPicker is a no-op.
   await page.addInitScript(() => {
     (window as any).__pickerOpens = [];
@@ -569,7 +604,7 @@ test("card-detail Ctrl+U focuses the due-date input and opens the picker", async
   await page.locator(".card", { hasText: "Due card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  await page.keyboard.press("Control+u");
+  await page.keyboard.press("ControlOrMeta+u");
 
   // The visible text input gets focus…
   await expect(page.locator(".due-date-input")).toBeFocused();

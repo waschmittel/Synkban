@@ -46,6 +46,12 @@ export default function Card(props: Props) {
     // a single scroll region, so "page" and "list edge" mean the same thing here.
     const key = e.key === "PageUp" ? "Home" : e.key === "PageDown" ? "End" : e.key;
 
+    // Shift+Alt+Arrow (list reorder, below) is the only chord this card owns —
+    // leave every other modifier combo to the browser/OS, so Ctrl+Home still
+    // scrolls, Alt+Left still goes back and Cmd+Enter isn't swallowed.
+    const isListMove = e.shiftKey && e.altKey && (key === "ArrowLeft" || key === "ArrowRight");
+    if (!isListMove && (e.ctrlKey || e.metaKey || e.altKey)) return;
+
     if (key === "Enter" || key === " ") {
       e.preventDefault();
       props.onClick(props.card);

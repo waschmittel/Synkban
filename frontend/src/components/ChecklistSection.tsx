@@ -99,6 +99,9 @@ export default function ChecklistSection(props: Props) {
       }
       return;
     }
+    // Shift is ours (reorder); the rest belongs to the browser/OS — Ctrl+Space
+    // switches input method on Windows and must not toggle the item.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === " ") {
       e.preventDefault();
       toggleItem(item);

@@ -1,7 +1,10 @@
-/// Markdown-shortcut helper for plain `<input>` elements. Ctrl/Cmd+B and
-/// Ctrl/Cmd+I wrap the current selection in `**...**` / `*...*` (and toggle
-/// off when already wrapped). Used in label drawer inputs and the
-/// CardDetail title; the ProseMirror editor has its own toggle commands.
+/// Markdown-shortcut helper for plain `<input>` elements. Accel+B and Accel+I
+/// (Cmd on macOS, Ctrl elsewhere — same `Mod-` chord ProseMirror binds) wrap
+/// the current selection in `**...**` / `*...*` (and toggle off when already
+/// wrapped). Used in label drawer inputs and the CardDetail title; the
+/// ProseMirror editor has its own toggle commands.
+
+import { hasAccel } from "./platform";
 
 export function wrapMarkdownSelection(input: HTMLInputElement, marker: string) {
   const start = input.selectionStart ?? 0;
@@ -22,10 +25,10 @@ export function wrapMarkdownSelection(input: HTMLInputElement, marker: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-/// Intercepts Ctrl/Cmd+B and Ctrl/Cmd+I on an `<input>` and applies the
-/// markdown wrap. Returns true if it handled the event.
+/// Intercepts Accel+B and Accel+I on an `<input>` and applies the markdown
+/// wrap. Returns true if it handled the event.
 export function handleMarkdownShortcut(e: KeyboardEvent): boolean {
-  if (!(e.ctrlKey || e.metaKey)) return false;
+  if (!hasAccel(e)) return false;
   if (e.key === "b") {
     e.preventDefault();
     wrapMarkdownSelection(e.currentTarget as HTMLInputElement, "**");

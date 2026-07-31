@@ -705,7 +705,6 @@ export default function BoardPage() {
             onCreateLabel={handleCreateLabel}
             onSave={handleCardSave}
             onClose={handleModalClose}
-            onToggleFilter={() => setShowFilterBar((v) => !v)}
             onToggleHelp={() => setShowHelp((v) => !v)}
           />
         )}
