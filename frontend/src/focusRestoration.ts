@@ -1,4 +1,5 @@
 import { createSignal, createEffect, untrack, type Accessor } from "solid-js";
+import { isTypingIn } from "./boardInput";
 
 /// Owns the small state machine that keeps a card focused across SolidJS
 /// resource refetches and async DOM recreations.
@@ -56,6 +57,10 @@ export function createFocusRestoration(
   });
 
   const preserve = (cardId: string) => {
+    // A create/save round-trip can land long after the user moved on to typing
+    // the next title. Pulling the caret out of a field mid-word is worse than
+    // leaving the new card unfocused, so the typist wins.
+    if (isTypingIn(document.activeElement)) return;
     setPending(cardId);
     requestAnimationFrame(() => focusCard(selector, cardId));
   };

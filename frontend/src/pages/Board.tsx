@@ -680,6 +680,7 @@ export default function BoardPage() {
                 <AddForm
                   placeholder="List title..."
                   buttonText="Add list"
+                  draftKey={`list:${params.id}`}
                   onAdd={handleAddList}
                 />
               </div>
