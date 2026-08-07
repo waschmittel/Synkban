@@ -89,6 +89,15 @@ export default function BoardPage() {
     if (b) header.setTitle(b.title);
   });
 
+  // The dock scrolls once there are more boards than fit the window, so the
+  // dot for the board you're actually on has to be brought back into it.
+  createEffect(() => {
+    params.id;
+    boardList();
+    const dot = document.querySelector(".board-dock-dot--active");
+    dot?.scrollIntoView({ block: "nearest", inline: "center" });
+  });
+
   // Remember the last board that actually loaded, for the "open last used
   // board on startup" preference. Stale ids (deleted/archived boards) are
   // filtered out server-side by GET /api/settings, so no clearing here.

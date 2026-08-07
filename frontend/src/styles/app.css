@@ -876,11 +876,24 @@ html.electron .header-rename-input {
   -webkit-backdrop-filter: blur(8px);
   box-shadow: var(--shadow-sm);
   z-index: 50;
+  /* Enough boards and the pill grows past both window edges, putting the end
+     dots out of reach. Cap it at the viewport and scroll instead; Board.tsx
+     keeps the active dot in view. The bar itself is hidden — it would eat half
+     the pill's height — so the dock scrolls by wheel/trackpad. */
+  max-width: calc(100% - 28px);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.board-dock::-webkit-scrollbar {
+  display: none;
 }
 
 .board-dock-dot {
   width: 11px;
   height: 11px;
+  flex: 0 0 auto;
   padding: 0;
   border: none;
   border-radius: 50%;

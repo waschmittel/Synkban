@@ -825,6 +825,39 @@ test("dock dots highlight the active board, show its name, and navigate on click
   await expect(dotB).toHaveClass(/board-dock-dot--active/);
 });
 
+// The dock is a fixed, centre-anchored pill. Before it was capped and made
+// scrollable it simply kept growing, so past a few dozen boards it hung off
+// both window edges and the dots at either end could not be seen or clicked.
+// A narrow viewport reproduces that with whatever boards the run has.
+test("dock stays within the window and reaches its end dots when boards overflow", async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  const a = await (
+    await request.post("/api/boards", { data: { title: `Overflow A ${stamp}` } })
+  ).json();
+  const b = await (
+    await request.post("/api/boards", { data: { title: `Overflow B ${stamp}` } })
+  ).json();
+
+  await page.setViewportSize({ width: 360, height: 700 });
+  await page.goto(`/board/${a.id}`);
+
+  const dock = page.locator(".board-dock");
+  await expect(dock).toBeVisible();
+  const box = (await dock.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(360);
+
+  // The dot for the board you're on is scrolled back into the pill.
+  await expect(page.locator(".board-dock-dot--active")).toBeInViewport();
+
+  const dotB = page.locator(`.board-dock-dot[data-board-id="${b.id}"]`);
+  await dotB.click();
+  await expect(page).toHaveURL(new RegExp(`/board/${b.id}$`));
+});
+
 test("New-label input stays hidden until Create label is clicked, on every card", async ({
   page,
   request,
