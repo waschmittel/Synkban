@@ -133,6 +133,32 @@ test("record demo", async ({ page }) => {
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await pause(page);
 
+  // --- Card history: edit once more, then browse the versions ---
+  await page.locator(".card", { hasText: "Design landing page" }).click();
+  await expect(page.locator(".modal-title-input")).toBeVisible();
+  await pause(page, 500);
+  await slowFill(page.locator(".checklist-add-input"), "Launch");
+  await page.locator(".checklist-add-input").press("Enter");
+  await pause(page, 500);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await pause(page, 500);
+
+  await page.locator(".card", { hasText: "Design landing page" }).click();
+  await expect(page.locator(".modal-title-input")).toBeVisible();
+  await pause(page, 500);
+  await page.keyboard.press("ControlOrMeta+j");
+  await expect(page.locator(".history-dialog")).toBeVisible();
+  await pause(page, 1500);
+  await page.keyboard.press("ArrowDown");
+  await pause(page, 1500);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".history-dialog")).toHaveCount(0);
+  await pause(page, 500);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await pause(page);
+
   // --- Move card across lists (keyboard) ---
   const designCard = page.locator(".card", { hasText: "Design landing page" });
   await designCard.focus();

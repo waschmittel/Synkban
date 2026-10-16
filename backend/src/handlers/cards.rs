@@ -79,6 +79,14 @@ pub async fn update_card(
     Ok(HttpResponse::Ok().json(card))
 }
 
+pub async fn get_card_history(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let history = store::get_card_history(&data_dir, &path.into_inner())?;
+    Ok(HttpResponse::Ok().json(history))
+}
+
 pub async fn delete_card(
     data_dir: web::Data<PathBuf>,
     path: web::Path<String>,

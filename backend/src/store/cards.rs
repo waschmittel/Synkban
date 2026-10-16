@@ -3,10 +3,10 @@
 //! `boards/{bid}/archived_cards/{cid}.json`.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::errors::AppError;
-use crate::models::{Card, ChecklistItem};
+use crate::models::{Card, CardContent, CardHistory, ChecklistItem, HistoryEntry};
 use crate::store::card_index::{self, CardLocation};
 use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::lists::find_board_for_list;
@@ -85,6 +85,98 @@ fn prune_label_ids(data_dir: &Path, board_id: &str, card: &mut Card) {
     }
 }
 
+/// Versions kept in a card's change history; older ones are dropped.
+pub const HISTORY_LIMIT: usize = 100;
+
+fn card_path(data_dir: &Path, card_id: &str, loc: &CardLocation) -> PathBuf {
+    match loc {
+        CardLocation::InList { board_id, list_id } => {
+            cards_dir(data_dir, board_id, list_id).join(format!("{card_id}.json"))
+        }
+        CardLocation::Orphaned { board_id } => {
+            archived_cards_dir(data_dir, board_id).join(format!("{card_id}.json"))
+        }
+    }
+}
+
+fn attachment_names(data_dir: &Path, board_id: &str, card_id: &str) -> Vec<String> {
+    crate::store::attachments::load_attachments(data_dir, board_id, card_id)
+        .into_iter()
+        .map(|a| a.filename)
+        .collect()
+}
+
+fn content_of(card: &Card, attachments: Vec<String>) -> CardContent {
+    CardContent {
+        title: card.title.clone(),
+        description: card.description.clone(),
+        label_ids: card.label_ids.clone(),
+        due_date: card.due_date.clone(),
+        checklist: card.checklist.clone(),
+        attachments,
+    }
+}
+
+/// Appends the card's new content to its history if it differs from `before`.
+/// A card with no history yet first gets `before` recorded as its original
+/// version (stamped with the creation time), so the first edit isn't lost.
+fn record_history(card: &mut Card, before: CardContent, attachments: Vec<String>) {
+    let after = content_of(card, attachments);
+    if before == after {
+        return;
+    }
+    if card.history.is_empty() {
+        card.history.push(HistoryEntry { at: card.created_at.clone(), content: before });
+    }
+    card.history.push(HistoryEntry { at: now_timestamp(), content: after });
+    let excess = card.history.len().saturating_sub(HISTORY_LIMIT);
+    card.history.drain(..excess);
+}
+
+/// Content snapshot to take *before* an attachment is added or removed, paired
+/// with `record_attachment_change` afterwards. Attachments live outside the
+/// card file, so their changes don't pass through `update_card`.
+pub(crate) fn content_snapshot(data_dir: &Path, card_id: &str) -> Result<CardContent, AppError> {
+    let loc = card_index::locate(data_dir, card_id)?;
+    let card = read_card(&card_path(data_dir, card_id, &loc))?;
+    let board_id = match &loc {
+        CardLocation::InList { board_id, .. } | CardLocation::Orphaned { board_id } => board_id,
+    };
+    Ok(content_of(&card, attachment_names(data_dir, board_id, card_id)))
+}
+
+pub(crate) fn record_attachment_change(
+    data_dir: &Path,
+    card_id: &str,
+    before: CardContent,
+) -> Result<(), AppError> {
+    let loc = card_index::locate(data_dir, card_id)?;
+    let path = card_path(data_dir, card_id, &loc);
+    let mut card = read_card(&path)?;
+    let board_id = match &loc {
+        CardLocation::InList { board_id, .. } | CardLocation::Orphaned { board_id } => board_id,
+    };
+    let after = content_of(&card, attachment_names(data_dir, board_id, card_id));
+    if before == after {
+        return Ok(());
+    }
+    record_history(&mut card, before, after.attachments);
+    write_card(&path, &mut card)
+}
+
+/// The card's current content plus its recorded versions, newest first.
+pub fn get_card_history(data_dir: &Path, card_id: &str) -> Result<CardHistory, AppError> {
+    let loc = card_index::locate(data_dir, card_id)?;
+    let card = read_card(&card_path(data_dir, card_id, &loc))?;
+    let board_id = match &loc {
+        CardLocation::InList { board_id, .. } | CardLocation::Orphaned { board_id } => board_id,
+    };
+    let current = content_of(&card, attachment_names(data_dir, board_id, card_id));
+    let mut entries = card.history;
+    entries.reverse();
+    Ok(CardHistory { current, entries })
+}
+
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -107,6 +199,7 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         attachments: Vec::new(),
         due_date: None,
         checklist: Vec::new(),
+        history: Vec::new(),
     };
     write_card(&dir.join(format!("{id}.json")), &mut card)?;
     card_index::record(&id, CardLocation::InList {
@@ -135,6 +228,27 @@ pub fn update_card(
     due_date: Option<Option<&str>>,
     checklist: Option<Vec<ChecklistItem>>,
 ) -> Result<Card, AppError> {
+    let mut card = update_card_with_history(
+        data_dir, card_id, title, description, position, new_list_id, label_ids, archived,
+        due_date, checklist,
+    )?;
+    // History is served by `get_card_history`, not inlined in card responses.
+    card.history = Vec::new();
+    Ok(card)
+}
+
+fn update_card_with_history(
+    data_dir: &Path,
+    card_id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+    position: Option<f64>,
+    new_list_id: Option<&str>,
+    label_ids: Option<&[String]>,
+    archived: Option<bool>,
+    due_date: Option<Option<&str>>,
+    checklist: Option<Vec<ChecklistItem>>,
+) -> Result<Card, AppError> {
     let loc = card_index::locate(data_dir, card_id)?;
     let (source_board_id, old_list_id, old_path, is_orphaned) = match &loc {
         CardLocation::InList { board_id, list_id } => {
@@ -148,6 +262,8 @@ pub fn update_card(
         }
     };
     let mut card = read_card(&old_path)?;
+    let attachments = attachment_names(data_dir, &source_board_id, card_id);
+    let before = content_of(&card, attachments.clone());
 
     if let Some(t) = title {
         card.title = t.to_string();
@@ -189,6 +305,7 @@ pub fn update_card(
         let new_dir = cards_dir(data_dir, &target_board_id, target_list_id);
         fs::create_dir_all(&new_dir)?;
         prune_label_ids(data_dir, &target_board_id, &mut card);
+        record_history(&mut card, before, attachments);
         write_card(&new_dir.join(format!("{card_id}.json")), &mut card)?;
         track("deleted", &old_path);
         fs::remove_file(&old_path)?;
@@ -215,6 +332,7 @@ pub fn update_card(
             fs::create_dir_all(&new_dir)?;
             card.list_id = target_list_id.to_string();
             prune_label_ids(data_dir, &target_board_id, &mut card);
+            record_history(&mut card, before, attachments);
             write_card(&new_dir.join(format!("{card_id}.json")), &mut card)?;
             track("deleted", &old_path);
             fs::remove_file(&old_path)?;
@@ -233,6 +351,7 @@ pub fn update_card(
     }
 
     prune_label_ids(data_dir, &source_board_id, &mut card);
+    record_history(&mut card, before, attachments);
     write_card(&old_path, &mut card)?;
     card.attachments = crate::store::attachments::load_attachments(data_dir, &source_board_id, card_id);
     Ok(card)
@@ -842,5 +961,91 @@ mod tests {
         )
         .unwrap();
         assert!(!arch_dir.exists());
+    }
+
+    // --- change history ---
+
+    fn card_with_list() -> (TempDir, String) {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "first").unwrap();
+        (d, c.id)
+    }
+
+    fn set_title(d: &Path, id: &str, t: &str) -> Card {
+        update_card(d, id, Some(t), None, None, None, None, None, None, None).unwrap()
+    }
+
+    #[test]
+    fn history_empty_until_first_content_change() {
+        let (d, id) = card_with_list();
+        let h = get_card_history(d.path(), &id).unwrap();
+        assert!(h.entries.is_empty());
+        assert_eq!(h.current.title, "first");
+    }
+
+    #[test]
+    fn first_edit_records_original_then_new_version_newest_first() {
+        let (d, id) = card_with_list();
+        set_title(d.path(), &id, "second");
+        let h = get_card_history(d.path(), &id).unwrap();
+        let titles: Vec<_> = h.entries.iter().map(|e| e.content.title.as_str()).collect();
+        assert_eq!(titles, ["second", "first"]);
+        assert_eq!(h.current.title, "second");
+    }
+
+    #[test]
+    fn non_content_updates_do_not_add_history() {
+        let (d, id) = card_with_list();
+        update_card(d.path(), &id, None, None, Some(5.0), None, None, Some(true), None, None).unwrap();
+        // Same title again is not a change either.
+        set_title(d.path(), &id, "first");
+        assert!(get_card_history(d.path(), &id).unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn history_tracks_labels_due_date_checklist_description() {
+        let (d, id) = card_with_list();
+        update_card(d.path(), &id, None, Some("{}"), None, None, None, None, Some(Some("2030-01-02")), Some(vec![ChecklistItem { id: "i".into(), text: "t".into(), done: false }])).unwrap();
+        let h = get_card_history(d.path(), &id).unwrap();
+        assert_eq!(h.entries.len(), 2);
+        assert_eq!(h.entries[0].content.due_date.as_deref(), Some("2030-01-02"));
+        assert_eq!(h.entries[0].content.checklist.len(), 1);
+        assert_eq!(h.entries[1].content.due_date, None);
+    }
+
+    #[test]
+    fn history_capped_at_limit_keeping_newest() {
+        let (d, id) = card_with_list();
+        for i in 0..(HISTORY_LIMIT + 20) {
+            set_title(d.path(), &id, &format!("t{i}"));
+        }
+        let h = get_card_history(d.path(), &id).unwrap();
+        assert_eq!(h.entries.len(), HISTORY_LIMIT);
+        assert_eq!(h.entries[0].content.title, format!("t{}", HISTORY_LIMIT + 19));
+    }
+
+    #[test]
+    fn attachment_changes_are_recorded_by_name() {
+        let (d, id) = card_with_list();
+        let att = create_attachment(d.path(), &id, "a.txt", "text/plain", b"x").unwrap();
+        crate::store::attachments::delete_attachment(d.path(), &id, &att.id).unwrap();
+        let h = get_card_history(d.path(), &id).unwrap();
+        let names: Vec<_> = h.entries.iter().map(|e| e.content.attachments.clone()).collect();
+        assert_eq!(names, vec![vec![], vec!["a.txt".to_string()], vec![]]);
+    }
+
+    #[test]
+    fn history_is_not_in_card_responses_but_survives_on_disk() {
+        let (d, id) = card_with_list();
+        let c = set_title(d.path(), &id, "second");
+        assert!(c.history.is_empty());
+        let json = serde_json::to_string(&c).unwrap();
+        assert!(!json.contains("\"history\""));
+        let b = crate::store::boards::list_boards(d.path()).unwrap().remove(0).id;
+        let detail = get_board(d.path(), &b).unwrap();
+        assert!(detail.lists[0].cards[0].history.is_empty());
+        assert_eq!(get_card_history(d.path(), &id).unwrap().entries.len(), 2);
     }
 }

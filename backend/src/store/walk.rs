@@ -93,6 +93,8 @@ pub(crate) fn orphaned_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card
 
 /// Reads every `*.json` card in `dir`, skipping (with a warning) any single
 /// card file that fails to parse so the rest of the list still loads.
+/// Change history is dropped from the result: these cards feed API responses
+/// (history is served on demand) and are never written back from here.
 fn read_cards_in(data_dir: &Path, dir: &Path) -> Result<Vec<Card>, AppError> {
     let mut out = Vec::new();
     if dir.exists() {
@@ -101,7 +103,10 @@ fn read_cards_in(data_dir: &Path, dir: &Path) -> Result<Vec<Card>, AppError> {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "json") {
                 match read_card(&path) {
-                    Ok(card) => out.push(card),
+                    Ok(mut card) => {
+                        card.history = Vec::new();
+                        out.push(card);
+                    }
                     Err(e) => crate::store::io::warn_skip(data_dir, &path, "card", &e),
                 }
             }

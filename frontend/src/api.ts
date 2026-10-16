@@ -1,4 +1,4 @@
-import type { Attachment, Board, BoardDetail, Card, ChecklistItem, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
+import type { Attachment, Board, BoardDetail, Card, CardHistory, ChecklistItem, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
 
 const BASE = "/api";
 
@@ -120,6 +120,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ archived: false, ...(listId ? { list_id: listId } : {}) }),
     }),
+
+  getCardHistory: (id: string) => request<CardHistory>(`/cards/${id}/history`),
 
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),

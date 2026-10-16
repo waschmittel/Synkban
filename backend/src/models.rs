@@ -17,7 +17,7 @@ pub struct Label {
     pub color: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChecklistItem {
     pub id: String,
     pub text: String,
@@ -57,6 +57,39 @@ pub struct List {
     pub created_at: String,
 }
 
+/// The user-editable content of a card — what the change history tracks.
+/// Position, list, archive state and timestamps are not content. Attachments
+/// are recorded by filename only (the blobs live in sidecar files).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CardContent {
+    pub title: String,
+    pub description: String,
+    #[serde(default)]
+    pub label_ids: Vec<String>,
+    #[serde(default)]
+    pub due_date: Option<String>,
+    #[serde(default)]
+    pub checklist: Vec<ChecklistItem>,
+    #[serde(default)]
+    pub attachments: Vec<String>,
+}
+
+/// One version of a card's content and when it became current.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub at: String,
+    #[serde(flatten)]
+    pub content: CardContent,
+}
+
+/// `GET /api/cards/:id/history`: the card's content now, plus its recorded
+/// versions newest first.
+#[derive(Debug, Serialize)]
+pub struct CardHistory {
+    pub current: CardContent,
+    pub entries: Vec<HistoryEntry>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Card {
     pub id: String,
@@ -82,6 +115,10 @@ pub struct Card {
     pub due_date: Option<String>,
     #[serde(default)]
     pub checklist: Vec<ChecklistItem>,
+    /// Last `HISTORY_LIMIT` versions, oldest first. Persisted in the card file
+    /// but stripped from API responses (served by `GET /cards/:id/history`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<HistoryEntry>,
 }
 
 #[derive(Debug, Serialize)]

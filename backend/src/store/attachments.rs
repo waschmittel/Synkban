@@ -79,6 +79,7 @@ pub fn create_attachment(
     data: &[u8],
 ) -> Result<Attachment, AppError> {
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
+    let before = crate::store::cards::content_snapshot(data_dir, card_id)?;
     let att_id = uuid::Uuid::new_v4().to_string();
 
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
@@ -100,6 +101,7 @@ pub fn create_attachment(
         created_at: now_timestamp(),
     };
     write_json(&att_dir.join(format!("{att_id}.json")), &att)?;
+    crate::store::cards::record_attachment_change(data_dir, card_id, before)?;
     Ok(att)
 }
 
@@ -129,6 +131,7 @@ pub fn delete_attachment(
     if !sidecar.exists() {
         return Err(AppError::NotFound("Attachment not found".into()));
     }
+    let before = crate::store::cards::content_snapshot(data_dir, card_id)?;
     // Remove the sidecar first (the completeness marker), then the blobs.
     track("deleted", &sidecar);
     fs::remove_file(&sidecar)?;
@@ -146,7 +149,7 @@ pub fn delete_attachment(
     if let Some(parent) = att_dir.parent() {
         remove_dir_if_empty(parent);
     }
-    Ok(())
+    crate::store::cards::record_attachment_change(data_dir, card_id, before)
 }
 
 fn create_thumbnail(att_dir: &Path, att_id: &str, data: &[u8]) {

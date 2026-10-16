@@ -18,7 +18,7 @@ pub use boards::{
     create_board, delete_board, get_board, list_archived_boards, list_boards, reorder_boards,
     update_board,
 };
-pub use cards::{create_card, delete_card, get_archived_cards, update_card};
+pub use cards::{create_card, delete_card, get_archived_cards, get_card_history, update_card};
 pub use io::{audit_op, drain_file_ops, get_latest_mtime, get_per_board_mtimes};
 pub use walk::collect_warnings;
 pub use labels::{create_label, delete_label, delete_label_by_id, update_label, update_label_by_id};

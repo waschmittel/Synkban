@@ -146,7 +146,15 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={[accelLabel, "L"]} desc="Focus checklist (list)" />
             <Row keys={[accelLabel, "O"]} desc="Add attachment (open file)" />
             <Row keys={[accelLabel, "U"]} desc="Open due date picker" />
+            <Row keys={[accelLabel, "J"]} desc="Open card history" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
+          </Section>
+          <Section title="Card History">
+            <Row keys={["↑", "↓"]} desc="Newer / older version" />
+            <Row keys={["Home"]} desc="Current version" />
+            <Row keys={["End"]} desc="Oldest version" />
+            <Row keys={["PgUp", "PgDn"]} desc="Jump ten versions" />
+            <Row keys={["Esc"]} alt={[accelLabel, "J"]} desc="Close history" />
           </Section>
           <Section title="Checklist">
             <Row keys={["↑", "↓"]} desc="Navigate checklist items" />

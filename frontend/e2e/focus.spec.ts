@@ -233,9 +233,9 @@ test("Tab wraps inside the card detail modal", async ({ page, request }) => {
   await page.locator(".card", { hasText: "Task card" }).click();
   await expect(page.locator(".modal-title-input")).toBeFocused();
 
-  // Shift+Tab from the first focusable wraps to the last (footer Cancel).
+  // Shift+Tab from the first focusable wraps to the last (footer History).
   await page.keyboard.press("Shift+Tab");
-  await expect(page.locator(".modal-footer .btn-cancel")).toBeFocused();
+  await expect(page.locator(".modal-footer .modal-history-btn")).toBeFocused();
 
   // Tab from the last focusable wraps back to the first.
   await page.keyboard.press("Tab");

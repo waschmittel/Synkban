@@ -44,6 +44,27 @@ export interface Card {
   checklist: ChecklistItem[];
 }
 
+/** Editable card content tracked by the change history. Attachments by name only. */
+export interface CardContent {
+  title: string;
+  description: string;
+  label_ids: string[];
+  due_date: string | null;
+  checklist: ChecklistItem[];
+  attachments: string[];
+}
+
+export interface HistoryEntry extends CardContent {
+  /** When this version became current, `YYYY-MM-DD HH:MM:SS` UTC. */
+  at: string;
+}
+
+export interface CardHistory {
+  current: CardContent;
+  /** Recorded versions, newest first (at most 100). */
+  entries: HistoryEntry[];
+}
+
 export interface ListWithCards {
   id: string;
   board_id: string;

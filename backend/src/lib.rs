@@ -60,6 +60,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .route("/api/labels/{id}", web::delete().to(handlers::labels::delete_label))
         .route("/api/lists/{list_id}/cards", web::post().to(handlers::cards::create_card))
         .route("/api/cards/{id}", web::put().to(handlers::cards::update_card))
+        .route("/api/cards/{id}/history", web::get().to(handlers::cards::get_card_history))
         .route("/api/cards/{id}", web::delete().to(handlers::cards::delete_card))
         .route("/api/cards/{card_id}/attachments", web::post().to(handlers::cards::upload_attachment))
         .route("/api/cards/{card_id}/attachments/{att_id}", web::get().to(handlers::cards::download_attachment))
