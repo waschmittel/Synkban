@@ -495,9 +495,12 @@ test("card-detail accelerator shortcuts focus each section", async ({
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Shortcut card" }).click();
-  await expect(page.locator(".modal-overlay")).toBeVisible();
+  // The title is focused a frame after mount; a shortcut pressed before that
+  // targets <body>, never reaches the modal's key handler, and the late focus
+  // then lands on the title instead. Wait for it (flaky on slow CI otherwise).
+  await expect(page.locator(".modal-title-input")).toBeFocused();
 
-  // Title input is auto-focused on open. Accel+D → description editor.
+  // Accel+D → description editor.
   await page.keyboard.press("ControlOrMeta+d");
   await expect(page.locator(".editor-wrapper .ProseMirror")).toBeFocused();
 
@@ -568,7 +571,7 @@ test("card-detail Ctrl/Cmd+O opens the attachment file picker", async ({
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Attach card" }).click();
-  await expect(page.locator(".modal-overlay")).toBeVisible();
+  await expect(page.locator(".modal-title-input")).toBeFocused();
 
   // Accel+O triggers the hidden file input's click → a native file chooser.
   const fileChooserPromise = page.waitForEvent("filechooser");
@@ -602,7 +605,7 @@ test("card-detail Ctrl/Cmd+U focuses the due-date input and opens the picker", a
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Due card" }).click();
-  await expect(page.locator(".modal-overlay")).toBeVisible();
+  await expect(page.locator(".modal-title-input")).toBeFocused();
 
   await page.keyboard.press("ControlOrMeta+u");
 
