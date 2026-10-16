@@ -94,8 +94,9 @@ export default function BoardPage() {
   createEffect(() => {
     params.id;
     boardList();
-    const dot = document.querySelector(".board-dock-dot--active");
-    dot?.scrollIntoView({ block: "nearest", inline: "center" });
+    document
+      .querySelector(".board-dock-dot--active")
+      ?.scrollIntoView({ block: "nearest", inline: "center" });
   });
 
   // Remember the last board that actually loaded, for the "open last used

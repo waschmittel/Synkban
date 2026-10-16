@@ -853,8 +853,7 @@ test("dock stays within the window and reaches its end dots when boards overflow
   // The dot for the board you're on is scrolled back into the pill.
   await expect(page.locator(".board-dock-dot--active")).toBeInViewport();
 
-  const dotB = page.locator(`.board-dock-dot[data-board-id="${b.id}"]`);
-  await dotB.click();
+  await page.locator(`.board-dock-dot[data-board-id="${b.id}"]`).click();
   await expect(page).toHaveURL(new RegExp(`/board/${b.id}$`));
 });
 
