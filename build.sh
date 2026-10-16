@@ -82,8 +82,17 @@ if [ "$DESKTOP" = true ]; then
     cd "$ROOT/electron"
     COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
     printf '{ "version": "%s", "build": "%s", "commit": "%s" }\n' "$VERSION" "$(date -u '+%Y-%m-%d %H:%M UTC')" "$COMMIT" > app-version.json
+    # electron-builder takes the package version (deb/dmg/exe metadata) from
+    # package.json, which is a fixed placeholder. Override it with the build
+    # version: drop the tag's "v"; a snapshot ("snap-DATE") isn't valid semver or
+    # a valid Debian version (must start with a digit), so map it to a prerelease.
+    PKG_VERSION="${VERSION#v}"
+    if [[ ! "$PKG_VERSION" =~ ^[0-9] ]]; then
+        PKG_VERSION="0.0.0-${PKG_VERSION//snap-/snap.}"
+    fi
+    echo "Package version: $PKG_VERSION"
     pnpm install
-    pnpm run dist
+    pnpm exec electron-builder "-c.extraMetadata.version=$PKG_VERSION"
 fi
 
 echo ""
