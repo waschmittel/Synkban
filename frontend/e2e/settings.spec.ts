@@ -18,8 +18,8 @@ test("startup preference: saved via dialog and honored on launch", async ({ page
   await page.goto(`/board/${board.id}`);
   await expect(page.locator(".app-logo--board")).toHaveText("Startup Board");
 
-  // The settings gear only exists on the board overview.
-  await expect(page.locator(".btn-header-settings")).toHaveCount(0);
+  // The settings gear is available on board pages too.
+  await expect(page.locator(".btn-header-settings")).toBeVisible();
   await page.locator(".app-logo-home").click();
   await expect(page.locator(".btn-header-settings")).toBeVisible();
 
