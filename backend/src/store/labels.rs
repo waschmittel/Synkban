@@ -58,6 +58,16 @@ pub fn update_label(
     Ok(updated)
 }
 
+/// Reorder a board's labels to match `ids`. Ids not in the board are ignored;
+/// labels missing from `ids` keep their relative order after the listed ones.
+pub fn reorder_labels(data_dir: &Path, board_id: &str, ids: &[String]) -> Result<(), AppError> {
+    let mut bf = read_board_file(data_dir, board_id)?;
+    // Stable sort: unlisted labels share the max key and stay in place at the end.
+    bf.labels
+        .sort_by_key(|l| ids.iter().position(|id| *id == l.id).unwrap_or(ids.len()));
+    write_board_file(data_dir, &bf)
+}
+
 pub fn delete_label(data_dir: &Path, board_id: &str, label_id: &str) -> Result<(), AppError> {
     let mut bf = read_board_file(data_dir, board_id)?;
     let before = bf.labels.len();
@@ -221,6 +231,26 @@ mod tests {
         let label = create_label(d.path(), &b2.id, "Bug").unwrap();
         delete_label_by_id(d.path(), &label.id).unwrap();
         assert!(get_board(d.path(), &b2.id).unwrap().labels.is_empty());
+    }
+
+    #[test]
+    fn reorder_labels_basic() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let a = create_label(d.path(), &b.id, "A").unwrap();
+        let bb = create_label(d.path(), &b.id, "B").unwrap();
+        let c = create_label(d.path(), &b.id, "C").unwrap();
+        // C first, B second; A unlisted -> last. Unknown id ignored.
+        reorder_labels(d.path(), &b.id, &[c.id.clone(), "fake".into(), bb.id.clone()]).unwrap();
+        let names: Vec<_> = get_board(d.path(), &b.id).unwrap().labels.into_iter().map(|l| l.id).collect();
+        assert_eq!(names, vec![c.id, bb.id, a.id]);
+    }
+
+    #[test]
+    fn reorder_labels_board_not_found() {
+        let d = tmp();
+        let err = reorder_labels(d.path(), "fake", &[]).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
     }
 
     #[test]

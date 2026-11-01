@@ -99,3 +99,25 @@ test("touch: move a card to another list", async ({ page, request }) => {
     })
     .toEqual([X]);
 });
+
+test("touch: reorder labels in the drawer", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: `t-labels-${Date.now()}` } })).json();
+  const ids: string[] = [];
+  for (const name of ["A", "B", "C"]) {
+    const l = await (await request.post(`/api/boards/${board.id}/labels`, { data: { name } })).json();
+    ids.push(l.id);
+  }
+  const [A, B, C] = ids;
+  await page.goto(`/board/${board.id}`);
+  await page.keyboard.press("g");
+  const row = (id: string) => `.label-drawer-item[data-label-id="${id}"]`;
+  await expect(page.locator(row(C))).toBeVisible();
+
+  // Drag A below C → [B, C, A].
+  await touchDrag(page, row(A), row(C), 0.5, 0.95);
+
+  await expect
+    .poll(async () => (await boardDetail(request, board.id)).labels.map((l: { id: string }) => l.id))
+    .toEqual([B, C, A]);
+  await expect.poll(() => domOrder(page, ".label-drawer-item", "data-label-id", ids)).toEqual([B, C, A]);
+});

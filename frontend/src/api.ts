@@ -138,6 +138,12 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  reorderLabels: (boardId: string, ids: string[]) =>
+    request<void>(`/boards/${boardId}/labels/order`, {
+      method: "PUT",
+      body: JSON.stringify({ ids }),
+    }),
+
   deleteLabel: (id: string) =>
     request<void>(`/labels/${id}`, { method: "DELETE" }),
 

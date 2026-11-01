@@ -560,6 +560,11 @@ export default function BoardPage() {
     refetch();
   };
 
+  const handleReorderLabels = async (ids: string[]) => {
+    await api.reorderLabels(params.id, ids);
+    await refetch();
+  };
+
   const handleUpdateLabel = async (labelId: string, name: string) => {
     await api.updateLabel(labelId, name);
     refetch();
@@ -703,6 +708,7 @@ export default function BoardPage() {
               onCreate={handleCreateLabel}
               onRename={handleUpdateLabel}
               onDelete={handleDeleteLabel}
+              onReorder={handleReorderLabels}
             />
           </>
         )}

@@ -737,8 +737,30 @@ html.electron .header-rename-input {
   transition: background 0.1s;
 }
 
-.label-drawer-item:hover {
+.label-drawer-item:hover,
+.label-drawer-item:focus {
   background: var(--color-surface-3);
+}
+
+.label-drawer-item:focus {
+  outline: 2px solid #0079bf;
+  outline-offset: -2px;
+}
+
+.label-drawer-item[draggable="true"] {
+  cursor: grab;
+}
+
+.label-drawer-item--dragging {
+  opacity: 0.4;
+}
+
+.label-drawer-item--drop-before {
+  box-shadow: 0 -2px 0 0 #0079bf;
+}
+
+.label-drawer-item--drop-after {
+  box-shadow: 0 2px 0 0 #0079bf;
 }
 
 .label-drawer-swatch {

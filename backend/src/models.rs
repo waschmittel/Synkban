@@ -205,6 +205,11 @@ pub struct CreateLabel {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ReorderLabels {
+    pub ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct UpdateLabel {
     pub name: String,
 }

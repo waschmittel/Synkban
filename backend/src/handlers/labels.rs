@@ -19,6 +19,21 @@ pub async fn create_label(
     Ok(HttpResponse::Created().json(label))
 }
 
+pub async fn reorder_labels(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+    body: web::Json<ReorderLabels>,
+) -> Result<HttpResponse, AppError> {
+    let board_id = path.into_inner();
+    let count = body.ids.len();
+    store::audit_op(
+        &data_dir,
+        |dd| store::reorder_labels(dd, &board_id, &body.ids),
+        |_| format!("REORDER labels ({} ids) in board {}", count, board_id),
+    )?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 pub async fn update_label(
     data_dir: web::Data<PathBuf>,
     path: web::Path<String>,

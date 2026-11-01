@@ -56,6 +56,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .route("/api/lists/{id}", web::put().to(handlers::lists::update_list))
         .route("/api/lists/{id}", web::delete().to(handlers::lists::delete_list))
         .route("/api/boards/{board_id}/labels", web::post().to(handlers::labels::create_label))
+        .route("/api/boards/{board_id}/labels/order", web::put().to(handlers::labels::reorder_labels))
         .route("/api/labels/{id}", web::put().to(handlers::labels::update_label))
         .route("/api/labels/{id}", web::delete().to(handlers::labels::delete_label))
         .route("/api/lists/{list_id}/cards", web::post().to(handlers::cards::create_card))
