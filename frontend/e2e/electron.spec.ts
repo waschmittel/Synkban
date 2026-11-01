@@ -1,7 +1,13 @@
 import { test, expect, _electron as electron, type ElectronApplication } from "@playwright/test";
 import { existsSync, readdirSync, readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// The package is ESM ("type": "module"), so the CommonJS globals are gone.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 // Electron is the only environment with a *distinct* link requirement: a
 // description link's window.open(_blank) must NOT spawn a child BrowserWindow

@@ -347,7 +347,10 @@ test("shortcut help over card modal: Escape closes help only, modal survives", a
   await page.locator(".card", { hasText: "Task card" }).click();
 
   // Move focus off the auto-focused title input onto a modal button so the
-  // single-letter `?` shortcut fires (it's suppressed while typing).
+  // single-letter `?` shortcut fires (it's suppressed while typing). Wait for
+  // the title's rAF auto-focus to land first: focusing the button before it
+  // does lets that late focus steal it back, and `?` is then swallowed.
+  await expect(page.locator(".modal-title-input")).toBeFocused();
   await page.locator(".modal-close").focus();
   await page.keyboard.press("?");
 
