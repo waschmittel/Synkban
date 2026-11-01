@@ -57,19 +57,18 @@ function Field(props: { name: string; lines: DiffLine[]; empty: string }) {
 }
 
 /// Two-pane card history: versions newest-first on the left, and on the right
-/// what changed between the selected version and the card as it is now
-/// (removed = only in the selected version, added = only in the current one).
+/// what the selected version changed relative to the one before it
+/// (removed = only in the previous version, added = only in the selected one).
+/// The oldest version has no predecessor, so all its content shows as added.
 export default function HistoryDialog(props: Props) {
   const [history] = createResource(() => props.cardId, (id) => api.getCardHistory(id));
   const [picked, setPicked] = createSignal<number | null>(null);
   let listRef: HTMLDivElement | undefined;
 
   const entries = () => (history.error ? [] : history()?.entries ?? []);
-  // Default to the previous version: index 0 is the current one (empty diff).
-  const selected = () => {
-    const n = entries().length;
-    return Math.min(picked() ?? (n > 1 ? 1 : 0), Math.max(n - 1, 0));
-  };
+  // Default to the newest version: the change that produced the current card.
+  const selected = () => Math.min(picked() ?? 0, Math.max(entries().length - 1, 0));
+  const isOldest = () => selected() === entries().length - 1;
 
   const select = (i: number, focus = false) => {
     setPicked(i);
@@ -84,17 +83,28 @@ export default function HistoryDialog(props: Props) {
     props.boardLabels.find((l) => l.id === id)?.name ?? "(deleted label)";
 
   const diff = createMemo(() => {
-    const h = history();
-    const old: CardContent | undefined = entries()[selected()];
-    if (!h || !old) return null;
-    const cur = h.current;
+    const cur: CardContent | undefined = entries()[selected()];
+    if (!cur) return null;
+    // Entries are newest first, so the predecessor is the next one down.
+    const prev: CardContent | undefined = entries()[selected() + 1];
+    if (!prev) {
+      // First recorded version: nothing came before it, everything is "added".
+      return {
+        title: diffLines([], [cur.title]),
+        labels: diffSets([], cur.label_ids).map((l) => ({ ...l, text: labelName(l.text) })),
+        due: diffLines([], cur.due_date ? [cur.due_date] : []),
+        description: diffLines([], descriptionLines(cur.description)),
+        checklist: diffLines([], checklistLines(cur.checklist)),
+        attachments: diffSets([], cur.attachments),
+      };
+    }
     return {
-      title: diffLines([old.title], [cur.title]),
-      labels: diffSets(old.label_ids, cur.label_ids).map((l) => ({ ...l, text: labelName(l.text) })),
-      due: diffLines(old.due_date ? [old.due_date] : [], cur.due_date ? [cur.due_date] : []),
-      description: diffLines(descriptionLines(old.description), descriptionLines(cur.description)),
-      checklist: diffLines(checklistLines(old.checklist), checklistLines(cur.checklist)),
-      attachments: diffSets(old.attachments, cur.attachments),
+      title: diffLines([prev.title], [cur.title]),
+      labels: diffSets(prev.label_ids, cur.label_ids).map((l) => ({ ...l, text: labelName(l.text) })),
+      due: diffLines(prev.due_date ? [prev.due_date] : [], cur.due_date ? [cur.due_date] : []),
+      description: diffLines(descriptionLines(prev.description), descriptionLines(cur.description)),
+      checklist: diffLines(checklistLines(prev.checklist), checklistLines(cur.checklist)),
+      attachments: diffSets(prev.attachments, cur.attachments),
     };
   });
 
@@ -139,7 +149,7 @@ export default function HistoryDialog(props: Props) {
       <div class="history-dialog" role="dialog" aria-label="Card history">
         <div class="history-header">
           <h3>Card history</h3>
-          <span class="history-hint">Showing changes from the selected version to now</span>
+          <span class="history-hint">Showing what each version changed</span>
           <button class="shortcut-help-close" onClick={props.onClose} title="Close (Esc)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -174,6 +184,9 @@ export default function HistoryDialog(props: Props) {
                         <Show when={i() === 0}>
                           <span class="history-item-badge">Current</span>
                         </Show>
+                        <Show when={i() === entries().length - 1}>
+                          <span class="history-item-badge history-item-badge--original">Original</span>
+                        </Show>
                       </button>
                     )}
                   </For>
@@ -182,8 +195,8 @@ export default function HistoryDialog(props: Props) {
                   <Show when={diff()}>
                     {(d) => (
                       <>
-                        <Show when={selected() === 0}>
-                          <div class="history-note">This is the current version.</div>
+                        <Show when={isOldest()}>
+                          <div class="history-note">This is the first recorded version.</div>
                         </Show>
                         <Field name="Title" lines={d().title} empty="(empty)" />
                         <Field name="Labels" lines={d().labels} empty="No labels" />

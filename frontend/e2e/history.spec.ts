@@ -14,7 +14,7 @@ async function seedCard(request: APIRequestContext, boardTitle: string) {
 const edit = (request: APIRequestContext, id: string, data: object) =>
   request.put(`/api/cards/${id}`, { data });
 
-test("history lists versions newest first and diffs the selection against the current card", async ({
+test("history lists versions newest first and diffs each against the version before it", async ({
   page,
   request,
 }) => {
@@ -34,24 +34,31 @@ test("history lists versions newest first and diffs the selection against the cu
   await expect(items).toHaveCount(3);
   await expect(items.nth(0).locator(".history-item-badge")).toHaveText("Current");
 
-  // The previous version is preselected: its title is removed, the current one added.
-  await expect(items.nth(1)).toHaveAttribute("aria-selected", "true");
+  // The newest version is preselected: it replaced "Second title" and added the step.
+  await expect(items.nth(0)).toHaveAttribute("aria-selected", "true");
   const titleField = page.locator(".history-field", { hasText: "Title" }).first();
   await expect(titleField.locator(".history-line--removed")).toHaveText(/Second title/);
   await expect(titleField.locator(".history-line--added")).toHaveText(/Third title/);
-
-  // Arrow keys walk to the oldest version, where the checklist item is new.
-  await page.keyboard.press("ArrowDown");
-  await expect(items.nth(2)).toHaveAttribute("aria-selected", "true");
-  await expect(titleField.locator(".history-line--removed")).toHaveText(/Original title/);
   await expect(
     page.locator(".history-field", { hasText: "Checklist" }).locator(".history-line--added")
   ).toHaveText(/Step/);
 
-  // The current version has no differences.
-  await items.nth(0).click();
-  await expect(page.locator(".history-note")).toHaveText("This is the current version.");
-  await expect(page.locator(".history-line--added, .history-line--removed")).toHaveCount(0);
+  // The middle version changed only the title, relative to the original.
+  await page.keyboard.press("ArrowDown");
+  await expect(items.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(titleField.locator(".history-line--removed")).toHaveText(/Original title/);
+  await expect(titleField.locator(".history-line--added")).toHaveText(/Second title/);
+  await expect(
+    page.locator(".history-field", { hasText: "Checklist" }).locator(".history-line--added")
+  ).toHaveCount(0);
+
+  // The oldest has no predecessor: its content shows as added, nothing removed.
+  await page.keyboard.press("ArrowDown");
+  await expect(items.nth(2)).toHaveAttribute("aria-selected", "true");
+  await expect(items.nth(2).locator(".history-item-badge")).toHaveText("Original");
+  await expect(page.locator(".history-note")).toHaveText("This is the first recorded version.");
+  await expect(titleField.locator(".history-line--added")).toHaveText(/Original title/);
+  await expect(page.locator(".history-line--removed")).toHaveCount(0);
 });
 
 test("history Escape closes only the history dialog", async ({ page, request }) => {
@@ -159,8 +166,8 @@ test("saving through the modal records every tracked field, and the diff shows e
   const items = page.locator(".history-item");
   await expect(items).toHaveCount(3);
 
-  // Previous version (has the attachment, still the old fields).
-  await expect(items.nth(1)).toHaveAttribute("aria-selected", "true");
+  // Newest version: the Save, relative to the version with the attachment.
+  await expect(items.nth(0)).toHaveAttribute("aria-selected", "true");
   await expect(field(page, "Title").locator(".history-line--removed")).toHaveText(/Original title/);
   await expect(field(page, "Title").locator(".history-line--added")).toHaveText(/Edited title/);
   await expect(field(page, "Description").locator(".history-line--added")).toHaveText(
@@ -171,9 +178,9 @@ test("saving through the modal records every tracked field, and the diff shows e
   await expect(field(page, "Attachments")).toContainText("unchanged");
   await expect(field(page, "Attachments").locator(".history-line--same")).toHaveText(/notes\.txt/);
 
-  // Oldest version: the attachment was not there yet.
-  await page.keyboard.press("End");
-  await expect(items.nth(2)).toHaveAttribute("aria-selected", "true");
+  // Middle version: the attachment upload, relative to the original.
+  await page.keyboard.press("ArrowDown");
+  await expect(items.nth(1)).toHaveAttribute("aria-selected", "true");
   await expect(field(page, "Attachments").locator(".history-line--added")).toHaveText(/notes\.txt/);
 
   // And the persisted record agrees (names only for attachments).
