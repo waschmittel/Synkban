@@ -1,6 +1,7 @@
 import { onCleanup } from "solid-js";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
+import { tip } from "../platform";
 
 interface Props {
   onSave: () => void;
@@ -47,7 +48,7 @@ export default function UnsavedDialog(props: Props) {
           <button class="btn btn-danger" onClick={props.onDiscard}>
             Discard
           </button>
-          <button class="btn btn-cancel" onClick={props.onCancel}>
+          <button class="btn btn-cancel" onClick={props.onCancel} title={tip("Cancel", "Esc")}>
             Cancel
           </button>
         </div>

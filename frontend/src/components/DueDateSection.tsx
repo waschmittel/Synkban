@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { accel, tip } from "../platform";
 
 interface Props {
   value: string;
@@ -27,7 +28,7 @@ export default function DueDateSection(props: Props) {
           <line x1="8" y1="2" x2="8" y2="6" />
           <line x1="3" y1="10" x2="21" y2="10" />
         </svg>
-        <span class="modal-label">Due Date</span>
+        <span class="modal-label" title={tip("Focus due date", accel("U"))}>Due Date</span>
       </div>
       <div class="due-date-input-row">
         <input
@@ -59,7 +60,7 @@ export default function DueDateSection(props: Props) {
         <button
           class="due-date-calendar-btn"
           onClick={() => pickerRef?.showPicker?.()}
-          title="Open date picker"
+          title={tip("Open date picker", accel("U"))}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />

@@ -2,6 +2,7 @@ import { For, Show, createSignal } from "solid-js";
 import type { Label } from "../types";
 import { handleMarkdownShortcut } from "../mdInput";
 import { renderTitle } from "./Card";
+import { tip } from "../platform";
 
 interface Props {
   open: boolean;
@@ -81,7 +82,7 @@ export default function LabelDrawer(props: Props) {
       <div class="label-drawer" classList={{ "label-drawer--open": props.open }}>
         <div class="label-drawer-header">
           <span>Labels</span>
-          <button class="label-drawer-close" onClick={props.onClose} title="Close">
+          <button class="label-drawer-close" onClick={props.onClose} title={tip("Close", "Esc")}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

@@ -2,6 +2,7 @@ import { For, Show, createSignal, createEffect, onCleanup, type JSX } from "soli
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
 import { handleRovingArrow } from "../rovingFocus";
+import { tip } from "../platform";
 
 interface Props<T extends { id: string }> {
   title: string;
@@ -73,7 +74,7 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
             <line x1="10" y1="12" x2="14" y2="12" />
           </svg>
           <span>{props.title}</span>
-          <button class="modal-close" onClick={props.onClose} title="Close">
+          <button class="modal-close" onClick={props.onClose} title={tip("Close", "Esc")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

@@ -1,10 +1,13 @@
 import { createSignal, onCleanup, Show } from "solid-js";
+import { tip } from "../platform";
 
 interface Props {
   placeholder: string;
   buttonText: string;
   onAdd: (value: string) => void;
   draftKey?: string;
+  /// Key that opens this form; advertised in the trigger's tooltip.
+  shortcut?: string;
 }
 
 // Every board refetch hands <For> a fresh payload, so the list rows — and this
@@ -108,7 +111,11 @@ export default function AddForm(props: Props) {
     <Show
       when={active()}
       fallback={
-        <button class="add-trigger" onClick={open}>
+        <button
+          class="add-trigger"
+          onClick={open}
+          title={props.shortcut ? tip(props.buttonText, props.shortcut) : undefined}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />

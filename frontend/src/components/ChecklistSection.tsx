@@ -1,6 +1,7 @@
 import { createSignal, Index, Show } from "solid-js";
 import type { ChecklistItem } from "../types";
 import { moveRovingFocus } from "../rovingFocus";
+import { accel, tip } from "../platform";
 
 interface Props {
   items: ChecklistItem[];
@@ -183,7 +184,7 @@ export default function ChecklistSection(props: Props) {
           <polyline points="9 11 12 14 22 4" />
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </svg>
-        <span class="modal-label">Checklist</span>
+        <span class="modal-label" title={tip("Focus checklist", accel("L"))}>Checklist</span>
         <Show when={props.items.length > 0}>
           <span class="checklist-progress" classList={{ "checklist-progress--complete": allDone() }}>
             {doneCount()}/{props.items.length}
@@ -258,7 +259,7 @@ export default function ChecklistSection(props: Props) {
                 fallback={
                   <button
                     class="checklist-delete"
-                    title="Remove item"
+                    title={tip("Remove item", "Del")}
                     tabindex="-1"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -307,6 +308,7 @@ export default function ChecklistSection(props: Props) {
         class="checklist-add-input"
         type="text"
         placeholder="Add checklist item…"
+        title={tip("Add checklist item", accel("L"))}
         value={newText()}
         onInput={(e) => setNewText(e.currentTarget.value)}
         onKeyDown={(e) => {

@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import type { Label } from "../types";
 import { renderTitle } from "./Card";
 import { handleMarkdownShortcut } from "../mdInput";
+import { accel, tip } from "../platform";
 
 interface Props {
   boardLabels: Label[];
@@ -130,7 +131,7 @@ export default function CardLabelSection(props: Props) {
           <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
           <line x1="7" y1="7" x2="7.01" y2="7" />
         </svg>
-        <span class="modal-label">Labels</span>
+        <span class="modal-label" title={tip("Focus labels", accel("G"))}>Labels</span>
       </div>
       <div
         class="label-toggle-row"

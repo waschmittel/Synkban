@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import type { Card as CardType, Label, ListWithCards } from "../types";
 import Card from "./Card";
 import AddForm from "./AddForm";
+import { tip } from "../platform";
 
 interface Props {
   list: ListWithCards;
@@ -124,7 +125,7 @@ export default function List(props: Props) {
                   props.onRequestRename(props.list.id);
                 }
               }}
-              title="Click or press Enter to rename"
+              title={tip("Click or press Enter to rename", "R")}
             >
               {props.list.title}
             </h3>
@@ -150,6 +151,7 @@ export default function List(props: Props) {
         </Show>
         <button
           class="list-delete"
+          title="Delete list"
           onClick={() => props.onDeleteList(props.list.id)}
         >
           &times;
@@ -172,6 +174,7 @@ export default function List(props: Props) {
       <AddForm
         placeholder="Card title..."
         buttonText="Add card"
+        shortcut="N"
         draftKey={`card:${props.list.id}`}
         onAdd={(title) => props.onAddCard(props.list.id, title)}
       />

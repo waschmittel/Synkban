@@ -817,11 +817,11 @@ test("dock dots highlight the active board, show its name, and navigate on click
   const dotA = page.locator(`.board-dock-dot[data-board-id="${a.id}"]`);
   await expect(dotA).toHaveClass(/board-dock-dot--active/);
   // Tooltip carries the board name.
-  await expect(dotA).toHaveAttribute("title", titleA);
+  await expect(dotA).toHaveAttribute("title", `${titleA} (, / .)`);
 
   // Clicking another board's dot navigates there and moves the highlight.
   const dotB = page.locator(`.board-dock-dot[data-board-id="${b.id}"]`);
-  await expect(dotB).toHaveAttribute("title", titleB);
+  await expect(dotB).toHaveAttribute("title", `${titleB} (, / .)`);
   await dotB.click();
   await expect(page).toHaveURL(new RegExp(`/board/${b.id}$`));
   await expect(dotB).toHaveClass(/board-dock-dot--active/);

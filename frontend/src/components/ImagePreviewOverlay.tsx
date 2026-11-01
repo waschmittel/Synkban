@@ -2,6 +2,7 @@ import { onCleanup } from "solid-js";
 import type { Attachment } from "../types";
 import { api } from "../api";
 import { focusTrap } from "../focusTrap";
+import { tip } from "../platform";
 
 interface Props {
   cardId: string;
@@ -36,7 +37,7 @@ export default function ImagePreviewOverlay(props: Props) {
               </svg>
               Download
             </a>
-            <button class="image-preview-close" onClick={props.onClose} title="Close">
+            <button class="image-preview-close" onClick={props.onClose} title={tip("Close", "Esc")}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />

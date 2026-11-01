@@ -4,6 +4,7 @@ import { A } from "@solidjs/router";
 import { BoardHeaderProvider, useBoardHeader } from "./BoardHeaderContext";
 import { LabelDrawerProvider, useLabelDrawer } from "./LabelDrawerContext";
 import SettingsDialog from "./components/SettingsDialog";
+import { tip } from "./platform";
 
 function AppHeader(props: { onOpenSettings: () => void }) {
   const header = useBoardHeader();
@@ -15,7 +16,7 @@ function AppHeader(props: { onOpenSettings: () => void }) {
         when={header.isOnBoard()}
         fallback={<A href="/" class="app-logo">Synkban</A>}
       >
-        <A href="/" class="app-logo-home" title="Back to boards">
+        <A href="/" class="app-logo-home" title={tip("Back to boards", "B")}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M15 18l-6-6 6-6" />
           </svg>
@@ -55,7 +56,7 @@ function AppHeader(props: { onOpenSettings: () => void }) {
             class="btn-header-labels"
             classList={{ "btn-header-labels--active": drawer.isOpen() }}
             onClick={drawer.toggle}
-            title="Manage labels"
+            title={tip("Manage labels", "G")}
           >
             <svg
               width="14"
@@ -76,7 +77,7 @@ function AppHeader(props: { onOpenSettings: () => void }) {
           onClick={() =>
             document.dispatchEvent(new CustomEvent("toggle-shortcuts"))
           }
-          title="Keyboard shortcuts"
+          title={tip("Keyboard shortcuts", "?")}
         >
           <kbd>?</kbd>
         </button>

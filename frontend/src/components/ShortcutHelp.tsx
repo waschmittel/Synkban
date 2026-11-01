@@ -1,7 +1,7 @@
 import { onCleanup } from "solid-js";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
-import { accelLabel } from "../platform";
+import { accelLabel, tip } from "../platform";
 
 interface Props {
   onClose: () => void;
@@ -72,7 +72,7 @@ export default function ShortcutHelp(props: Props) {
       <div class="shortcut-help-modal">
         <div class="shortcut-help-header">
           <h3>Keyboard Shortcuts</h3>
-          <button class="shortcut-help-close" onClick={props.onClose}>
+          <button class="shortcut-help-close" onClick={props.onClose} title={tip("Close", "Esc")}>
             <svg
               width="16"
               height="16"

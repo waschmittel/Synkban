@@ -5,6 +5,7 @@ import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
 import { desktopBridge } from "../settings";
 import { applyTheme } from "../theme";
+import { tip } from "../platform";
 
 interface Props {
   onClose: () => void;
@@ -155,7 +156,7 @@ export default function SettingsDialog(props: Props) {
       <div class="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="settings-header">
           <h3>Settings</h3>
-          <button class="settings-close" onClick={close} title="Close">
+          <button class="settings-close" onClick={close} title={tip("Close", "Esc")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

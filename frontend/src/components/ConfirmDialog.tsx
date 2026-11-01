@@ -7,6 +7,7 @@
 import { onCleanup } from "solid-js";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
+import { tip } from "../platform";
 
 interface Props {
   message: string;
@@ -52,7 +53,7 @@ export default function ConfirmDialog(props: Props) {
           >
             {props.confirmLabel}
           </button>
-          <button class="btn btn-cancel" onClick={props.onCancel}>
+          <button class="btn btn-cancel" onClick={props.onCancel} title={tip("Cancel", "Esc")}>
             Cancel
           </button>
         </div>

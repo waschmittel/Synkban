@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import type { Card as CardType, Label } from "../types";
 import { crossListInsertPosition, listDropPosition, moveToBottom, moveToTop, withinListMoveDown, withinListMoveUp } from "../positions";
+import { tip } from "../platform";
 
 interface Props {
   card: CardType;
@@ -290,7 +291,7 @@ export default function Card(props: Props) {
             e.stopPropagation();
             props.onArchive(props.card.id);
           }}
-          title="Archive card"
+          title={tip("Archive card", "Del")}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="21 8 21 21 3 21 3 8" />

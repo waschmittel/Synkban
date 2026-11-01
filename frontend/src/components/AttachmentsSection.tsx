@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import type { Attachment } from "../types";
 import { api } from "../api";
+import { accel, tip } from "../platform";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -105,7 +106,7 @@ export default function AttachmentsSection(props: Props) {
               </div>
               <button
                 class="attachment-delete"
-                title="Remove attachment"
+                title={tip("Remove attachment", "Del")}
                 onClick={() => props.onDelete(att.id)}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -117,7 +118,11 @@ export default function AttachmentsSection(props: Props) {
           )}
         </For>
       </div>
-      <label class="attachment-upload" classList={{ "attachment-upload--busy": props.uploading }}>
+      <label
+        class="attachment-upload"
+        classList={{ "attachment-upload--busy": props.uploading }}
+        title={tip("Add attachment", accel("O"))}
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
         </svg>

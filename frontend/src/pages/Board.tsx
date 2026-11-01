@@ -30,6 +30,7 @@ import { recordLastBoard } from "../settings";
 import { createFocusRestoration } from "../focusRestoration";
 import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
+import { tip } from "../platform";
 
 export default function BoardPage() {
   const params = useParams<{ id: string }>();
@@ -639,7 +640,7 @@ export default function BoardPage() {
                 class="board-filter-btn"
                 classList={{ "board-filter-btn--active": showFilterBar() || isFiltering() }}
                 onClick={() => setShowFilterBar((v) => !v)}
-                title="Filter cards (F)"
+                title={tip("Filter cards", "F")}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
@@ -649,7 +650,7 @@ export default function BoardPage() {
               <button
                 class="board-archive-btn"
                 onClick={openArchive}
-                title="View archived cards"
+                title={tip("View archived cards", "A")}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="21 8 21 21 3 21 3 8" />
@@ -708,6 +709,7 @@ export default function BoardPage() {
                 <AddForm
                   placeholder="List title..."
                   buttonText="Add list"
+                  shortcut="L"
                   draftKey={`list:${params.id}`}
                   onAdd={handleAddList}
                 />
@@ -773,7 +775,7 @@ export default function BoardPage() {
                 classList={{ "board-dock-dot--active": bd.id === params.id }}
                 style={{ "--dot-color": bd.color ?? "#0079bf" }}
                 data-board-id={bd.id}
-                title={bd.title}
+                title={tip(bd.title, ", / .")}
                 aria-label={bd.title}
                 aria-current={bd.id === params.id ? "true" : undefined}
                 onClick={() => navigate(`/board/${bd.id}`)}
