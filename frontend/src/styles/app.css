@@ -1783,6 +1783,119 @@ html.theme-dark .modal-history-btn:hover {
   cursor: pointer;
 }
 
+/* Tables in the description editor (first row = header, see tables.ts) */
+.editor-wrapper .ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.editor-wrapper .ProseMirror td,
+.editor-wrapper .ProseMirror th {
+  border: 1px solid var(--color-border-strong);
+  padding: 5px 8px;
+  vertical-align: top;
+  position: relative;
+  word-break: break-word;
+}
+
+.editor-wrapper .ProseMirror th {
+  background: rgba(128, 128, 128, 0.18);
+  font-weight: 600;
+  /* Headers are always centred; the column alignment applies to body cells. */
+  text-align: center !important;
+}
+
+.editor-wrapper .ProseMirror td p,
+.editor-wrapper .ProseMirror th p {
+  margin: 0;
+}
+
+.editor-wrapper .ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 121, 191, 0.22);
+  pointer-events: none;
+}
+
+/* Table menu (Accel+K / toolbar "Table"): popup beside the caret */
+.table-menu {
+  position: fixed;
+  z-index: 310;
+  min-width: 230px;
+  padding: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+}
+
+.table-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--color-border);
+}
+
+.table-menu-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+}
+
+.table-menu-label {
+  flex: 1;
+}
+
+.table-menu-item--danger .table-menu-icon {
+  color: var(--color-danger);
+}
+
+.table-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-menu-item:hover:not(:disabled) {
+  background: var(--color-surface-3);
+}
+
+.table-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.table-menu-item kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.table-menu-foot {
+  margin-top: 4px;
+  padding: 4px 8px 2px;
+  border-top: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-subtle);
+}
+
 /* ProseMirror menu bar */
 .editor-wrapper .ProseMirror-menubar-wrapper {
   border: none;

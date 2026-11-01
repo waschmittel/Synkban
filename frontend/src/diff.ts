@@ -103,6 +103,25 @@ export function descriptionLines(description: string): string[] {
         );
         return;
       }
+      case "table": {
+        // One markdown-style line per row (header gets a separator), so a row
+        // or column change shows as a changed line instead of a pile of cells.
+        (node.content ?? []).forEach((row: any, ri: number) => {
+          const cells = (row.content ?? []).map((c: any) =>
+            (c.content ?? []).map(inline).join(" ").trim()
+          );
+          lines.push(indent + "| " + cells.join(" | ") + " |");
+          // Header separator carries the column alignment, markdown-style.
+          if (ri === 0) {
+            const sep = (row.content ?? []).map((c: any) => {
+              const a = c.attrs?.align;
+              return a === "center" ? ":---:" : a === "right" ? "---:" : a === "left" ? ":---" : "---";
+            });
+            lines.push(indent + "| " + sep.join(" | ") + " |");
+          }
+        });
+        return;
+      }
       case "code_block":
         lines.push(indent + (marker ?? "") + "```");
         for (const l of inline(node).split("\n")) lines.push(indent + l);

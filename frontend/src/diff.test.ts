@@ -79,3 +79,52 @@ describe("checklistLines", () => {
     expect(checklistLines([{ text: "x", done: true }, { text: "y", done: false }])).toEqual(["☑ x", "☐ y"]);
   });
 });
+
+describe("descriptionLines tables", () => {
+  const cell = (type: string, text: string) => ({
+    type,
+    content: [{ type: "paragraph", content: text ? [{ type: "text", text }] : [] }],
+  });
+  const table = (rows: string[][]) => ({
+    type: "table",
+    content: rows.map((r, i) => ({
+      type: "table_row",
+      content: r.map((t) => cell(i === 0 ? "table_header" : "table_cell", t)),
+    })),
+  });
+  const doc = (...content: unknown[]) => JSON.stringify({ type: "doc", content });
+
+  it("renders one markdown-style line per row, with a header separator", () => {
+    expect(
+      descriptionLines(doc(table([["Name", "Qty"], ["Apple", "3"], ["Pear", ""]])))
+    ).toEqual(["| Name | Qty |", "| --- | --- |", "| Apple | 3 |", "| Pear |  |"]);
+  });
+
+  it("a row swap shows up as changed rows, not a pile of cells", () => {
+    const a = descriptionLines(doc(table([["H"], ["one"], ["two"]])));
+    const b = descriptionLines(doc(table([["H"], ["two"], ["one"]])));
+    expect(hasChanges(diffLines(a, b))).toBe(true);
+    expect(a).toHaveLength(4);
+  });
+
+  it("the header separator carries the column alignment", () => {
+    const hdr = (text: string, align: string | null) => ({
+      type: "table_header",
+      attrs: { align },
+      content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    });
+    const d = JSON.stringify({
+      type: "doc",
+      content: [
+        {
+          type: "table",
+          content: [
+            { type: "table_row", content: [hdr("L", "left"), hdr("C", "center"), hdr("R", "right"), hdr("N", null)] },
+          ],
+        },
+      ],
+    });
+    expect(descriptionLines(d)).toEqual(["| L | C | R | N |", "| :--- | :---: | ---: | --- |"]);
+  });
+});
+

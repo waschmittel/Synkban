@@ -18,6 +18,10 @@ import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { toggleMark } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
+import { tableNodeSpecs, tablePlugins } from "./tables";
+import { openTableMenu } from "./tableMenu";
+import { TABLE_ICON, svg } from "./tableIcons";
+import { accel, tip } from "./platform";
 import { registerOverlay } from "./overlayLayers";
 import {
   MenuItem,
@@ -43,7 +47,7 @@ const marks = basicSchema.spec.marks.update("link", {
 });
 
 export const schema = new Schema({
-  nodes: addListNodes(filteredNodes, "paragraph block*", "block"),
+  nodes: addListNodes(filteredNodes, "paragraph block*", "block").append(tableNodeSpecs),
   marks,
 });
 
@@ -225,6 +229,13 @@ function showLinkDialog(view: EditorView, opts: LinkDialogOptions) {
   });
 }
 
+/// The toolbar button's icon (prosemirror-menu clones the node it is given).
+function tableIconDom(): HTMLElement {
+  const span = document.createElement("span");
+  span.innerHTML = svg(TABLE_ICON, 16); // static markup from tableIcons.ts
+  return span;
+}
+
 /// Creates an `EditorView` bound to `target`. Transactions go through
 /// `onChange` (called with the new doc — used to mark the form dirty).
 export function createCardEditor(
@@ -270,8 +281,19 @@ export function createCardEditor(
     blockTypeItem(schema.nodes.heading, { title: "Heading 3", label: "H3", attrs: { level: 3 } }),
   ], { label: "Type" });
 
+  const tableItem = new MenuItem({
+    title: tip("Table", accel("K")),
+    icon: { dom: tableIconDom() },
+    class: "table-menu-trigger",
+    run(_state, _dispatch, view) {
+      openTableMenu(view);
+      return true;
+    },
+  });
+
   const menuContent = inlineMenu
     .concat([[typeDropdown]])
+    .concat([[tableItem]])
     .concat([[undoItem, redoItem]])
     .concat(items.blockMenu);
 
@@ -280,10 +302,20 @@ export function createCardEditor(
     "Tab": sinkListItem(listItem),
     "Shift-Tab": liftListItem(listItem),
   });
+  // Opens the table menu (insert a table, or edit the one the cursor is in).
+  const tableMenuKeymap = keymap({
+    "Mod-k": (_state, _dispatch, view) => {
+      if (!view) return false;
+      openTableMenu(view);
+      return true;
+    },
+  });
 
   const state = EditorState.create({
     doc: initialDoc,
     plugins: [
+      tableMenuKeymap,
+      ...tablePlugins(),
       listKeymap,
       autolinkInputRules(schema),
       ...exampleSetup({ schema, menuBar: true, menuContent }),

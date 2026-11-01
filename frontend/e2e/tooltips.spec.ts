@@ -85,6 +85,7 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
     [".modal-footer .btn-primary", new RegExp(`${A("S")}\\)$`)],
     [".modal-footer .btn-cancel", /\(Esc\)$/],
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],
+    [".table-menu-trigger", new RegExp(`${A("K")}\\)$`)],
   ]);
   // The history button carries an icon, not just text.
   await expect(page.locator(".modal-history-btn svg")).toHaveCount(1);

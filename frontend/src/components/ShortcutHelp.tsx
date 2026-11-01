@@ -162,6 +162,17 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Enter"]} desc="Edit item text" />
             <Row keys={["Del"]} desc="Delete item" />
           </Section>
+          <Section title="Tables (in the description)">
+            <Row keys={[accelLabel, "K"]} desc="Table menu: insert / edit table" />
+            <Row keys={["Tab"]} alt={["Shift", "Tab"]} desc="Next / previous cell (Tab on last cell adds a row)" />
+            <Row keys={["Enter"]} desc="Next row, same column (last row: leave table)" />
+            <Row keys={["Shift", "Enter"]} desc="Line break inside the cell" />
+            <Row keys={["↑", "↓", "←", "→"]} desc="In menu: move row / column" />
+            <Row keys={["Shift", "↑↓←→"]} desc="In menu: insert row / column" />
+            <Row keys={["1", "2", "3"]} desc="In menu: align column left / center / right" />
+            <Row keys={["R", "C", "T"]} desc="In menu: delete row / column / table" />
+            <Row keys={["Esc"]} desc="Close table menu" />
+          </Section>
           <Section title="Description Editor">
             <Row keys={["Tab"]} desc="Nest list item (indent)" />
             <Row keys={["Shift", "Tab"]} desc="Outdent list item" />

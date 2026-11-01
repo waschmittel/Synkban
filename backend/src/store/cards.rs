@@ -428,6 +428,23 @@ mod tests {
     use crate::store::lists::{create_list, delete_list};
     use tempfile::TempDir;
 
+    #[test]
+    fn extract_prose_text_includes_table_cells() {
+        let doc = r#"{"type":"doc","content":[{"type":"table","content":[
+            {"type":"table_row","content":[
+                {"type":"table_header","content":[{"type":"paragraph","content":[{"type":"text","text":"Name"}]}]},
+                {"type":"table_header","content":[{"type":"paragraph","content":[{"type":"text","text":"Qty"}]}]}]},
+            {"type":"table_row","content":[
+                {"type":"table_cell","content":[{"type":"paragraph","content":[{"type":"text","text":"Apple"}]}]},
+                {"type":"table_cell","content":[{"type":"paragraph","content":[{"type":"text","text":"3"}]}]}]}]}]}"#;
+        let text = extract_prose_text(doc);
+        for word in ["Name", "Qty", "Apple", "3"] {
+            assert!(text.contains(word), "{word} missing from {text:?}");
+        }
+        // Cells stay separate words: "Name" and "Qty" must not fuse.
+        assert!(!text.contains("NameQty"));
+    }
+
     fn tmp() -> TempDir {
         let d = TempDir::new().unwrap();
         drain_file_ops(d.path());
