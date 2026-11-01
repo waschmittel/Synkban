@@ -64,3 +64,53 @@ test("a slow card create does not steal focus from the next add form", async ({
   await expect(input).toHaveValue("Card B");
   await expect(input).toBeFocused();
 });
+
+async function seedLists(request: import("@playwright/test").APIRequestContext, title: string) {
+  const board = await (await request.post("/api/boards", { data: { title } })).json();
+  for (const t of ["One", "Two"]) {
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: t } });
+  }
+  return board;
+}
+
+test("pressing n re-focuses an add-card form that lost focus", async ({ page, request }) => {
+  const board = await seedLists(request, "AddForm Refocus");
+  await page.goto(`/board/${board.id}`);
+  await expect(page.getByText("Two")).toBeVisible();
+
+  await page.keyboard.press("n");
+  const input = page.locator(".list .add-form input");
+  await expect(input).toBeFocused();
+  await input.fill("Draft");
+
+  // Click on empty board area: focus leaves the input, the form stays open.
+  await page.locator(".board-page").click({ position: { x: 5, y: 400 } });
+  await expect(input).not.toBeFocused();
+  await expect(input).toBeVisible();
+
+  await page.keyboard.press("n");
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("Draft");
+  await expect(page.locator(".add-form")).toHaveCount(1);
+});
+
+test("opening an add-card form in another list closes the first", async ({ page, request }) => {
+  const board = await seedLists(request, "AddForm Exclusive");
+  await page.goto(`/board/${board.id}`);
+  await expect(page.getByText("Two")).toBeVisible();
+
+  const lists = page.locator(".list");
+  await lists.nth(0).locator(".add-trigger").click();
+  await lists.nth(0).locator(".add-form input").fill("Keep me");
+  await expect(lists.nth(0).locator(".add-form")).toBeVisible();
+
+  await lists.nth(1).locator(".add-trigger").click();
+  await expect(lists.nth(1).locator(".add-form input")).toBeFocused();
+  await expect(lists.nth(0).locator(".add-form")).toHaveCount(0);
+  await expect(page.locator(".add-form")).toHaveCount(1);
+
+  // The closed form keeps its draft, like Escape does.
+  await lists.nth(0).locator(".add-trigger").click();
+  await expect(lists.nth(0).locator(".add-form input")).toHaveValue("Keep me");
+  await expect(lists.nth(1).locator(".add-form")).toHaveCount(0);
+});

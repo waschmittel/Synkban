@@ -1,4 +1,4 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal, onCleanup, Show } from "solid-js";
 
 interface Props {
   placeholder: string;
@@ -17,6 +17,10 @@ const openForms = new Set<string>();
 // to another live element: a re-render removes the focused input without firing
 // a reliable blur, and that case is exactly the one we need to remember.
 let focusedKey: string | null = null;
+// Only one form is open at a time: opening one closes the others, like Escape.
+// Each instance registers its `close` under its key (a re-created instance
+// simply replaces the old registration).
+const closers = new Map<string, () => void>();
 
 export default function AddForm(props: Props) {
   const readDraft = () => (props.draftKey ? drafts.get(props.draftKey) ?? "" : "");
@@ -42,6 +46,9 @@ export default function AddForm(props: Props) {
   };
 
   const open = () => {
+    for (const [key, closeOther] of closers) {
+      if (key !== props.draftKey && openForms.has(key)) closeOther();
+    }
     openedByUser = true;
     setValue(readDraft());
     setActive(true);
@@ -54,6 +61,14 @@ export default function AddForm(props: Props) {
     markOpen(false);
     if (focusedKey === props.draftKey) focusedKey = null;
   };
+
+  if (props.draftKey) {
+    const key = props.draftKey;
+    closers.set(key, close);
+    onCleanup(() => {
+      if (closers.get(key) === close) closers.delete(key);
+    });
+  }
 
   const handleSubmit = (e: Event) => {
     e.preventDefault();

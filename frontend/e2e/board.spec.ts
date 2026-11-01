@@ -147,7 +147,11 @@ test("add-card draft survives cancel, clears after create, is per-list", async (
   await expect(lb.locator(".add-form input")).toHaveValue("");
   await lb.locator(".add-form input").press("Escape");
 
-  // Creating the card from list A clears its draft.
+  // Opening B closed A's form but kept its draft; creating the card from A
+  // clears it.
+  await expect(la.locator(".add-form")).toHaveCount(0);
+  await la.locator(".add-trigger").click();
+  await expect(la.locator(".add-form input")).toHaveValue("Half typed");
   await la.locator(".add-form input").press("Enter");
   await expect(la.locator(".card", { hasText: "Half typed" })).toBeVisible();
   await la.locator(".add-trigger").click();

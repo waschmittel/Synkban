@@ -123,13 +123,26 @@ export default function BoardPage() {
       },
     });
 
+    // An already-open form has no trigger to click (and may have lost focus
+    // without closing), so the shortcut re-focuses its input instead.
+    const openOrFocusAdd = (scope: Element | null | undefined) => {
+      const input = scope?.querySelector<HTMLElement>(".add-form input");
+      if (input) {
+        input.focus();
+        return;
+      }
+      scope?.querySelector<HTMLElement>(".add-trigger")?.click();
+    };
     const triggerAddList = () => {
-      (document.querySelector(".add-list-wrapper .add-trigger") as HTMLElement | null)?.click();
+      openOrFocusAdd(document.querySelector(".add-list-wrapper"));
     };
     const triggerAddCard = () => {
-      const focused = document.activeElement;
-      const list = focused?.closest(".list") ?? document.querySelector(".list");
-      (list?.querySelector(".add-trigger") as HTMLElement | null)?.click();
+      // The list holding the focus, else the one with an open form, else the first.
+      const list =
+        document.activeElement?.closest(".list") ??
+        document.querySelector(".list:has(.add-form)") ??
+        document.querySelector(".list");
+      openOrFocusAdd(list);
     };
     const navigateArrow = (e: KeyboardEvent) => {
       const focused = document.activeElement as HTMLElement | null;
