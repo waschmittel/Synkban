@@ -399,18 +399,17 @@ test("create a new label inline in card detail and auto-assign it", async ({
   await page.locator(".card", { hasText: "Labelled card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  // Open the label picker, reveal the create form, then create a label inline.
-  await page.locator(".label-add-btn").click();
+  // The create form is hidden behind the "New label" chip until clicked.
   await expect(page.locator(".label-create")).toHaveCount(0);
-  await page.locator(".label-create-toggle").click();
+  await page.locator(".label-new-chip").click();
   await page.locator(".label-create-input").fill("Urgent");
   await page.locator(".label-create-btn").click();
 
-  // New label is auto-assigned (shows as a chip), the inline create form is
-  // gone, and focus returns to the "Add label" button.
-  await expect(page.locator(".label-assigned-chip", { hasText: "Urgent" })).toBeVisible();
+  // New label is auto-assigned (selected toggle), the inline create form is
+  // gone, and focus returns to the "New label" chip.
+  await expect(page.locator(".label-toggle--selected", { hasText: "Urgent" })).toBeVisible();
   await expect(page.locator(".label-create")).toHaveCount(0);
-  await expect(page.locator(".label-add-btn")).toBeFocused();
+  await expect(page.locator(".label-new-chip")).toBeFocused();
 
   // Save and confirm the label persists on the card in the list view.
   await page.locator(".modal-footer .btn-primary", { hasText: "Save" }).click();
@@ -421,7 +420,7 @@ test("create a new label inline in card detail and auto-assign it", async ({
   await expect(page.locator(".card-label-chip", { hasText: "Urgent" })).toBeVisible();
 });
 
-test("inline label create form closes when focus leaves the label area", async ({
+test("inline label create form closes when focus leaves the label row", async ({
   page,
   request,
 }) => {
@@ -436,16 +435,15 @@ test("inline label create form closes when focus leaves the label area", async (
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Blur card" }).click();
 
-  await page.locator(".label-add-btn").click();
-  await page.locator(".label-create-toggle").click();
+  await page.locator(".label-new-chip").click();
   await expect(page.locator(".label-create")).toBeVisible();
 
-  // Moving focus out of the label area (to the title input) closes the picker.
+  // Moving focus out of the label row (to the title input) collapses the form.
   await page.locator(".modal-title-input").focus();
   await expect(page.locator(".label-create")).toHaveCount(0);
 });
 
-test("inline create form collapses to the toggle when it loses focus inside the picker", async ({
+test("inline create form collapses to the chip when focus moves to a label toggle", async ({
   page,
   request,
 }) => {
@@ -461,17 +459,15 @@ test("inline create form collapses to the toggle when it loses focus inside the 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Collapse card" }).click();
 
-  // Open the picker and reveal the create input.
-  await page.locator(".label-add-btn").click();
-  await page.locator(".label-create-toggle").click();
+  await page.locator(".label-new-chip").click();
   await expect(page.locator(".label-create")).toBeVisible();
 
-  // Click a label in the grid: focus leaves the create form but stays in the
-  // picker — the form collapses back to the toggle, picker stays open.
-  await page.locator(".label-picker-item", { hasText: "Existing" }).click();
+  // Click a label toggle: the form collapses back to the chip and the click
+  // still toggles the label.
+  await page.locator(".label-toggle", { hasText: "Existing" }).click();
   await expect(page.locator(".label-create")).toHaveCount(0);
-  await expect(page.locator(".label-create-toggle")).toBeVisible();
-  await expect(page.locator(".label-picker")).toBeVisible();
+  await expect(page.locator(".label-new-chip")).toBeVisible();
+  await expect(page.locator(".label-toggle--selected", { hasText: "Existing" })).toBeVisible();
 });
 
 test("card-detail accelerator shortcuts focus each section", async ({
@@ -516,10 +512,9 @@ test("card-detail accelerator shortcuts focus each section", async ({
   await page.keyboard.press("ControlOrMeta+u");
   await expect(page.locator(".due-date-input")).toBeFocused();
 
-  // Accel+G → opens the label picker and focuses the add-label button.
+  // Accel+G → focuses the label row (no board labels here → "New label" chip).
   await page.keyboard.press("ControlOrMeta+g");
-  await expect(page.locator(".label-add-btn")).toBeFocused();
-  await expect(page.locator(".label-add-btn")).toHaveText(/Done/);
+  await expect(page.locator(".label-new-chip")).toBeFocused();
 });
 
 // Regression: the checklist shortcut used to be Ctrl/Cmd+C and fired even
@@ -860,7 +855,7 @@ test("dock stays within the window and reaches its end dots when boards overflow
   await expect(page).toHaveURL(new RegExp(`/board/${b.id}$`));
 });
 
-test("New-label input stays hidden until Create label is clicked, on every card", async ({
+test("New-label input stays hidden until the New label chip is clicked, on every card", async ({
   page,
   request,
 }) => {
@@ -875,33 +870,114 @@ test("New-label input stays hidden until Create label is clicked, on every card"
 
   await page.goto(`/board/${board.id}`);
 
-  // First card: opening the picker shows the create toggle, NOT the input.
+  // First card: the chip is there, the input is not.
   await page.locator(".card", { hasText: "First card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
-  await page.locator(".label-add-btn").click();
-  await expect(page.locator(".label-create-toggle")).toBeVisible();
+  await expect(page.locator(".label-new-chip")).toBeVisible();
   await expect(page.locator(".label-create")).toHaveCount(0);
 
-  // Clicking the toggle reveals the input.
-  await page.locator(".label-create-toggle").click();
+  // Clicking the chip reveals the input.
+  await page.locator(".label-new-chip").click();
   await expect(page.locator(".label-create")).toBeVisible();
 
-  // Close and open a different card: picker must again start with the input
-  // hidden behind the toggle (the regression: it leaked open across cards).
+  // Open a different card: the input must start hidden again.
+  await page.keyboard.press("Escape"); // collapses the form only
+  await expect(page.locator(".label-create")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await page.locator(".card", { hasText: "Second card" }).click();
   await expect(page.locator(".modal-overlay")).toBeVisible();
-  await page.locator(".label-add-btn").click();
-  await expect(page.locator(".label-create-toggle")).toBeVisible();
+  await expect(page.locator(".label-new-chip")).toBeVisible();
   await expect(page.locator(".label-create")).toHaveCount(0);
+});
 
-  // Reopening the picker on the same card after closing it also resets.
-  await page.locator(".label-create-toggle").click();
-  await expect(page.locator(".label-create")).toBeVisible();
-  await page.locator(".label-add-btn").click(); // "Done" — close picker
-  await expect(page.locator(".label-create")).toHaveCount(0);
-  await page.locator(".label-add-btn").click(); // reopen picker
-  await expect(page.locator(".label-create-toggle")).toBeVisible();
-  await expect(page.locator(".label-create")).toHaveCount(0);
+test("label row shows each board label once and toggles assignment both ways", async ({
+  page,
+  request,
+}) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Toggle Board" } })).json();
+  for (const name of ["Alpha", "Beta"]) {
+    await request.post(`/api/boards/${board.id}/labels`, { data: { name } });
+  }
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Toggle card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: "Toggle card" }).click();
+
+  const toggles = page.locator(".label-toggle");
+  await expect(toggles).toHaveCount(2); // each label exactly once, board order
+  await expect(toggles.locator(".label-toggle-name")).toHaveText(["Alpha", "Beta"]);
+
+  await toggles.nth(1).click();
+  await expect(toggles.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(toggles.nth(0)).toHaveAttribute("aria-pressed", "false");
+  await toggles.nth(1).click();
+  await expect(toggles.nth(1)).toHaveAttribute("aria-pressed", "false");
+
+  // Accel+G focuses the first label toggle.
+  await page.keyboard.press("ControlOrMeta+g");
+  await expect(toggles.nth(0)).toBeFocused();
+});
+
+test("many labels: assigned first, capped with +N more, order frozen while interacting", async ({
+  page,
+  request,
+}) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Many Labels" } })).json();
+  const ids: string[] = [];
+  for (let i = 1; i <= 20; i++) {
+    const l = await (
+      await request.post(`/api/boards/${board.id}/labels`, { data: { name: `L${i}` } })
+    ).json();
+    ids.push(l.id);
+  }
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  const withLabels = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Has labels" } })
+  ).json();
+  await request.put(`/api/cards/${withLabels.id}`, {
+    data: { label_ids: [ids[2], ids[6], ids[19]] },
+  });
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "No labels" } });
+
+  await page.goto(`/board/${board.id}`);
+  const toggles = page.locator(".label-toggle");
+  const names = toggles.locator(".label-toggle-name");
+
+  // 3 assigned (L3, L7, L20) first, then 9 unassigned = 12 visible, 8 hidden.
+  await page.locator(".card", { hasText: "Has labels" }).click();
+  await expect(toggles).toHaveCount(12);
+  await expect(names.nth(0)).toHaveText("L3");
+  await expect(names.nth(1)).toHaveText("L7");
+  await expect(names.nth(2)).toHaveText("L20");
+  await expect(names.nth(3)).toHaveText("L1");
+  await expect(page.locator(".label-more-chip")).toHaveText("+8 more");
+
+  await page.locator(".label-more-chip").click();
+  await expect(toggles).toHaveCount(20);
+  await expect(page.locator(".label-more-chip")).toHaveText("Show fewer");
+  await page.locator(".label-more-chip").click();
+  await expect(toggles).toHaveCount(12);
+
+  // Fresh card: first 12 in board order. Toggling L5 must not move it while
+  // the pointer is over the row; it jumps to the front once pointer+focus leave.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "No labels" }).click();
+  await expect(toggles).toHaveCount(12);
+  await toggles.nth(4).click();
+  await expect(names.nth(4)).toHaveText("L5");
+  await expect(toggles.nth(4)).toHaveAttribute("aria-pressed", "true");
+
+  await page.mouse.move(0, 0);
+  await page.locator(".modal-title-input").focus();
+  await expect(names.nth(0)).toHaveText("L5");
+  await expect(toggles.nth(0)).toHaveAttribute("aria-pressed", "true");
+  await expect(toggles).toHaveCount(12);
 });

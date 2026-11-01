@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 import type { Label } from "../types";
 import { renderTitle } from "./Card";
 import { handleMarkdownShortcut } from "../mdInput";
@@ -6,46 +6,100 @@ import { handleMarkdownShortcut } from "../mdInput";
 interface Props {
   boardLabels: Label[];
   selectedIds: string[];
-  pickerOpen: boolean;
   onToggleLabel: (labelId: string) => void;
-  onTogglePicker: () => void;
-  onClosePicker: () => void;
   onCreateLabel: (name: string) => void | Promise<void>;
-  addBtnRef?: (el: HTMLButtonElement) => void;
+  /// Receives a function that moves keyboard focus into the row (first label,
+  /// or the "New label" chip when the board has none) — drives `Accel+G`.
+  focusRef?: (focus: () => void) => void;
 }
 
-/// Renders the assigned-label chips above the title and (when open) the
-/// label-picker grid below them. Always rendered (even with zero board
-/// labels) so the "+ Add label" button stays reachable.
-export default function CardLabelSection(props: Props) {
-  const assignedLabels = () =>
-    props.boardLabels.filter((l) => props.selectedIds.includes(l.id));
-  const hasLabels = () => props.boardLabels.length > 0;
+/// One toggle row: board labels as chips, filled with a ✓ when assigned,
+/// outlined when not. Click toggles. A dashed "New label" chip at the end
+/// becomes an inline name input; the created label is auto-assigned. Always
+/// rendered (even with zero board labels) so creating one stays reachable.
+///
+/// Many labels: assigned ones come first (board order), then the first
+/// `max(12 - assigned, 2)` unassigned ones; the rest hide behind "+N more".
+/// While the pointer or focus is in the row the order is frozen (a toggled chip
+/// must not jump away under the cursor); it re-sorts once both have left.
+const VISIBLE_TARGET = 12;
+const MIN_UNASSIGNED = 2;
+const visibleCount = (assigned: number) =>
+  assigned + Math.max(VISIBLE_TARGET - assigned, MIN_UNASSIGNED);
 
+export default function CardLabelSection(props: Props) {
   const [newName, setNewName] = createSignal("");
   const [creating, setCreating] = createSignal(false);
-  // The inline create form is hidden until the user clicks "Create label";
-  // opening the picker only reveals the existing-label grid, not a text input.
   const [showCreate, setShowCreate] = createSignal(false);
-  let areaRef: HTMLDivElement | undefined;
-  let addBtnRef: HTMLButtonElement | undefined;
+  const [expanded, setExpanded] = createSignal(false);
+  // Frozen view: label ids in display order + how many of them are visible.
+  const [snapshot, setSnapshot] = createSignal<{ ids: string[]; cut: number } | null>(null);
+  const [hovered, setHovered] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  let rowRef: HTMLDivElement | undefined;
+  let newChipRef: HTMLButtonElement | undefined;
   let createInputRef: HTMLInputElement | undefined;
 
-  // Reveal the inline create form and focus its input synchronously. Solid
-  // mounts the input during this signal write, so focusing it now (rather than
-  // on the next animation frame) wins the race against the focusout microtask
-  // fired when the toggle button this click removes leaves the DOM — otherwise
-  // that handler sees an empty activeElement and closes the whole picker.
+  const sortedIds = createMemo(() => {
+    const assigned = props.boardLabels.filter((l) => props.selectedIds.includes(l.id));
+    const rest = props.boardLabels.filter((l) => !props.selectedIds.includes(l.id));
+    return { ids: [...assigned, ...rest].map((l) => l.id), cut: visibleCount(assigned.length) };
+  });
+
+  // Labels in display order plus how many are hidden behind "+N more".
+  const view = createMemo(() => {
+    const byId = new Map(props.boardLabels.map((l) => [l.id, l]));
+    const snap = snapshot();
+    const { ids, cut } = snap ?? sortedIds();
+    const ordered = ids.filter((id) => byId.has(id));
+    // Labels the snapshot never saw (just created / synced in) always show.
+    const extra = snap ? props.boardLabels.filter((l) => !ids.includes(l.id)).map((l) => l.id) : [];
+    const all = [...ordered, ...extra];
+    const shown = expanded() ? all : all.filter((id, i) => i < cut || i >= ordered.length);
+    return { items: shown.map((id) => byId.get(id)!), hidden: all.length - shown.length, canCollapse: all.length > cut };
+  });
+
+  const freeze = () => {
+    if (!snapshot()) setSnapshot(sortedIds());
+  };
+  const release = () => {
+    if (!hovered() && !focused()) setSnapshot(null);
+  };
+  const handleFocusOut = () =>
+    queueMicrotask(() => {
+      if (!rowRef?.contains(document.activeElement)) {
+        setFocused(false);
+        release();
+      }
+    });
+
+  const showMore = () => {
+    const firstHidden = view().items.length;
+    setExpanded(true);
+    rowRef?.querySelectorAll<HTMLElement>(".label-toggle")[firstHidden]?.focus();
+  };
+  const showFewer = () => {
+    setExpanded(false);
+    rowRef?.querySelector<HTMLElement>(".label-more-chip")?.focus();
+  };
+
+  props.focusRef?.(() =>
+    (rowRef?.querySelector<HTMLElement>(".label-toggle, .label-new-chip, .label-create-input"))?.focus(),
+  );
+
+  // Focus the input synchronously: the chip this click removes leaves the DOM
+  // in the same flush, and a deferred focus would lose the race with the form's
+  // focusout-collapse microtask.
   const openCreate = () => {
     setShowCreate(true);
     createInputRef?.focus();
   };
 
-  // Collapse the create form whenever the picker closes so the next open
-  // (this card or another) starts from the existing-label grid.
-  createEffect(() => {
-    if (!props.pickerOpen) setShowCreate(false);
-  });
+  const closeCreate = (refocus: boolean) => {
+    setShowCreate(false);
+    setNewName("");
+    if (refocus) queueMicrotask(() => newChipRef?.focus());
+  };
 
   const submitNew = async () => {
     const name = newName().trim();
@@ -53,40 +107,19 @@ export default function CardLabelSection(props: Props) {
     setCreating(true);
     try {
       await props.onCreateLabel(name);
-      setNewName("");
-      props.onClosePicker();
-      addBtnRef?.focus();
+      closeCreate(true);
     } finally {
       setCreating(false);
     }
   };
 
-  // Close the picker (and thus the inline create form) when focus leaves the
-  // whole label area. relatedTarget is unreliable for clicks on non-focusable
-  // regions, so confirm via document.activeElement on the next microtask.
-  const handleFocusOut = (e: FocusEvent) => {
-    if (!props.pickerOpen) return;
-    const next = e.relatedTarget as Node | null;
-    if (next && areaRef?.contains(next)) return;
-    queueMicrotask(() => {
-      if (props.pickerOpen && !areaRef?.contains(document.activeElement)) {
-        props.onClosePicker();
-      }
-    });
-  };
-
-  // Collapse just the create form (back to the "Create label" toggle) when
-  // focus leaves the form but stays elsewhere in the picker — e.g. clicking a
-  // label in the grid. Same microtask/activeElement guard as handleFocusOut.
+  // Collapse back to the chip when focus leaves the form (e.g. clicking a label).
   const handleCreateFocusOut = (e: FocusEvent) => {
     const form = e.currentTarget as HTMLElement;
     const next = e.relatedTarget as Node | null;
     if (next && form.contains(next)) return;
     queueMicrotask(() => {
-      if (showCreate() && !form.contains(document.activeElement)) {
-        setShowCreate(false);
-        setNewName("");
-      }
+      if (showCreate() && !form.contains(document.activeElement)) closeCreate(false);
     });
   };
 
@@ -99,107 +132,106 @@ export default function CardLabelSection(props: Props) {
         </svg>
         <span class="modal-label">Labels</span>
       </div>
-      <div class="label-assigned-area" ref={areaRef} onFocusOut={handleFocusOut}>
-        <div class="label-assigned-chips">
-          <For each={assignedLabels()}>
-            {(label) => (
-              <span class="label-assigned-chip" style={{ "background-color": label.color }}>
-                <span innerHTML={renderTitle(label.name)} />
-                <button
-                  class="label-chip-remove"
-                  title={`Remove "${label.name}"`}
-                  onClick={() => props.onToggleLabel(label.id)}
-                >
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              </span>
-            )}
-          </For>
-          <button
-            class="label-add-btn"
-            ref={(el) => { addBtnRef = el; props.addBtnRef?.(el); }}
-            onClick={props.onTogglePicker}
-            title={props.pickerOpen ? "Hide label picker (Ctrl+L)" : "Add/remove labels (Ctrl+L)"}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            {props.pickerOpen ? "Done" : "Add label"}
-          </button>
-        </div>
-        <Show when={props.pickerOpen}>
-          <Show when={hasLabels()}>
-            <div class="label-picker">
-              <For each={props.boardLabels}>
-                {(label) => {
-                  const selected = () => props.selectedIds.includes(label.id);
-                  return (
-                    <button
-                      class="label-picker-item"
-                      classList={{ "label-picker-item--selected": selected() }}
-                      style={{ "--label-color": label.color }}
-                      onClick={() => props.onToggleLabel(label.id)}
-                      title={selected() ? `Remove "${label.name}"` : `Add "${label.name}"`}
-                    >
-                      <span class="label-picker-dot" style={{ "background-color": label.color }} />
-                      <span class="label-picker-name" innerHTML={renderTitle(label.name)} />
-                      <Show when={selected()}>
-                        <svg class="label-picker-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </Show>
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
-          </Show>
-          <Show
-            when={showCreate()}
-            fallback={
+      <div
+        class="label-toggle-row"
+        ref={rowRef}
+        onMouseEnter={() => {
+          setHovered(true);
+          freeze();
+        }}
+        onMouseLeave={() => {
+          setHovered(false);
+          release();
+        }}
+        onFocusIn={() => {
+          setFocused(true);
+          freeze();
+        }}
+        onFocusOut={handleFocusOut}
+      >
+        <For each={view().items}>
+          {(label) => {
+            const selected = () => props.selectedIds.includes(label.id);
+            return (
               <button
-                class="label-create-toggle"
                 type="button"
-                onClick={openCreate}
+                class="label-toggle"
+                classList={{ "label-toggle--selected": selected() }}
+                style={{ "--label-color": label.color }}
+                aria-pressed={selected()}
+                onClick={() => props.onToggleLabel(label.id)}
+                title={selected() ? `Remove "${label.name}"` : `Add "${label.name}"`}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Create label
+                <span class="label-toggle-dot" style={{ "background-color": label.color }} />
+                <span class="label-toggle-name" innerHTML={renderTitle(label.name)} />
+                <Show when={selected()}>
+                  <svg class="label-toggle-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </Show>
               </button>
-            }
-          >
-            <form
-              class="label-create"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void submitNew();
-              }}
-              onFocusOut={handleCreateFocusOut}
+            );
+          }}
+        </For>
+        <Show when={view().hidden > 0}>
+          <button type="button" class="label-more-chip" onClick={showMore}>
+            +{view().hidden} more
+          </button>
+        </Show>
+        <Show when={expanded() && view().canCollapse}>
+          <button type="button" class="label-more-chip" onClick={showFewer}>
+            Show fewer
+          </button>
+        </Show>
+        <Show
+          when={showCreate()}
+          fallback={
+            <button
+              class="label-new-chip"
+              type="button"
+              ref={(el) => (newChipRef = el)}
+              onClick={openCreate}
+              title="Create a new label for this board"
             >
-              <input
-                class="label-create-input"
-                placeholder="New label name…"
-                value={newName()}
-                disabled={creating()}
-                onInput={(e) => setNewName(e.currentTarget.value)}
-                onKeyDown={(e) => handleMarkdownShortcut(e)}
-                ref={(el) => (createInputRef = el)}
-              />
-              <button
-                type="submit"
-                class="label-create-btn"
-                disabled={!newName().trim() || creating()}
-              >
-                Create
-              </button>
-            </form>
-          </Show>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New label
+            </button>
+          }
+        >
+          <form
+            class="label-create"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitNew();
+            }}
+            onFocusOut={handleCreateFocusOut}
+          >
+            <input
+              class="label-create-input"
+              placeholder="New label name…"
+              value={newName()}
+              disabled={creating()}
+              onInput={(e) => setNewName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                handleMarkdownShortcut(e);
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  closeCreate(true);
+                }
+              }}
+              ref={(el) => (createInputRef = el)}
+            />
+            <button
+              type="submit"
+              class="label-create-btn"
+              disabled={!newName().trim() || creating()}
+            >
+              Create
+            </button>
+          </form>
         </Show>
       </div>
     </>

@@ -147,8 +147,7 @@ test("saving through the modal records every tracked field, and the diff shows e
   await page.locator(".modal-title-input").fill("Edited title");
   await page.locator(".editor-wrapper .ProseMirror").click();
   await page.keyboard.type("Brand new description");
-  await page.locator(".label-add-btn").click();
-  await page.locator(".label-picker-item", { hasText: "Urgent" }).click();
+  await page.locator(".label-toggle", { hasText: "Urgent" }).click();
   await page.locator(".due-date-input").fill("2031-05-06");
   await page.locator(".modal-footer .btn-primary").click();
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
