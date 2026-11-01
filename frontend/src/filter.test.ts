@@ -54,10 +54,16 @@ describe("cardMatchesFilter", () => {
     ).toBe(true);
   });
 
-  it("label match: any-of (OR within labels)", () => {
+  it("label match: all-of (AND within labels)", () => {
+    expect(
+      cardMatchesFilter(makeCard({ label_ids: ["a", "x", "b", "y"] }), "", ["a", "x", "b"])
+    ).toBe(true);
+  });
+
+  it("label partial match (only some selected labels) → false", () => {
     expect(
       cardMatchesFilter(makeCard({ label_ids: ["x"] }), "", ["a", "x", "b"])
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("label mismatch → false", () => {

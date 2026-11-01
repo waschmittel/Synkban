@@ -6,7 +6,7 @@ import type { Card } from "./types";
 /// The description_text field is the plain-text view of the ProseMirror doc,
 /// computed server-side; searching against the raw description JSON would
 /// false-match on node type names ("paragraph", "text").
-/// Label filter: matches when the card has at least one of the selected labels.
+/// Label filter: matches when the card has every selected label (AND).
 /// Filters combine with AND. Empty filter values are ignored.
 export function cardMatchesFilter(
   card: Card,
@@ -23,7 +23,7 @@ export function cardMatchesFilter(
     if (!titleMatch && !descMatch && !checklistMatch) return false;
   }
   if (labelIds.length > 0) {
-    if (!card.label_ids?.some((id) => labelIds.includes(id))) return false;
+    if (!labelIds.every((id) => card.label_ids?.includes(id))) return false;
   }
   return true;
 }
