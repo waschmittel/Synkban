@@ -81,6 +81,13 @@ test("record demo", async ({ page }) => {
     ).toBeVisible();
   }
   await pause(page);
+  // Reorder: keyboard Shift+↑ moves the focused label up (drag & drop works too).
+  // The order is the board's label order everywhere — cards, detail view, filters.
+  await page.locator(".label-drawer-item", { hasText: "Urgent" }).focus();
+  await pause(page, 500);
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect(page.locator(".label-drawer-name").first()).toHaveText("Urgent");
+  await pause(page, 1000);
   await page.locator(".label-drawer-close").click();
   await pause(page);
 
@@ -99,21 +106,44 @@ test("record demo", async ({ page }) => {
   await page.keyboard.type(".", { delay: TYPE_DELAY });
   await pause(page);
 
-  await page.locator(".label-add-btn").click();
-  await page.locator(".label-picker-item", { hasText: "Design" }).click();
+  // --- Table: Ctrl/Cmd+K opens the table menu (insert / edit / align / move) ---
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu")).toBeVisible();
+  await pause(page, 1200);
+  await page.keyboard.press("t");
+  await expect(page.locator(".editor-wrapper .ProseMirror table")).toBeVisible();
+  // Tab walks the cells (header row first), Enter would go down a column.
+  const cells = ["Task", "Owner", "Days", "Wireframe", "Ana", "2", "Copy", "Ben", "3"];
+  for (let i = 0; i < cells.length; i++) {
+    await page.keyboard.type(cells[i], { delay: TYPE_DELAY });
+    if (i < cells.length - 1) await page.keyboard.press("Tab");
+  }
+  await pause(page, 600);
+  // Align the "Days" column right, then swap the two body rows — each action
+  // closes the menu, headers stay centered and first.
+  await page.keyboard.press("ControlOrMeta+k");
+  await pause(page, 1200);
+  await page.keyboard.press("3");
+  await pause(page, 800);
+  await page.keyboard.press("ControlOrMeta+k");
+  await pause(page, 800);
+  await page.keyboard.press("ArrowUp");
+  await pause(page, 1200);
+
+  // Labels: one row of toggles — click to assign, click again to remove.
+  await page.locator(".label-toggle", { hasText: "Design" }).click();
   await pause(page, 400);
-  await page.locator(".label-picker-item", { hasText: "Urgent" }).click();
+  await page.locator(".label-toggle", { hasText: "Urgent" }).click();
   await pause(page, 400);
-  // Inline label creation — reveal the create form, then define a new label
-  // without leaving the card.
-  await page.locator(".label-create-toggle").click();
+  // The dashed "New label" chip defines a label without leaving the card; it is
+  // assigned right away.
+  await page.locator(".label-new-chip").click();
   await slowFill(page.locator(".label-create-input"), "Polish");
   await page.locator(".label-create-btn").click();
   await expect(
-    page.locator(".label-assigned-chip", { hasText: "Polish" })
+    page.locator(".label-toggle--selected", { hasText: "Polish" })
   ).toBeVisible();
-  await pause(page);
-  await page.locator(".label-add-btn").click();
   await pause(page);
 
   await slowFill(page.locator(".due-date-input"), "2026-07-01");
