@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 
 COPY --from=backend-build /app/backend/target/release/synkban ./synkban
+COPY LICENSE THIRD-PARTY-NOTICES.md ./
+COPY backend/fonts/licenses ./licenses
 
 RUN useradd -r -u 10001 app && mkdir -p /app/data && chown -R app /app
 USER app

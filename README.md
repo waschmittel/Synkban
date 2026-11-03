@@ -123,3 +123,7 @@ The Dockerfile is a multi-stage build:
 Synkban's web server has **no authentication of its own** (single-user MVP), so run it behind an authenticating reverse proxy on an internal network with no published ports. Full step-by-step setup with Docker Compose + Caddy (login form + long-lived session cookie via the `caddy-security` plugin):
 
 ➡️ **[Self-hosting behind Caddy + caddy-security](docs/self-hosting-caddy-security.md)**
+
+## License
+
+Synkban is released under the [MIT License](LICENSE). Bundled fonts and third-party components keep their own licenses — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
