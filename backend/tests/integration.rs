@@ -435,3 +435,53 @@ async fn token_middleware_rejects_wrong_cookie() {
         .to_request();
     assert_forbidden!(app, req);
 }
+
+// -- PDF export --
+
+#[actix_web::test]
+async fn export_card_pdf_returns_download_with_embedded_image() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (_, _, cid) = seed_board_list_card!(app);
+
+    let req = test::TestRequest::put().uri(&format!("/api/cards/{}", cid))
+        .set_json(json!({ "title": "Größe/Test", "due_date": "2026-12-24" })).to_request();
+    test::call_service(&app, req).await;
+
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(64, 48, image::Rgb([200, 40, 40]))
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/cards/{}/attachments?filename=red.png", cid))
+        .insert_header(("content-type", "image/png"))
+        .set_payload(png.into_inner())
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), StatusCode::CREATED);
+
+    let req = test::TestRequest::get().uri(&format!("/api/cards/{}/pdf", cid)).to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    if status != StatusCode::OK {
+        panic!("{status}: {}", String::from_utf8_lossy(&test::read_body(resp).await));
+    }
+    assert_eq!(resp.headers().get("content-type").unwrap(), "application/pdf");
+    let disposition = resp.headers().get("content-disposition").unwrap().to_str().unwrap().to_string();
+    assert!(disposition.starts_with("attachment; filename=\"Gr__e_Test.pdf\""), "{disposition}");
+    assert!(disposition.contains("filename*=UTF-8''Gr%C3%B6%C3%9Fe_Test.pdf"), "{disposition}");
+    let body = test::read_body(resp).await;
+    if let Ok(out) = std::env::var("PDF_TEST_OUT_HTTP") {
+        std::fs::write(out, &body).unwrap();
+    }
+    assert!(body.starts_with(b"%PDF-"));
+}
+
+#[actix_web::test]
+async fn export_card_pdf_unknown_card_is_404() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let req = test::TestRequest::get().uri("/api/cards/nope/pdf").to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+}

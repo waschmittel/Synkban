@@ -164,6 +164,33 @@ pub(crate) fn record_attachment_change(
     write_card(&path, &mut card)
 }
 
+/// Gathers what the PDF export needs: the saved card, its board's title and
+/// labels (in board order), and each attachment with its thumbnail.
+pub fn export_card(data_dir: &Path, card_id: &str) -> Result<crate::pdf::CardExport, AppError> {
+    let loc = card_index::locate(data_dir, card_id)?;
+    let mut card = read_card(&card_path(data_dir, card_id, &loc))?;
+    let (CardLocation::InList { board_id, .. } | CardLocation::Orphaned { board_id }) = &loc;
+    let board = crate::store::boards::read_board_file(data_dir, board_id)?;
+    let attachments = crate::store::attachments::load_attachments(data_dir, board_id, card_id)
+        .into_iter()
+        .map(|att| {
+            let thumb = std::fs::read(
+                attachment_dir(data_dir, board_id, card_id).join(format!("{}_thumb", att.id)),
+            )
+            .ok();
+            (att, thumb)
+        })
+        .collect();
+    card.history.clear();
+    Ok(crate::pdf::CardExport {
+        labels: board.labels.into_iter().filter(|l| card.label_ids.contains(&l.id)).collect(),
+        board_title: board.title,
+        card,
+        attachments,
+        exported_at: now_timestamp(),
+    })
+}
+
 /// The card's current content plus its recorded versions, newest first.
 pub fn get_card_history(data_dir: &Path, card_id: &str) -> Result<CardHistory, AppError> {
     let loc = card_index::locate(data_dir, card_id)?;

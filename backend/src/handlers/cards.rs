@@ -87,6 +87,33 @@ pub async fn get_card_history(
     Ok(HttpResponse::Ok().json(history))
 }
 
+pub async fn export_card_pdf(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let export = store::export_card(&data_dir, &path.into_inner())?;
+    let pdf = crate::pdf::render_card(&export)?;
+    let stem: String = export
+        .card
+        .title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let stem = stem.trim();
+    let stem = if stem.is_empty() { "card" } else { stem };
+    let ascii: String = stem.chars().map(|c| if c.is_ascii() { c } else { '_' }).collect();
+    let encoded: String = stem
+        .bytes()
+        .map(|b| if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' { (b as char).to_string() } else { format!("%{b:02X}") })
+        .collect();
+    let disposition =
+        format!("attachment; filename=\"{ascii}.pdf\"; filename*=UTF-8''{encoded}.pdf");
+    Ok(HttpResponse::Ok()
+        .content_type("application/pdf")
+        .append_header(("Content-Disposition", disposition))
+        .body(pdf))
+}
+
 pub async fn delete_card(
     data_dir: web::Data<PathBuf>,
     path: web::Path<String>,

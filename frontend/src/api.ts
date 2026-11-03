@@ -123,6 +123,16 @@ export const api = {
 
   getCardHistory: (id: string) => request<CardHistory>(`/cards/${id}/history`),
 
+  /// Starts the browser's (or Electron's) download of the saved card as PDF.
+  downloadCardPdf: (id: string) => {
+    const a = document.createElement("a");
+    a.href = `${BASE}/cards/${id}/pdf`;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  },
+
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
 

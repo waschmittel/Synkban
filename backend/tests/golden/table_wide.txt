@@ -1,0 +1,61 @@
+== page 1 ==
+T 50.0 71.0 f1 20 #1f2328 "Ship PDF export —"
+T 266.5 71.0 f3 20 #1f2328 "now"
+T 320.0 71.0 f5 20 #1f2328 "🚀"
+T 50.0 91.4 f0 9 #6b7280 "Board: Roadmap · Status: 2026-11-03 12:00 UTC"
+R 50.0 102.6 42.6 15.0 #f5c6cb
+T 56.0 113.1 f0 9 #1f2328 "Urgent"
+R 97.6 102.6 50.5 15.0 #c6e0f5
+T 103.6 113.1 f0 9 #1f2328 "Backend"
+T 50.0 136.6 f1 10.5 #1f2328 "Due:"
+T 80.8 136.6 f0 10.5 #1f2328 "2026-12-24"
+T 50.0 166.9 f1 12 #6b7280 "Description"
+R 50.0 171.1 495.0 0.6 #d0d4da
+R 50.0 182.1 30.0 21.3 #e9ecef
+T 59.8 196.1 f1 9.5 #1f2328 "Id"
+R 50.0 182.1 0.6 21.3 #d0d4da
+R 80.0 182.1 422.3 21.3 #e9ecef
+T 260.4 196.1 f1 9.5 #1f2328 "Description"
+R 80.0 182.1 0.6 21.3 #d0d4da
+R 502.3 182.1 42.7 21.3 #e9ecef
+T 506.3 196.1 f1 9.5 #1f2328 "Owner"
+R 502.3 182.1 0.6 21.3 #d0d4da
+R 545.0 182.1 0.6 21.3 #d0d4da
+R 50.0 182.1 495.0 0.6 #d0d4da
+R 50.0 203.4 495.0 0.6 #d0d4da
+T 54.0 217.4 f0 9.5 #1f2328 "1"
+R 50.0 203.4 0.6 61.2 #d0d4da
+T 84.0 217.4 f0 9.5 #1f2328 "words words words words words words words words words words words words words"
+T 84.0 230.7 f0 9.5 #1f2328 "words words words words words words words words words words words words words"
+T 84.0 244.0 f0 9.5 #1f2328 "words words words words words words words words words words words words words"
+T 84.0 257.3 f0 9.5 #1f2328 "words"
+R 80.0 203.4 0.6 61.2 #d0d4da
+T 506.3 217.4 f0 9.5 #1f2328 "ann"
+R 502.3 203.4 0.6 61.2 #d0d4da
+R 545.0 203.4 0.6 61.2 #d0d4da
+R 50.0 203.4 495.0 0.6 #d0d4da
+R 50.0 264.6 495.0 0.6 #d0d4da
+T 54.0 278.6 f0 9.5 #1f2328 "2"
+R 50.0 264.6 0.6 21.3 #d0d4da
+T 84.0 278.6 f0 9.5 #1f2328 "short"
+R 80.0 264.6 0.6 21.3 #d0d4da
+T 506.3 278.6 f0 9.5 #1f2328 "bob"
+R 502.3 264.6 0.6 21.3 #d0d4da
+R 545.0 264.6 0.6 21.3 #d0d4da
+R 50.0 264.6 495.0 0.6 #d0d4da
+R 50.0 285.9 495.0 0.6 #d0d4da
+T 50.0 316.5 f1 12 #6b7280 "Checklist (1/2)"
+R 50.0 320.7 495.0 0.6 #d0d4da
+T 50.0 339.7 f0 10.5 #1f2328 "☑"
+T 70.0 339.7 f0 10.5 #6b7280 "write it"
+T 50.0 356.4 f0 10.5 #1f2328 "☐"
+T 70.0 356.4 f0 10.5 #1f2328 "test it, with a rather long line that has to wrap around the page edge at least once or"
+T 70.0 371.1 f0 10.5 #1f2328 "twice"
+T 50.0 399.4 f1 12 #6b7280 "Attachments (1)"
+R 50.0 403.6 495.0 0.6 #d0d4da
+T 52.0 422.1 f0 10 #1f2328 "•"
+T 70.0 422.1 f0 10 #1f2328 "notes.txt 2.0 KB · text/plain"
+R 50.0 794.0 495.0 0.6 #d0d4da
+T 50.0 806.0 f0 8 #6b7280 "Ship PDF export — now "
+T 146.2 806.0 f5 8 #6b7280 "🚀"
+T 505.1 806.0 f0 8 #6b7280 "Page 1 / 1"

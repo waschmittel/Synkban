@@ -147,6 +147,7 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={[accelLabel, "O"]} desc="Add attachment (open file)" />
             <Row keys={[accelLabel, "U"]} desc="Open due date picker" />
             <Row keys={[accelLabel, "J"]} desc="Open card history" />
+            <Row keys={[accelLabel, "P"]} desc="Export card as PDF" />
             <Row keys={["?"]} desc="Toggle shortcuts help" />
           </Section>
           <Section title="Card History">

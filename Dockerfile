@@ -10,6 +10,7 @@ FROM rust:1.95-bookworm AS backend-build
 WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 COPY backend/src ./src
+COPY backend/fonts ./fonts
 COPY --from=frontend-build /app/frontend/dist ./static
 RUN cargo build --release
 

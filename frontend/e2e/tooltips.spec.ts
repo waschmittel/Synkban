@@ -84,6 +84,7 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
     [".attachment-delete", /\(Del\)$/],
     [".modal-footer .btn-primary", new RegExp(`${A("S")}\\)$`)],
     [".modal-footer .btn-cancel", /\(Esc\)$/],
+    [".modal-export-btn", new RegExp(`${A("P")}\\)$`)],
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],
     [".table-menu-trigger", new RegExp(`${A("K")}\\)$`)],
   ]);

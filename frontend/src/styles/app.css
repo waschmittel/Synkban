@@ -1589,15 +1589,21 @@ html.electron .header-rename-input {
   font-style: italic;
 }
 
-.modal-history-btn {
+.modal-export-btn {
   margin-left: auto;
 }
 
+.modal-export-btn + .modal-history-btn {
+  margin-left: 0;
+}
+
+.modal-export-btn:hover,
 .modal-history-btn:hover {
   background: rgba(15, 23, 42, 0.06);
   color: var(--color-text);
 }
 
+html.theme-dark .modal-export-btn:hover,
 html.theme-dark .modal-history-btn:hover {
   background: rgba(255, 255, 255, 0.08);
 }

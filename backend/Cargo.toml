@@ -22,8 +22,11 @@ include_dir = "0.7"
 mime_guess = "2"
 image = "0.25"
 toml = "1"
+krilla = "0.8.2"
+rustybuzz = "0.20"
 
 [build-dependencies]
 
 [dev-dependencies]
+lopdf = "0.46.0"
 tempfile = "3"
