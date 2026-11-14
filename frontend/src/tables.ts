@@ -4,7 +4,7 @@
 /// Deliberately simple tables: cells hold paragraphs only (no lists, so Tab
 /// keeps one meaning inside a table), the first row is always the header row,
 /// and there is no merging or column resizing. The menu that exposes these
-/// commands lives in `tableMenu.ts`.
+/// commands lives in `editorMenu.ts`.
 
 import type { Node as PmNode, Schema } from "prosemirror-model";
 import {

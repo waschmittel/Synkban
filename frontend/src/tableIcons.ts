@@ -40,4 +40,13 @@ export const ICONS = {
     '<path d="M10.5 10.5l3 3M13.5 10.5l-3 3"/>',
   deleteTable:
     '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>',
+  // Text
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  unlink: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1M4 4l16 16"/>',
+  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
+  codeBlock: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l-3 3 3 3M14 9l3 3-3 3"/>',
+  paragraph: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+  heading1: '<path d="M4 5v14M4 12h8M12 5v14M17 9l3-2v12"/>',
+  heading2: '<path d="M4 5v14M4 12h8M12 5v14M16 9a2.5 2.5 0 0 1 5 0c0 3-5 5-5 8h5"/>',
+  heading3: '<path d="M4 5v14M4 12h8M12 5v14M16 7h5l-3 4a3 3 0 1 1-2 5"/>',
 } as const;

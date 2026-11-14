@@ -1884,6 +1884,11 @@ html.theme-dark .modal-history-btn:hover {
   cursor: default;
 }
 
+.table-menu-item--active {
+  font-weight: 600;
+  color: #0079bf;
+}
+
 .table-menu-item kbd {
   font-family: inherit;
   font-size: 11px;
@@ -1984,6 +1989,31 @@ html.theme-dark .modal-history-btn:hover {
 .editor-wrapper .ProseMirror-menu-dropdown-item:hover,
 .editor-wrapper .ProseMirror-menu-dropdown-item:focus-within {
   background: var(--color-surface-3);
+}
+
+/* Text-style dropdown: shows the current style; greyed out where the block
+   type can't change (table cells). Unavailable choices stay visible, greyed. */
+.editor-wrapper .ProseMirror-menubar .type-dropdown {
+  min-width: 118px;
+  text-align: left;
+}
+
+.editor-wrapper .ProseMirror-menubar .type-dropdown:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.editor-wrapper .ProseMirror-menu-dropdown-menu .ProseMirror-menu-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.editor-wrapper .ProseMirror-menu-dropdown-item:has(.ProseMirror-menu-disabled):hover {
+  background: none;
+}
+
+.editor-wrapper .ProseMirror-menu-dropdown-menu .ProseMirror-menu-active {
+  font-weight: 600;
 }
 
 /* Placeholder for empty editor */

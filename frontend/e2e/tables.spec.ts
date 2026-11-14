@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 // Table editing in the card description: the Accel+K menu, Tab/Enter
 // navigation, row/column operations and the "first row is the header" rule.
-// See src/tables.ts and src/tableMenu.ts.
+// See src/tables.ts and src/editorMenu.ts.
 
 async function openEditor(page: Page, request: import("@playwright/test").APIRequestContext, name: string) {
   const board = await (await request.post("/api/boards", { data: { title: name } })).json();
@@ -113,24 +113,24 @@ async function menuKey(page: Page, key: string) {
 test("table menu: groups, icons, and every action closes the menu", async ({ page, request }) => {
   await openEditor(page, request, "Tables Menu Look");
 
-  // Outside a table: a single insert action with an icon.
+  // Outside a table: link, code, text-style groups, then the insert action.
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(page.locator(".table-menu-item")).toHaveCount(1);
-  await expect(page.locator(".table-menu-item svg")).toHaveCount(1);
-  await expect(page.locator(".table-menu-sep")).toHaveCount(0);
+  await expect(page.locator(".table-menu-item").last()).toHaveText(/Insert table/);
+  await expect(page.locator(".table-menu-sep")).toHaveCount(3);
   await page.keyboard.press("Escape");
 
   await insertTable(page);
   await page.keyboard.press("ControlOrMeta+k");
 
-  // Move / insert / align / delete: four groups, three dividers, an icon each,
-  // no group headings.
+  // Link / code / move / insert / align / delete: six groups, five dividers,
+  // an icon each, no group headings. No text styles: cell blocks are fixed.
   const items = page.locator(".table-menu-item");
-  await expect(items).toHaveCount(14);
-  await expect(page.locator(".table-menu-sep")).toHaveCount(3);
-  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(14);
+  await expect(items).toHaveCount(17);
+  await expect(page.locator(".table-menu-sep")).toHaveCount(5);
+  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(17);
   await expect(page.locator(".table-menu-title")).toHaveCount(0);
   await expect(items.locator(".table-menu-label")).toHaveText([
+    "Add link…", "Remove link", "Inline code",
     "Move row up", "Move row down", "Move column left", "Move column right",
     "Insert row above", "Insert row below", "Insert column left", "Insert column right",
     "Align column left", "Align column center", "Align column right",

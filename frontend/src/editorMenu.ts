@@ -1,18 +1,23 @@
-/// The table menu (Accel+K, or the editor toolbar's "Table" button).
+/// The editor menu (Accel+K, the toolbar's "Table" button, or right-click
+/// anywhere in the editor — the same menu, anchored at the pointer).
 ///
 /// One mechanism for keyboard and touch: the menu is a small popup beside the
 /// caret whose items are clickable *and* carry single-key shortcuts that are
-/// shown on screen — so no modifier chord has to be found for every table
-/// operation, and the only global chord is the one that opens the menu.
+/// shown on screen — so no modifier chord has to be found for every operation,
+/// and the only global chord is the one that opens the menu.
 ///
 /// Keyboard focus never leaves the editor (items swallow `mousedown`), which
 /// keeps the selection and the touch keyboard intact. While the menu is open it
 /// owns the keyboard via `dialogKeys`, so typed letters can't leak into the
 /// document. Every action closes the menu once it has run; an action that is
 /// not possible right now (shown disabled) is ignored and the menu stays open.
-/// Related actions are grouped, separated by a divider. Keys:
+/// Related actions are grouped, separated by a divider. The menu adapts to the
+/// context: link · inline code · text style (not in table cells, where the
+/// block type is fixed) · then either "insert table" or the table actions.
+/// Keys:
 ///
-///   outside a table   t / Enter … insert a table
+///   always            l link (add/edit) · u remove link · i inline code
+///   outside a table   0 plain · b code block · 1/2/3 heading · t insert table
 ///   inside a table    ↑ ↓ ← →  … move the row / column
 ///                     Shift+arrow … insert a row / column in that direction
 ///                     1 / 2 / 3 … align column left / center / right
@@ -20,7 +25,10 @@
 ///   always            Esc / Accel+K … close
 
 import type { EditorView } from "prosemirror-view";
-import type { Command } from "prosemirror-state";
+import type { Command, EditorState } from "prosemirror-state";
+import { toggleMark } from "prosemirror-commands";
+import { linkTarget, markActive, openLinkEditor, removeLink } from "./links";
+import { TEXT_STYLES, schema } from "./schema";
 import { dialogKeys } from "./dialogKeys";
 import { accel, hasAccel, isMac, tip } from "./platform";
 import { ICONS, TABLE_ICON, svg } from "./tableIcons";
@@ -47,7 +55,10 @@ import {
 const SHIFT = isMac ? "⇧" : "Shift+";
 
 interface Item {
-  label: string;
+  label: string | ((state: EditorState) => string);
+  /// Shown with a highlight (current style, mark in effect).
+  active?: (state: EditorState) => boolean;
+  danger?: boolean;
   /// Inner markup of a 24×24 stroke icon (see tableIcons.ts).
   icon: string;
   /// Items of one group sit together; a divider separates groups.
@@ -65,35 +76,93 @@ const letter = (ch: string) => (e: KeyboardEvent) => !e.shiftKey && e.key.toLowe
 
 const digit = (d: string) => (e: KeyboardEvent) => !e.shiftKey && e.key === d;
 
+const linkType = schema.marks.link;
+const codeMark = schema.marks.code;
+
+const LINK_ITEMS: Item[] = [
+  {
+    label: (s) => (linkTarget(s, linkType)?.mark ? "Edit link…" : "Add link…"),
+    icon: ICONS.link,
+    group: 0,
+    hint: "L",
+    active: (s) => markActive(s, linkType),
+    match: letter("l"),
+    command: (s, d, v) => {
+      if (!linkTarget(s, linkType)) return false;
+      if (d && v) openLinkEditor(v, linkType);
+      return true;
+    },
+  },
+  {
+    label: "Remove link",
+    icon: ICONS.unlink,
+    group: 0,
+    hint: "U",
+    match: letter("u"),
+    command: (s, d, v) => {
+      if (!linkTarget(s, linkType)?.mark) return false;
+      if (d && v) removeLink(v, linkType);
+      return true;
+    },
+  },
+];
+
+const CODE_ITEM: Item = {
+  label: "Inline code",
+  icon: ICONS.code,
+  group: 1,
+  hint: "I",
+  active: (s) => markActive(s, codeMark),
+  match: letter("i"),
+  command: toggleMark(codeMark),
+};
+
+const STYLE_ICONS = [ICONS.paragraph, ICONS.codeBlock, ICONS.heading1, ICONS.heading2, ICONS.heading3];
+const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
+  label: t.label,
+  icon: STYLE_ICONS[i],
+  group: 2,
+  hint: t.key.toUpperCase(),
+  active: t.active,
+  match: letter(t.key),
+  // The current style is a no-op choice, not a disabled one.
+  command: (s, d, v) => t.command(s, d, v) || t.active(s),
+}));
+
 const TABLE_ITEMS: Item[] = [
   // Move
-  { label: "Move row up", icon: ICONS.moveUp, group: 0, hint: "↑", match: arrow("ArrowUp", false), command: moveRowUp },
-  { label: "Move row down", icon: ICONS.moveDown, group: 0, hint: "↓", match: arrow("ArrowDown", false), command: moveRowDown },
-  { label: "Move column left", icon: ICONS.moveLeft, group: 0, hint: "←", match: arrow("ArrowLeft", false), command: moveColumnLeft },
-  { label: "Move column right", icon: ICONS.moveRight, group: 0, hint: "→", match: arrow("ArrowRight", false), command: moveColumnRight },
+  { label: "Move row up", icon: ICONS.moveUp, group: 3, hint: "↑", match: arrow("ArrowUp", false), command: moveRowUp },
+  { label: "Move row down", icon: ICONS.moveDown, group: 3, hint: "↓", match: arrow("ArrowDown", false), command: moveRowDown },
+  { label: "Move column left", icon: ICONS.moveLeft, group: 3, hint: "←", match: arrow("ArrowLeft", false), command: moveColumnLeft },
+  { label: "Move column right", icon: ICONS.moveRight, group: 3, hint: "→", match: arrow("ArrowRight", false), command: moveColumnRight },
   // Insert
-  { label: "Insert row above", icon: ICONS.rowAbove, group: 1, hint: `${SHIFT}↑`, match: arrow("ArrowUp", true), command: insertRowAbove },
-  { label: "Insert row below", icon: ICONS.rowBelow, group: 1, hint: `${SHIFT}↓`, match: arrow("ArrowDown", true), command: insertRowBelow },
-  { label: "Insert column left", icon: ICONS.colLeft, group: 1, hint: `${SHIFT}←`, match: arrow("ArrowLeft", true), command: insertColumnLeft },
-  { label: "Insert column right", icon: ICONS.colRight, group: 1, hint: `${SHIFT}→`, match: arrow("ArrowRight", true), command: insertColumnRight },
+  { label: "Insert row above", icon: ICONS.rowAbove, group: 4, hint: `${SHIFT}↑`, match: arrow("ArrowUp", true), command: insertRowAbove },
+  { label: "Insert row below", icon: ICONS.rowBelow, group: 4, hint: `${SHIFT}↓`, match: arrow("ArrowDown", true), command: insertRowBelow },
+  { label: "Insert column left", icon: ICONS.colLeft, group: 4, hint: `${SHIFT}←`, match: arrow("ArrowLeft", true), command: insertColumnLeft },
+  { label: "Insert column right", icon: ICONS.colRight, group: 4, hint: `${SHIFT}→`, match: arrow("ArrowRight", true), command: insertColumnRight },
   // Align
-  { label: "Align column left", icon: ICONS.alignLeft, group: 2, hint: "1", match: digit("1"), command: alignLeft },
-  { label: "Align column center", icon: ICONS.alignCenter, group: 2, hint: "2", match: digit("2"), command: alignCenter },
-  { label: "Align column right", icon: ICONS.alignRight, group: 2, hint: "3", match: digit("3"), command: alignRight },
+  { label: "Align column left", icon: ICONS.alignLeft, group: 5, hint: "1", match: digit("1"), command: alignLeft },
+  { label: "Align column center", icon: ICONS.alignCenter, group: 5, hint: "2", match: digit("2"), command: alignCenter },
+  { label: "Align column right", icon: ICONS.alignRight, group: 5, hint: "3", match: digit("3"), command: alignRight },
   // Delete
-  { label: "Delete row", icon: ICONS.deleteRow, group: 3, hint: "R", match: letter("r"), command: removeRow },
-  { label: "Delete column", icon: ICONS.deleteColumn, group: 3, hint: "C", match: letter("c"), command: removeColumn },
-  { label: "Delete table", icon: ICONS.deleteTable, group: 3, hint: "T", match: letter("t"), command: removeTable },
+  { label: "Delete row", icon: ICONS.deleteRow, group: 6, danger: true, hint: "R", match: letter("r"), command: removeRow },
+  { label: "Delete column", icon: ICONS.deleteColumn, group: 6, danger: true, hint: "C", match: letter("c"), command: removeColumn },
+  { label: "Delete table", icon: ICONS.deleteTable, group: 6, danger: true, hint: "T", match: letter("t"), command: removeTable },
 ];
 
 const INSERT_ITEMS: Item[] = [
-  { label: "Insert table (3×3)", icon: TABLE_ICON, group: 0, hint: "T", match: letter("t"), command: insertTable },
+  { label: "Insert table (3×3)", icon: TABLE_ICON, group: 3, hint: "T", match: letter("t"), command: insertTable },
 ];
 
 let close: (() => void) | null = null;
 
 /// Opens the menu for `view`, or closes it if it is already open.
-export function openTableMenu(view: EditorView): void {
+export interface MenuOptions {
+  /// Anchor at this viewport point instead of the caret.
+  at?: { x: number; y: number };
+}
+
+export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
   if (close) {
     close();
     return;
@@ -102,10 +171,13 @@ export function openTableMenu(view: EditorView): void {
   const menu = document.createElement("div");
   menu.className = "table-menu";
   menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", "Table");
+  menu.setAttribute("aria-label", "Editor");
   document.body.appendChild(menu);
 
-  const items = (): Item[] => (cellContext(view.state) ? TABLE_ITEMS : INSERT_ITEMS);
+  const items = (): Item[] =>
+    cellContext(view.state)
+      ? [...LINK_ITEMS, CODE_ITEM, ...TABLE_ITEMS]
+      : [...LINK_ITEMS, CODE_ITEM, ...STYLE_ITEMS, ...INSERT_ITEMS];
 
   const run = (item: Item) => {
     // Not possible right now (the item is shown disabled): ignore, stay open.
@@ -125,12 +197,20 @@ export function openTableMenu(view: EditorView): void {
       }
       lastGroup = item.group;
       const enabled = item.command(view.state, undefined, view);
+      const label = typeof item.label === "function" ? item.label(view.state) : item.label;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "table-menu-item";
-      if (item.group === 3 && cellContext(view.state)) btn.classList.add("table-menu-item--danger");
-      btn.setAttribute("role", "menuitem");
-      btn.title = tip(item.label, item.hint);
+      if (item.danger) btn.classList.add("table-menu-item--danger");
+      if (item.active) {
+        const on = item.active(view.state);
+        btn.setAttribute("role", "menuitemcheckbox");
+        btn.setAttribute("aria-checked", String(on));
+        btn.classList.toggle("table-menu-item--active", on);
+      } else {
+        btn.setAttribute("role", "menuitem");
+      }
+      btn.title = tip(label, item.hint);
       btn.disabled = !enabled;
       // Keep the caret in the editor (also on touch, where it would dismiss
       // the on-screen keyboard).
@@ -142,7 +222,7 @@ export function openTableMenu(view: EditorView): void {
       icon.innerHTML = svg(item.icon); // static markup from tableIcons.ts
       const text = document.createElement("span");
       text.className = "table-menu-label";
-      text.textContent = item.label;
+      text.textContent = label;
       const kbd = document.createElement("kbd");
       kbd.textContent = item.hint;
       btn.append(icon, text, kbd);
@@ -158,8 +238,9 @@ export function openTableMenu(view: EditorView): void {
 
   // Below the caret, kept inside the viewport.
   const position = () => {
-    const { head } = view.state.selection;
-    const c = view.coordsAtPos(head);
+    const c = opts.at
+      ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
+      : view.coordsAtPos(view.state.selection.head);
     const r = menu.getBoundingClientRect();
     const left = Math.max(8, Math.min(c.left, window.innerWidth - r.width - 8));
     const below = c.bottom + 6;
@@ -188,12 +269,10 @@ export function openTableMenu(view: EditorView): void {
     e.preventDefault();
     e.stopPropagation();
     if (e.key === "Escape" || e.key === "Enter") {
-      // Enter in the insert menu inserts; elsewhere it just closes.
-      if (e.key === "Enter" && !cellContext(view.state)) run(INSERT_ITEMS[0]);
-      else dispose();
+      dispose();
       return;
     }
-    const item = items().find((i) => i.match(e));
+    const item = items().find((i) => i.match(e) && i.command(view.state, undefined, view));
     if (item) run(item);
   };
 

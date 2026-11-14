@@ -287,7 +287,7 @@ test("link dialog keeps focus when opened over the card modal", async ({ page, r
   await page.keyboard.type("example");
   await page.keyboard.press("ControlOrMeta+a");
 
-  await page.locator('[title="Add or remove link"]').click();
+  await page.locator('[title="Add or edit link"]').click();
 
   const input = page.locator(".link-dialog-input");
   await expect(input).toBeVisible();

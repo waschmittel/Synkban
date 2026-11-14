@@ -7,7 +7,7 @@ import { InputRule, inputRules } from "prosemirror-inputrules";
 import { MarkType, Schema } from "prosemirror-model";
 import { Plugin } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
-import { sanitizeLinkHref } from "./proseEditor";
+import { sanitizeLinkHref } from "./links";
 
 /// Matches a URL (http(s):// or www.) immediately followed by a trigger char
 /// (whitespace). The trailing trigger is re-inserted unmarked so the link mark
