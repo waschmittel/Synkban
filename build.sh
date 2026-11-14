@@ -60,7 +60,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     cargo build --release --target aarch64-apple-darwin
     
     mkdir -p "$ROOT/backend/target/release"
-    cp "$ROOT/backend/target/aarch64-apple-darwin/release/synkban" "$ROOT/backend/target/release/synkban"
+    rm -f "$ROOT/backend/target/release/synkban" && cp "$ROOT/backend/target/aarch64-apple-darwin/release/synkban" "$ROOT/backend/target/release/synkban"
 else
     cargo build --release
 fi
