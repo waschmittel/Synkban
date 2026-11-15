@@ -11,17 +11,25 @@ pub async fn create_label(
     body: web::Json<CreateLabel>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
-    let label = store::audit_op(
+    let (label, created) = store::audit_op(
         &data_dir,
         |dd| store::create_label(dd, &board_id, &body.name),
-        |l| {
+        |(l, created)| {
             format!(
-                "CREATE label \"{}\" (id: {}, color: {}) in board {}",
-                l.name, l.id, l.color, board_id
+                "{} label \"{}\" (id: {}, color: {}) in board {}",
+                if *created { "CREATE" } else { "REUSE" },
+                l.name,
+                l.id,
+                l.color,
+                board_id
             )
         },
     )?;
-    Ok(HttpResponse::Created().json(label))
+    Ok(if created {
+        HttpResponse::Created().json(label)
+    } else {
+        HttpResponse::Ok().json(label)
+    })
 }
 
 pub async fn reorder_labels(
@@ -47,8 +55,17 @@ pub async fn update_label(
     let label_id = path.into_inner();
     let label = store::audit_op(
         &data_dir,
-        |dd| store::update_label_by_id(dd, &label_id, &body.name),
-        |l| format!("UPDATE label \"{}\" (id: {})", l.name, l.id),
+        |dd| store::update_label_by_id(dd, &label_id, &body.name, body.merge),
+        |l| {
+            if l.id == label_id {
+                format!("UPDATE label \"{}\" (id: {})", l.name, l.id)
+            } else {
+                format!(
+                    "MERGE label {} into \"{}\" (id: {})",
+                    label_id, l.name, l.id
+                )
+            }
+        },
     )?;
     Ok(HttpResponse::Ok().json(label))
 }

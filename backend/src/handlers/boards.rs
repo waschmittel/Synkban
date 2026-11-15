@@ -16,8 +16,11 @@ pub async fn get_warnings(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, 
     Ok(HttpResponse::Ok().json(WarningList { warnings }))
 }
 
-pub async fn list_boards(data_dir: web::Data<PathBuf>) -> Result<HttpResponse, AppError> {
-    let boards = store::list_boards(&data_dir)?;
+pub async fn list_boards(
+    data_dir: web::Data<PathBuf>,
+    query: web::Query<BoardsQuery>,
+) -> Result<HttpResponse, AppError> {
+    let boards = store::list_boards_with_stats(&data_dir, query.today.as_deref())?;
     Ok(HttpResponse::Ok().json(boards))
 }
 

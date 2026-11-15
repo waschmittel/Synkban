@@ -12,10 +12,27 @@ pub async fn create_card(
     path: web::Path<String>,
     body: web::Json<CreateCard>,
 ) -> Result<HttpResponse, AppError> {
+    if body
+        .due_date
+        .as_deref()
+        .is_some_and(|d| !is_valid_iso_date(d))
+    {
+        return Err(AppError::BadRequest(
+            "due_date must be in YYYY-MM-DD format".to_string(),
+        ));
+    }
     let list_id = path.into_inner();
     let card = store::audit_op(
         &data_dir,
-        |dd| store::create_card(dd, &list_id, &body.title),
+        |dd| {
+            store::create_card_with(
+                dd,
+                &list_id,
+                &body.title,
+                &body.label_ids,
+                body.due_date.as_deref(),
+            )
+        },
         |c| {
             format!(
                 "CREATE card \"{}\" (id: {}) in list {}",

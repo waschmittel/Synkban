@@ -32,7 +32,15 @@ pub async fn update_list(
     let list_id = path.into_inner();
     let list = store::audit_op(
         &data_dir,
-        |dd| store::update_list(dd, &list_id, body.title.as_deref(), body.position),
+        |dd| {
+            store::update_list(
+                dd,
+                &list_id,
+                body.title.as_deref(),
+                body.position,
+                body.collapsed,
+            )
+        },
         |l| {
             format!(
                 "UPDATE list \"{}\" (id: {}) in board {}",

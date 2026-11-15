@@ -40,6 +40,7 @@ pub fn create_list(data_dir: &Path, board_id: &str, title: &str) -> Result<List,
         title: title.to_string(),
         position: max_pos + 1.0,
         created_at: now_timestamp(),
+        collapsed: false,
     };
     write_json(&dir.join("list.json"), &list)?;
     Ok(list)
@@ -57,6 +58,7 @@ pub fn update_list(
     list_id: &str,
     title: Option<&str>,
     position: Option<f64>,
+    collapsed: Option<bool>,
 ) -> Result<List, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let list_json = list_dir(data_dir, &board_id, list_id).join("list.json");
@@ -67,6 +69,9 @@ pub fn update_list(
     }
     if let Some(p) = position {
         list.position = p;
+    }
+    if let Some(c) = collapsed {
+        list.collapsed = c;
     }
     write_json(&list_json, &list)?;
     Ok(list)
@@ -157,7 +162,7 @@ mod tests {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
         let l = create_list(d.path(), &b.id, "Old").unwrap();
-        let updated = update_list(d.path(), &l.id, Some("New"), None).unwrap();
+        let updated = update_list(d.path(), &l.id, Some("New"), None, None).unwrap();
         assert_eq!(updated.title, "New");
         assert_eq!(updated.position, l.position);
     }
@@ -167,15 +172,32 @@ mod tests {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
         let l = create_list(d.path(), &b.id, "List").unwrap();
-        let updated = update_list(d.path(), &l.id, None, Some(5.5)).unwrap();
+        let updated = update_list(d.path(), &l.id, None, Some(5.5), None).unwrap();
         assert_eq!(updated.position, 5.5);
         assert_eq!(updated.title, "List");
     }
 
     #[test]
+    fn update_list_collapsed_persists_and_defaults_to_expanded() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        assert!(!l.collapsed);
+        assert!(
+            update_list(d.path(), &l.id, None, None, Some(true))
+                .unwrap()
+                .collapsed
+        );
+        // Other updates leave it alone.
+        let renamed = update_list(d.path(), &l.id, Some("R"), None, None).unwrap();
+        assert!(renamed.collapsed);
+        assert!(get_board(d.path(), &b.id).unwrap().lists[0].collapsed);
+    }
+
+    #[test]
     fn update_list_not_found() {
         let d = tmp();
-        let err = update_list(d.path(), "fake", Some("X"), None).unwrap_err();
+        let err = update_list(d.path(), "fake", Some("X"), None, None).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 

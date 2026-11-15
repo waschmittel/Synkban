@@ -7,6 +7,8 @@ pub enum AppError {
     Io(std::io::Error),
     TooLarge,
     BadRequest(String),
+    /// 409: the request would need an explicit confirmation flag.
+    Conflict(String),
 }
 
 impl fmt::Display for AppError {
@@ -16,6 +18,7 @@ impl fmt::Display for AppError {
             AppError::Io(e) => write!(f, "IO error: {e}"),
             AppError::TooLarge => write!(f, "Payload too large"),
             AppError::BadRequest(msg) => write!(f, "Bad request: {msg}"),
+            AppError::Conflict(msg) => write!(f, "Conflict: {msg}"),
         }
     }
 }
@@ -32,6 +35,9 @@ impl ResponseError for AppError {
                 .json(serde_json::json!({"error": "File too large (max 50 MB)"})),
             AppError::BadRequest(msg) => {
                 HttpResponse::BadRequest().json(serde_json::json!({"error": msg}))
+            }
+            AppError::Conflict(msg) => {
+                HttpResponse::Conflict().json(serde_json::json!({"error": msg}))
             }
         }
     }

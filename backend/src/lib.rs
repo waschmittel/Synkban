@@ -1,4 +1,5 @@
 pub mod config;
+pub mod drafts;
 pub mod errors;
 pub mod handlers;
 pub mod models;
@@ -62,6 +63,15 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         web::put().to(handlers::settings::update_settings),
     )
     .route("/api/boards", web::get().to(handlers::boards::list_boards))
+    .route("/api/draft", web::get().to(handlers::drafts::get_draft))
+    .route(
+        "/api/draft/{card_id}",
+        web::put().to(handlers::drafts::save_draft),
+    )
+    .route(
+        "/api/draft/{card_id}",
+        web::delete().to(handlers::drafts::delete_draft),
+    )
     .route(
         "/api/boards",
         web::post().to(handlers::boards::create_board),

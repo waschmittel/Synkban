@@ -57,6 +57,26 @@ pub struct Board {
     pub position: f64,
     #[serde(default)]
     pub mode: BoardMode,
+    /// Only in `GET /api/boards` (home tiles).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stats: Option<BoardStats>,
+}
+
+/// Home tile summary of a board.
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BoardStats {
+    /// Active (non-archived) cards.
+    pub cards: usize,
+    /// Active cards due before `today` (0 without `today`).
+    pub overdue: usize,
+    /// Newest file mtime in the board directory, ms since the epoch.
+    pub edited_at: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BoardsQuery {
+    /// The client's local date, `YYYY-MM-DD`: what "overdue" is measured against.
+    pub today: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,6 +86,9 @@ pub struct List {
     pub title: String,
     pub position: f64,
     pub created_at: String,
+    /// Shown as a narrow strip in the board view.
+    #[serde(default)]
+    pub collapsed: bool,
 }
 
 /// The user-editable content of a card — what the change history tracks.
@@ -151,6 +174,7 @@ pub struct ListWithCards {
     pub title: String,
     pub position: f64,
     pub created_at: String,
+    pub collapsed: bool,
     pub cards: Vec<Card>,
 }
 
@@ -192,11 +216,16 @@ pub struct CreateList {
 pub struct UpdateList {
     pub title: Option<String>,
     pub position: Option<f64>,
+    pub collapsed: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateCard {
     pub title: String,
+    /// Quick-add tokens (`#label`, `due:`), set without a history entry.
+    #[serde(default)]
+    pub label_ids: Vec<String>,
+    pub due_date: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,6 +254,9 @@ pub struct ReorderLabels {
 #[derive(Debug, Deserialize)]
 pub struct UpdateLabel {
     pub name: String,
+    /// Required (true) when the name matches another label: merging is destructive.
+    #[serde(default)]
+    pub merge: bool,
 }
 
 #[derive(Debug, Deserialize)]

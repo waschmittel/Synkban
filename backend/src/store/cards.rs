@@ -256,6 +256,17 @@ pub fn get_card_history(data_dir: &Path, card_id: &str) -> Result<CardHistory, A
 }
 
 pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, AppError> {
+    create_card_with(data_dir, list_id, title, &[], None)
+}
+
+/// A new card that already carries labels and a due date (quick-add).
+pub fn create_card_with(
+    data_dir: &Path,
+    list_id: &str,
+    title: &str,
+    label_ids: &[String],
+    due_date: Option<&str>,
+) -> Result<Card, AppError> {
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
     let max_pos = max_position(data_dir, &board_id, list_id)?;
@@ -271,11 +282,11 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         description_text: String::new(),
         position: max_pos + 1.0,
         created_at: now_timestamp(),
-        label_ids: Vec::new(),
+        label_ids: label_ids.to_vec(),
         archived: false,
         archived_at: None,
         attachments: Vec::new(),
-        due_date: None,
+        due_date: due_date.map(str::to_string),
         checklist: Vec::new(),
         history: Vec::new(),
     };
@@ -640,8 +651,8 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let l1 = create_label(d.path(), &b.id, "One").unwrap();
-        let l2 = create_label(d.path(), &b.id, "Two").unwrap();
+        let l1 = create_label(d.path(), &b.id, "One").unwrap().0;
+        let l2 = create_label(d.path(), &b.id, "Two").unwrap().0;
         let ids = vec![l1.id.clone(), l2.id.clone()];
         let updated = update_card(
             d.path(),
@@ -889,8 +900,8 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let keep = create_label(d.path(), &b.id, "Keep").unwrap();
-        let gone = create_label(d.path(), &b.id, "Gone").unwrap();
+        let keep = create_label(d.path(), &b.id, "Keep").unwrap().0;
+        let gone = create_label(d.path(), &b.id, "Gone").unwrap().0;
 
         update_card(
             d.path(),

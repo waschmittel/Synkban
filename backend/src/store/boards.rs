@@ -8,6 +8,7 @@ use crate::errors::AppError;
 use crate::models::*;
 use crate::store::io::{now_timestamp, read_json, track, write_json};
 use crate::store::paths::*;
+use crate::store::walk;
 
 /// Internal representation of board.json on disk (includes labels).
 /// Public `Board` response type omits labels (labels only appear in `BoardDetail`).
@@ -41,6 +42,7 @@ impl From<BoardFile> for Board {
             archived_at: b.archived_at,
             position: b.position,
             mode: b.mode,
+            stats: None,
         }
     }
 }
@@ -66,6 +68,34 @@ pub fn list_boards(data_dir: &Path) -> Result<Vec<Board>, AppError> {
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(b.created_at.cmp(&a.created_at))
     });
+    Ok(boards)
+}
+
+/// Active boards with their `BoardStats` (`today`: `YYYY-MM-DD`).
+pub fn list_boards_with_stats(
+    data_dir: &Path,
+    today: Option<&str>,
+) -> Result<Vec<Board>, AppError> {
+    let mut boards = list_boards(data_dir)?;
+    let mtimes = crate::store::io::get_per_board_mtimes(data_dir)?;
+    for b in &mut boards {
+        let mut stats = BoardStats {
+            edited_at: mtimes.get(&b.id).copied().unwrap_or(0),
+            ..Default::default()
+        };
+        for list_id in walk::list_ids(data_dir, &b.id)? {
+            for c in walk::cards(data_dir, &b.id, &list_id)? {
+                if c.archived {
+                    continue;
+                }
+                stats.cards += 1;
+                if let (Some(due), Some(today)) = (c.due_date.as_deref(), today) {
+                    stats.overdue += usize::from(due < today);
+                }
+            }
+        }
+        b.stats = Some(stats);
+    }
     Ok(boards)
 }
 
@@ -163,6 +193,7 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
             title: list.title,
             position: list.position,
             created_at: list.created_at,
+            collapsed: list.collapsed,
             cards,
         });
     }
@@ -374,6 +405,54 @@ mod tests {
             read_board_file(d.path(), &b.id).unwrap().mode,
             BoardMode::Kanban
         );
+    }
+
+    #[test]
+    fn board_stats_count_active_cards_and_overdue_ones() {
+        use crate::store::cards::{create_card_with, update_card};
+        use crate::store::lists::create_list;
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let empty = create_board(d.path(), "Empty").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let l2 = create_list(d.path(), &b.id, "L2").unwrap();
+        create_card_with(d.path(), &l.id, "past", &[], Some("2026-11-16")).unwrap();
+        create_card_with(d.path(), &l2.id, "today", &[], Some("2026-11-17")).unwrap();
+        create_card_with(d.path(), &l2.id, "none", &[], None).unwrap();
+        let archived = create_card_with(d.path(), &l.id, "a", &[], Some("2020-01-01")).unwrap();
+        let patch = CardPatch {
+            archived: Some(true),
+            ..Default::default()
+        };
+        update_card(d.path(), &archived.id, patch).unwrap();
+
+        let boards = list_boards_with_stats(d.path(), Some("2026-11-17")).unwrap();
+        let stats = |id: &str| {
+            boards
+                .iter()
+                .find(|x| x.id == id)
+                .unwrap()
+                .stats
+                .as_ref()
+                .unwrap()
+        };
+        assert_eq!((stats(&b.id).cards, stats(&b.id).overdue), (3, 1));
+        assert!(stats(&b.id).edited_at > 0);
+        assert_eq!((stats(&empty.id).cards, stats(&empty.id).overdue), (0, 0));
+        // Without a date nothing is overdue.
+        let boards = list_boards_with_stats(d.path(), None).unwrap();
+        assert_eq!(
+            boards
+                .iter()
+                .map(|b| b.stats.as_ref().unwrap().overdue)
+                .sum::<usize>(),
+            0
+        );
+        // Other endpoints don't carry stats.
+        assert!(list_boards(d.path())
+            .unwrap()
+            .iter()
+            .all(|b| b.stats.is_none()));
     }
 
     #[test]

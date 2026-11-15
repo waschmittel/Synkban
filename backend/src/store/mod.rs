@@ -18,11 +18,12 @@ pub use attachments::{
     copy_attachment, create_attachment, delete_attachment, get_attachment_data, get_thumbnail_data,
 };
 pub use boards::{
-    create_board, delete_board, get_board, list_archived_boards, list_boards, reorder_boards,
-    update_board,
+    create_board, delete_board, get_board, list_archived_boards, list_boards,
+    list_boards_with_stats, reorder_boards, update_board,
 };
 pub use cards::{
-    create_card, delete_card, export_card, get_archived_cards, get_card_history, update_card,
+    create_card, create_card_with, delete_card, export_card, get_archived_cards, get_card_history,
+    update_card,
 };
 pub use io::{audit_op, drain_file_ops, get_latest_mtime, get_per_board_mtimes};
 pub use labels::{

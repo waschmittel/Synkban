@@ -597,3 +597,143 @@ async fn board_mode_rejects_unknown_value() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+// -- quick-add, label merge, list collapse, board stats --
+
+#[actix_web::test]
+async fn create_card_with_labels_and_due_date() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, lid, _) = seed_board_list_card!(app);
+    let label: Value = post_json!(
+        app,
+        &format!("/api/boards/{bid}/labels"),
+        json!({ "name": "Bug" })
+    );
+    let card: Value = post_json!(
+        app,
+        &format!("/api/lists/{lid}/cards"),
+        json!({ "title": "Quick", "label_ids": [label["id"]], "due_date": "2026-12-01" })
+    );
+    assert_eq!(card["label_ids"], json!([label["id"]]));
+    assert_eq!(card["due_date"], "2026-12-01");
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/lists/{lid}/cards"))
+        .set_json(json!({ "title": "Bad", "due_date": "12/01/2026" }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[actix_web::test]
+async fn creating_a_same_named_label_reuses_it_and_renaming_onto_one_merges() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, _, cid) = seed_board_list_card!(app);
+    let uri = format!("/api/boards/{bid}/labels");
+    let create = |name: &str| {
+        test::TestRequest::post()
+            .uri(&uri)
+            .set_json(json!({ "name": name }))
+            .to_request()
+    };
+    let resp = test::call_service(&app, create("In Progress")).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let keep = read_json_body(test::read_body(resp).await);
+    let resp = test::call_service(&app, create("in-progress")).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        read_json_body(test::read_body(resp).await)["id"],
+        keep["id"]
+    );
+
+    let gone: Value = post_json!(app, &uri, json!({ "name": "Doing" }));
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{cid}"))
+        .set_json(json!({ "label_ids": [gone["id"]] }))
+        .to_request();
+    test::call_service(&app, req).await;
+    let rename = |merge: Option<bool>| {
+        let mut body = json!({ "name": "IN PROGRESS" });
+        if let Some(m) = merge {
+            body["merge"] = json!(m);
+        }
+        test::TestRequest::put()
+            .uri(&format!("/api/labels/{}", gone["id"].as_str().unwrap()))
+            .set_json(body)
+            .to_request()
+    };
+    // Destructive: refused unless asked for explicitly.
+    for flag in [None, Some(false)] {
+        let resp = test::call_service(&app, rename(flag)).await;
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+    let req = rename(Some(true));
+    let merged = read_json_body(test::read_body(test::call_service(&app, req).await).await);
+    assert_eq!(merged["id"], keep["id"]);
+    assert_eq!(merged["name"], "IN PROGRESS");
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/boards/{bid}"))
+        .to_request();
+    let board = read_json_body(test::read_body(test::call_service(&app, req).await).await);
+    assert_eq!(board["labels"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        board["lists"][0]["cards"][0]["label_ids"],
+        json!([keep["id"]])
+    );
+}
+
+#[actix_web::test]
+async fn list_collapsed_round_trips() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, lid, _) = seed_board_list_card!(app);
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/lists/{lid}"))
+        .set_json(json!({ "collapsed": true }))
+        .to_request();
+    let list = read_json_body(test::read_body(test::call_service(&app, req).await).await);
+    assert_eq!(list["collapsed"], true);
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/boards/{bid}"))
+        .to_request();
+    let board = read_json_body(test::read_body(test::call_service(&app, req).await).await);
+    assert_eq!(board["lists"][0]["collapsed"], true);
+}
+
+#[actix_web::test]
+async fn board_list_carries_stats_measured_against_the_client_date() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, lid, _) = seed_board_list_card!(app);
+    post_json!(
+        app,
+        &format!("/api/lists/{lid}/cards"),
+        json!({ "title": "Late", "due_date": "2026-11-10" })
+    );
+    let get = |uri: &str| test::TestRequest::get().uri(uri).to_request();
+    let boards = read_json_body(
+        test::read_body(test::call_service(&app, get("/api/boards?today=2026-11-17")).await).await,
+    );
+    let stats = &boards[0]["stats"];
+    assert_eq!(boards[0]["id"], bid);
+    assert_eq!(
+        (stats["cards"].as_u64(), stats["overdue"].as_u64()),
+        (Some(2), Some(1))
+    );
+    assert!(stats["edited_at"].as_u64().unwrap() > 0);
+    let boards =
+        read_json_body(test::read_body(test::call_service(&app, get("/api/boards")).await).await);
+    assert_eq!(boards[0]["stats"]["overdue"], 0);
+    // Single-board responses don't carry stats.
+    let board = read_json_body(
+        test::read_body(test::call_service(&app, get(&format!("/api/boards/{bid}"))).await).await,
+    );
+    assert!(board.get("stats").is_none());
+}

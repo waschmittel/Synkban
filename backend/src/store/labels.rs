@@ -5,10 +5,12 @@ use std::fs;
 use std::path::Path;
 
 use crate::errors::AppError;
-use crate::models::Label;
+use crate::models::{CardPatch, Label};
 use crate::store::boards::{read_board_file, write_board_file, BoardFile};
+use crate::store::cards::update_card;
 use crate::store::io::read_json;
 use crate::store::paths::{board_dir, boards_dir};
+use crate::store::walk;
 
 /// Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
 /// Interleaved hues: 0°, 180°, 90°, 270°, 45°, 225°, 135°, 315°, 30°, 210°, 150°, 330°
@@ -27,8 +29,37 @@ pub(crate) const LABEL_COLORS: &[&str] = &[
     "#e2f0cb", // pale green
 ];
 
-pub fn create_label(data_dir: &Path, board_id: &str, name: &str) -> Result<Label, AppError> {
+/// Labels are the same when their names differ only in case, whitespace and
+/// dashes ("In Progress" = "in-progress"). Empty keys never match.
+pub fn label_key(name: &str) -> String {
+    name.chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn same_label<'a>(labels: &'a [Label], name: &str, except: &str) -> Option<&'a Label> {
+    let key = label_key(name);
+    (!key.is_empty())
+        .then(|| {
+            labels
+                .iter()
+                .find(|l| l.id != except && label_key(&l.name) == key)
+        })
+        .flatten()
+}
+
+/// Returns the new label and `true`, or an existing one with the same
+/// `label_key` and `false` (no duplicates).
+pub fn create_label(
+    data_dir: &Path,
+    board_id: &str,
+    name: &str,
+) -> Result<(Label, bool), AppError> {
     let mut bf = read_board_file(data_dir, board_id)?;
+    if let Some(existing) = same_label(&bf.labels, name, "") {
+        return Ok((existing.clone(), false));
+    }
     let color = LABEL_COLORS[bf.labels.len() % LABEL_COLORS.len()].to_string();
     let label = Label {
         id: uuid::Uuid::new_v4().to_string(),
@@ -37,7 +68,7 @@ pub fn create_label(data_dir: &Path, board_id: &str, name: &str) -> Result<Label
     };
     bf.labels.push(label.clone());
     write_board_file(data_dir, &bf)?;
-    Ok(label)
+    Ok((label, true))
 }
 
 pub fn update_label(
@@ -45,17 +76,68 @@ pub fn update_label(
     board_id: &str,
     label_id: &str,
     name: &str,
+    merge: bool,
 ) -> Result<Label, AppError> {
     let mut bf = read_board_file(data_dir, board_id)?;
-    let label = bf
+    if !bf.labels.iter().any(|l| l.id == label_id) {
+        return Err(AppError::NotFound("Label not found".into()));
+    }
+    // Renamed onto another label: merge into that one — only when asked to
+    // (destructive: the renamed label is removed, its cards relabelled).
+    let other = same_label(&bf.labels, name, label_id);
+    if let (Some(o), false) = (other, merge) {
+        return Err(AppError::Conflict(format!(
+            "A label named \"{}\" exists; renaming merges into it (send merge: true)",
+            o.name
+        )));
+    }
+    let target_id = other.map_or(label_id, |l| &l.id);
+    let target_id = target_id.to_string();
+    for l in bf.labels.iter_mut().filter(|l| l.id == target_id) {
+        l.name = name.to_string();
+    }
+    let updated = bf
         .labels
-        .iter_mut()
-        .find(|l| l.id == label_id)
-        .ok_or_else(|| AppError::NotFound("Label not found".into()))?;
-    label.name = name.to_string();
-    let updated = label.clone();
-    write_board_file(data_dir, &bf)?;
+        .iter()
+        .find(|l| l.id == target_id)
+        .cloned()
+        .unwrap();
+    if target_id != label_id {
+        bf.labels.retain(|l| l.id != label_id);
+        write_board_file(data_dir, &bf)?;
+        relabel_cards(data_dir, board_id, label_id, &target_id)?;
+    } else {
+        write_board_file(data_dir, &bf)?;
+    }
     Ok(updated)
+}
+
+/// Every card of the board (archived ones too) carrying `from` gets `to`
+/// instead, once. Through `update_card`: a history entry each.
+fn relabel_cards(data_dir: &Path, board_id: &str, from: &str, to: &str) -> Result<(), AppError> {
+    let mut cards = Vec::new();
+    for list_id in walk::list_ids(data_dir, board_id)? {
+        cards.extend(walk::cards(data_dir, board_id, &list_id)?);
+    }
+    cards.extend(walk::orphaned_cards(data_dir, board_id)?);
+    for card in cards
+        .iter()
+        .filter(|c| c.label_ids.iter().any(|id| id == from))
+    {
+        let mut ids: Vec<String> = Vec::new();
+        for id in &card.label_ids {
+            let id = if id == from { to } else { id };
+            if !ids.iter().any(|i| i == id) {
+                ids.push(id.to_string());
+            }
+        }
+        let patch = CardPatch {
+            label_ids: Some(&ids),
+            ..Default::default()
+        };
+        update_card(data_dir, &card.id, patch)?;
+    }
+    Ok(())
 }
 
 /// Reorder a board's labels to match `ids`. Ids not in the board are ignored;
@@ -108,9 +190,14 @@ fn find_board_for_label(data_dir: &Path, label_id: &str) -> Result<String, AppEr
     Err(AppError::NotFound("Label not found".into()))
 }
 
-pub fn update_label_by_id(data_dir: &Path, label_id: &str, name: &str) -> Result<Label, AppError> {
+pub fn update_label_by_id(
+    data_dir: &Path,
+    label_id: &str,
+    name: &str,
+    merge: bool,
+) -> Result<Label, AppError> {
     let board_id = find_board_for_label(data_dir, label_id)?;
-    update_label(data_dir, &board_id, label_id, name)
+    update_label(data_dir, &board_id, label_id, name, merge)
 }
 
 pub fn delete_label_by_id(data_dir: &Path, label_id: &str) -> Result<(), AppError> {
@@ -135,7 +222,7 @@ mod tests {
     fn create_label_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "Bug").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug").unwrap().0;
         assert_eq!(label.name, "Bug");
         assert_eq!(label.color, "#ffb3b3");
         assert!(!label.id.is_empty());
@@ -147,7 +234,7 @@ mod tests {
         let b = create_board(d.path(), "Board").unwrap();
         let mut colors = Vec::new();
         for i in 0..13 {
-            let label = create_label(d.path(), &b.id, &format!("L{i}")).unwrap();
+            let label = create_label(d.path(), &b.id, &format!("L{i}")).unwrap().0;
             colors.push(label.color);
         }
         for i in 0..12 {
@@ -167,18 +254,123 @@ mod tests {
     fn update_label_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "Bug").unwrap();
-        let updated = update_label(d.path(), &b.id, &label.id, "Feature").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug").unwrap().0;
+        let updated = update_label(d.path(), &b.id, &label.id, "Feature", false).unwrap();
         assert_eq!(updated.name, "Feature");
         assert_eq!(updated.id, label.id);
         assert_eq!(updated.color, label.color);
     }
 
     #[test]
+    fn label_key_ignores_case_whitespace_and_dashes() {
+        assert_eq!(label_key("In Progress"), "inprogress");
+        assert_eq!(label_key(" in-progress "), "inprogress");
+        assert_eq!(label_key("IN--PRO gress"), "inprogress");
+        assert_eq!(label_key("Größe"), "größe");
+        assert_eq!(label_key(" - "), "");
+    }
+
+    #[test]
+    fn create_label_reuses_a_same_named_one() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let (first, created) = create_label(d.path(), &b.id, "In Progress").unwrap();
+        assert!(created);
+        let (again, created) = create_label(d.path(), &b.id, "in-progress").unwrap();
+        assert!(!created);
+        assert_eq!(again.id, first.id);
+        assert_eq!(again.name, "In Progress");
+        assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 1);
+        // Names without letters never match each other.
+        create_label(d.path(), &b.id, "-").unwrap();
+        assert!(create_label(d.path(), &b.id, "--").unwrap().1);
+    }
+
+    #[test]
+    fn renaming_onto_another_label_merges_and_relabels_cards() {
+        use crate::models::CardPatch;
+        use crate::store::cards::{create_card, get_card_history, update_card};
+        use crate::store::lists::create_list;
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let other = create_board(d.path(), "Other").unwrap();
+        let keep = create_label(d.path(), &b.id, "Bug").unwrap().0;
+        let gone = create_label(d.path(), &b.id, "Defect").unwrap().0;
+        let extra = create_label(d.path(), &b.id, "Extra").unwrap().0;
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let set = |card: &str, ids: &[String], archived: Option<bool>| {
+            let patch = CardPatch {
+                label_ids: Some(ids),
+                archived,
+                ..Default::default()
+            };
+            update_card(d.path(), card, patch).unwrap();
+        };
+        let only_gone = create_card(d.path(), &l.id, "only gone").unwrap();
+        set(&only_gone.id, &[extra.id.clone(), gone.id.clone()], None);
+        let both = create_card(d.path(), &l.id, "both").unwrap();
+        set(&both.id, &[gone.id.clone(), keep.id.clone()], None);
+        let archived = create_card(d.path(), &l.id, "archived").unwrap();
+        set(&archived.id, std::slice::from_ref(&gone.id), Some(true));
+        let untouched = create_card(d.path(), &l.id, "untouched").unwrap();
+        set(&untouched.id, std::slice::from_ref(&extra.id), None);
+        // Another board's same-named label is not a merge target.
+        create_label(d.path(), &other.id, "bug").unwrap();
+        let history = |id: &str| get_card_history(d.path(), id).unwrap().entries.len();
+        let untouched_history = history(&untouched.id);
+        let both_history = history(&both.id);
+
+        // Without the flag: refused, nothing changes.
+        let err = update_label(d.path(), &b.id, &gone.id, "BUG", false).unwrap_err();
+        assert!(matches!(err, AppError::Conflict(_)));
+        assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 3);
+        assert_eq!(history(&both.id), both_history);
+
+        let merged = update_label(d.path(), &b.id, &gone.id, "BUG", true).unwrap();
+        assert_eq!(merged.id, keep.id);
+        assert_eq!(merged.name, "BUG");
+        assert_eq!(merged.color, keep.color);
+        let board = get_board(d.path(), &b.id).unwrap();
+        let names: Vec<_> = board.labels.iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(names, ["BUG", "Extra"]);
+        let labels_of = |id: &str| {
+            board.lists[0]
+                .cards
+                .iter()
+                .find(|c| c.id == id)
+                .unwrap()
+                .label_ids
+                .clone()
+        };
+        // Replaced in place, never twice.
+        assert_eq!(
+            labels_of(&only_gone.id),
+            [extra.id.clone(), keep.id.clone()]
+        );
+        assert_eq!(labels_of(&both.id), [keep.id.as_str()]);
+        assert_eq!(labels_of(&untouched.id), [extra.id.as_str()]);
+        let arch = crate::store::get_archived_cards(d.path(), &b.id).unwrap();
+        assert_eq!(arch[0].label_ids, [keep.id.as_str()]);
+        // A history entry for each relabelled card only.
+        assert_eq!(history(&both.id), both_history + 1);
+        assert_eq!(history(&untouched.id), untouched_history);
+    }
+
+    #[test]
+    fn renaming_a_label_to_its_own_variant_is_a_plain_rename() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let label = create_label(d.path(), &b.id, "in progress").unwrap().0;
+        let updated = update_label(d.path(), &b.id, &label.id, "In-Progress", false).unwrap();
+        assert_eq!(updated.id, label.id);
+        assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 1);
+    }
+
+    #[test]
     fn update_label_not_found() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let err = update_label(d.path(), &b.id, "fake", "X").unwrap_err();
+        let err = update_label(d.path(), &b.id, "fake", "X", false).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
@@ -186,7 +378,7 @@ mod tests {
     fn delete_label_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "Bug").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug").unwrap().0;
         delete_label(d.path(), &b.id, &label.id).unwrap();
         assert!(get_board(d.path(), &b.id).unwrap().labels.is_empty());
     }
@@ -204,8 +396,8 @@ mod tests {
         let d = tmp();
         let _b1 = create_board(d.path(), "Board 1").unwrap();
         let b2 = create_board(d.path(), "Board 2").unwrap();
-        let label = create_label(d.path(), &b2.id, "Original").unwrap();
-        let updated = update_label_by_id(d.path(), &label.id, "Renamed").unwrap();
+        let label = create_label(d.path(), &b2.id, "Original").unwrap().0;
+        let updated = update_label_by_id(d.path(), &label.id, "Renamed", false).unwrap();
         assert_eq!(updated.name, "Renamed");
     }
 
@@ -216,14 +408,14 @@ mod tests {
         let d = tmp();
         let corrupt = create_board(d.path(), "Corrupt").unwrap();
         let b2 = create_board(d.path(), "Good").unwrap();
-        let label = create_label(d.path(), &b2.id, "Bug").unwrap();
+        let label = create_label(d.path(), &b2.id, "Bug").unwrap().0;
         // A corrupt board.json must not stop us finding the label's real owner.
         fs::write(
             board_dir(d.path(), &corrupt.id).join("board.json"),
             b"{ broken",
         )
         .unwrap();
-        let updated = update_label_by_id(d.path(), &label.id, "Renamed").unwrap();
+        let updated = update_label_by_id(d.path(), &label.id, "Renamed", false).unwrap();
         assert_eq!(updated.name, "Renamed");
     }
 
@@ -232,7 +424,7 @@ mod tests {
         let d = tmp();
         let _b1 = create_board(d.path(), "Board 1").unwrap();
         let b2 = create_board(d.path(), "Board 2").unwrap();
-        let label = create_label(d.path(), &b2.id, "Bug").unwrap();
+        let label = create_label(d.path(), &b2.id, "Bug").unwrap().0;
         delete_label_by_id(d.path(), &label.id).unwrap();
         assert!(get_board(d.path(), &b2.id).unwrap().labels.is_empty());
     }
@@ -241,9 +433,9 @@ mod tests {
     fn reorder_labels_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let a = create_label(d.path(), &b.id, "A").unwrap();
-        let bb = create_label(d.path(), &b.id, "B").unwrap();
-        let c = create_label(d.path(), &b.id, "C").unwrap();
+        let a = create_label(d.path(), &b.id, "A").unwrap().0;
+        let bb = create_label(d.path(), &b.id, "B").unwrap().0;
+        let c = create_label(d.path(), &b.id, "C").unwrap().0;
         // C first, B second; A unlisted -> last. Unknown id ignored.
         reorder_labels(
             d.path(),
