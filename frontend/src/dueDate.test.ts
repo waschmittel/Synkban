@@ -52,9 +52,15 @@ describe("parseDueInput", () => {
     ["+2w", "2026-12-01"],
     ["-1d", "2026-11-16"],
     ["+20", "2026-12-07"],
+    // Weekdays: the next one after today (a Tuesday).
+    ["wed", "2026-11-18"],
+    ["Friday", "2026-11-20"],
+    ["mon", "2026-11-23"],
+    ["tue", "2026-11-24"],
+    ["sun", "2026-11-22"],
   ])("%s → %s", (input, out) => expect(parseDueInput(input, today)).toBe(out));
 
-  it.each(["", "to", "2026-13-01", "2026-02-29", "next week", "+", "3"])("rejects %j", (input) =>
+  it.each(["", "to", "2026-13-01", "2026-02-29", "next week", "+", "3", "fr", "fridays"])("rejects %j", (input) =>
     expect(parseDueInput(input, today)).toBeNull(),
   );
 });

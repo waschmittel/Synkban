@@ -8,6 +8,8 @@ export interface BoardFilter {
   open: boolean;
   text: string;
   labelIds: string[];
+  /// `DueFilter` (filter.ts).
+  due: string | null;
 }
 
 interface BoardView {
@@ -45,7 +47,12 @@ function load(): Map<string, BoardView> {
         card: typeof r.card === "string" ? r.card : null,
         filter:
           f && typeof f === "object"
-            ? { open: f.open === true, text: typeof f.text === "string" ? f.text : "", labelIds: strs(f.labelIds) }
+            ? {
+                open: f.open === true,
+                text: typeof f.text === "string" ? f.text : "",
+                labelIds: strs(f.labelIds),
+                due: typeof f.due === "string" ? f.due : null,
+              }
             : null,
         x: num(r.x),
         lists,

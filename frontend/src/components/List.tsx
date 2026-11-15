@@ -2,7 +2,10 @@ import { For, Show } from "solid-js";
 import type { Card as CardType, Label, ListWithCards } from "../types";
 import Card, { type SideKey } from "./Card";
 import AddForm from "./AddForm";
+import QuickAddPreview from "./QuickAddPreview";
+import { parseQuickAdd } from "../quickAdd";
 import { tip } from "../platform";
+import { focusListEntry } from "../listFocus";
 
 interface Props {
   list: ListWithCards;
@@ -24,6 +27,10 @@ interface Props {
   hideHeader?: boolean;
   /// Hint shown when the list has no (matching) cards.
   emptyText?: string;
+  /// Cards before filtering (the header shows "shown/total" while filtering).
+  total?: number;
+  /// Board view: collapse to a narrow strip / expand again.
+  onToggleCollapse?: (listId: string, collapsed: boolean) => void;
 }
 
 export default function List(props: Props) {
@@ -108,7 +115,63 @@ export default function List(props: Props) {
     document.querySelectorAll(".list-drop-placeholder").forEach((el) => el.remove());
   };
 
+  const count = () => {
+    const n = props.list.cards.length;
+    return props.total !== undefined && props.total !== n ? `${n}/${props.total}` : `${n}`;
+  };
+  const maxPosition = () => props.list.cards.reduce((m, c) => Math.max(m, c.position), 0);
+  const collapsed = () => props.list.collapsed && !props.hideHeader;
+
   return (
+    <Show when={!collapsed()} fallback={
+      <div
+        class="list list--collapsed"
+        draggable={true}
+        onDragStart={handleListDragStart}
+        onDragEnd={handleListDragEnd}
+        // A card dropped on the strip goes to the end of the list.
+        onDragOver={(e) => {
+          if (!e.dataTransfer?.types.includes("application/card-id")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          e.currentTarget.classList.add("list--drop");
+        }}
+        onDragLeave={(e) => e.currentTarget.classList.remove("list--drop")}
+        onDrop={(e) => {
+          e.currentTarget.classList.remove("list--drop");
+          const cardId = e.dataTransfer?.getData("application/card-id");
+          if (!cardId) return;
+          e.preventDefault();
+          document.querySelector(".drop-placeholder")?.remove();
+          props.onDropCard(cardId, props.list.id, maxPosition() + 1);
+        }}
+        data-list-id={props.list.id}
+        data-list-position={props.list.position}
+        data-max-position={maxPosition()}
+      >
+        <button
+          class="list-expand"
+          aria-expanded="false"
+          title={tip(`Expand “${props.list.title}”`, "C")}
+          onClick={() => props.onToggleCollapse?.(props.list.id, false)}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") return;
+            const list = e.currentTarget.closest(".list");
+            const adj = e.key === "ArrowLeft" ? list?.previousElementSibling : list?.nextElementSibling;
+            if (adj?.classList.contains("list")) focusListEntry(adj, e.key === "ArrowLeft");
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span class="list-count">{count()}</span>
+          <span class="list-collapsed-title">{props.list.title}</span>
+        </button>
+      </div>
+    }>
     <div
       class="list"
       onDragOver={handleDragOver}
@@ -124,6 +187,7 @@ export default function List(props: Props) {
         <Show
           when={props.renamingListId === props.list.id}
           fallback={
+            <>
             <h3
               class="list-title"
               tabindex="0"
@@ -139,6 +203,8 @@ export default function List(props: Props) {
             >
               {props.list.title}
             </h3>
+            <span class="list-count" title="Cards">{count()}</span>
+            </>
           }
         >
           <input
@@ -163,6 +229,18 @@ export default function List(props: Props) {
             }}
             onBlur={(e) => !settled && props.onRenameList(props.list.id, e.currentTarget.value)}
           />
+        </Show>
+        <Show when={props.onToggleCollapse}>
+          <button
+            class="list-collapse"
+            title={tip("Collapse list", "C")}
+            aria-expanded="true"
+            onClick={() => props.onToggleCollapse!(props.list.id, true)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
         </Show>
         <button
           class="list-delete"
@@ -193,13 +271,16 @@ export default function List(props: Props) {
         </Show>
       </div>
       <AddForm
-        placeholder="Card title..."
+        placeholder="Card title… #label due:fri"
         buttonText="Add card"
         shortcut="N"
         draftKey={`card:${props.list.id}`}
         onAdd={(title) => props.onAddCard(props.list.id, title)}
+        valid={(v) => !!parseQuickAdd(v, props.labels).title}
+        preview={(v) => <QuickAddPreview text={v} labels={props.labels} />}
       />
     </div>
+    </Show>
   );
 }
 

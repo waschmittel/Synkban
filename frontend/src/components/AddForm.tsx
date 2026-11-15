@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, onCleanup, Show, type JSX } from "solid-js";
 import { tip } from "../platform";
 
 interface Props {
@@ -8,6 +8,10 @@ interface Props {
   draftKey?: string;
   /// Key that opens this form; advertised in the trigger's tooltip.
   shortcut?: string;
+  /// Shown under the input while typing (quick-add tokens).
+  preview?: (value: string) => JSX.Element;
+  /// Rejects a submit (e.g. nothing left but tokens).
+  valid?: (value: string) => boolean;
 }
 
 // Every board refetch hands <For> a fresh payload, so the list rows — and this
@@ -76,7 +80,7 @@ export default function AddForm(props: Props) {
   const handleSubmit = (e: Event) => {
     e.preventDefault();
     const v = value().trim();
-    if (!v) return;
+    if (!v || props.valid?.(v) === false) return;
     props.onAdd(v);
     updateValue("");
     close();
@@ -134,6 +138,7 @@ export default function AddForm(props: Props) {
           onFocus={() => { focusedKey = props.draftKey ?? null; }}
           onBlur={handleBlur}
         />
+        {props.preview?.(value())}
         <div class="add-form-actions">
           <button type="submit" class="btn btn-primary">
             Add

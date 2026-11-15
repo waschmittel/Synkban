@@ -128,7 +128,7 @@ test("notes: keys in the due-date picker stay there", async ({ page, request }) 
   await expect(page.locator(".due-picker")).toBeVisible();
 });
 
-test("notes: long titles in the list stop after two lines", async ({ page, request }) => {
+test("notes: long titles in the list stop after three lines", async ({ page, request }) => {
   const long = "A very long note title that keeps going and going so it would wrap onto many lines ".repeat(3);
   const s = await seed(request, "notes", [long, "Short"]);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -136,12 +136,12 @@ test("notes: long titles in the list stop after two lines", async ({ page, reque
   const title = page.locator(".notes-master .card-title").first();
   const lh = parseFloat(await title.evaluate((el) => getComputedStyle(el).lineHeight));
   const box = await title.boundingBox();
-  expect(box!.height).toBeLessThanOrEqual(2 * lh + 1);
+  expect(box!.height).toBeLessThanOrEqual(3 * lh + 1);
   expect(await title.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   // The kanban board still shows the whole title.
   await page.keyboard.press("v");
   const full = page.locator(".lists-container .card-title").first();
-  expect((await full.boundingBox())!.height).toBeGreaterThan(2 * lh + 1);
+  expect((await full.boundingBox())!.height).toBeGreaterThan(3 * lh + 1);
 });
 
 // Shortcut help: opens on the tab for where the user is.
@@ -163,6 +163,9 @@ test("help opens on the current context and switches tabs by keyboard", async ({
   await expect(helpTab(page)).toHaveText(/^Board/);
   await expect(helpTab(page)).toBeFocused();
   await expect(page.locator(".shortcut-help-body")).toContainText("Neighbouring list");
+  // Every board key is listed, c included; labels / filter panel keys too.
+  for (const t of ["Collapse / expand this list", "Rename list", "Labels: reorder", "Filter: clear it"])
+    await expect(page.locator(".shortcut-help-body")).toContainText(t);
   // ←/→ and the number keys switch tabs; the "here" marker stays on Board.
   await page.keyboard.press("ArrowRight");
   await expect(helpTab(page)).toHaveText(/^Notes/);

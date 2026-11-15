@@ -1,4 +1,4 @@
-import type { Attachment, Board, BoardDetail, BoardMode, Card, CardHistory, ChecklistItem, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
+import type { Attachment, Board, BoardDetail, BoardMode, Card, CardHistory, ChecklistItem, Draft, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
 
 const BASE = "/api";
 
@@ -28,7 +28,8 @@ export const api = {
 
   getWarnings: () => request<{ warnings: string[] }>("/warnings"),
 
-  listBoards: () => request<Board[]>("/boards"),
+  /// With stats; `today` (local `YYYY-MM-DD`) defines "overdue".
+  listBoards: (today?: string) => request<Board[]>(today ? `/boards?today=${today}` : "/boards"),
 
   createBoard: (title: string) =>
     request<Board>("/boards", {
@@ -76,7 +77,7 @@ export const api = {
       body: JSON.stringify({ title }),
     }),
 
-  updateList: (id: string, data: { title?: string; position?: number }) =>
+  updateList: (id: string, data: { title?: string; position?: number; collapsed?: boolean }) =>
     request<ListWithCards>(`/lists/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -85,10 +86,10 @@ export const api = {
   deleteList: (id: string) =>
     request<void>(`/lists/${id}`, { method: "DELETE" }),
 
-  createCard: (listId: string, title: string) =>
+  createCard: (listId: string, title: string, extra?: { label_ids?: string[]; due_date?: string }) =>
     request<Card>(`/lists/${listId}/cards`, {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, ...extra }),
     }),
 
   updateCard: (
@@ -142,10 +143,11 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  updateLabel: (id: string, name: string) =>
+  /// `merge`: confirmed merge into a same-named label (409 without it).
+  updateLabel: (id: string, name: string, merge = false) =>
     request<Label>(`/labels/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, merge }),
     }),
 
   reorderLabels: (boardId: string, ids: string[]) =>
@@ -172,6 +174,16 @@ export const api = {
     }
     return res.json();
   },
+
+  /// The single crash-safety draft (ADR-0024), or null.
+  getDraft: () => request<Draft | null>("/draft"),
+
+  /// Replaces any draft. `keepalive`: still sent while the page unloads.
+  saveDraft: (d: Draft, keepalive = false) =>
+    request<void>(`/draft/${d.card_id}`, { method: "PUT", body: JSON.stringify(d), keepalive }),
+
+  /// Only removes it if it's this card's.
+  deleteDraft: (cardId: string) => request<void>(`/draft/${cardId}`, { method: "DELETE" }),
 
   /// Copies attachment `attId` of card `fromCard` onto `cardId` (pasting an inline image across cards).
   copyAttachment: (cardId: string, fromCard: string, attId: string) =>

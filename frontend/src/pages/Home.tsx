@@ -1,6 +1,8 @@
 import { createSignal, createResource, createEffect, untrack, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
 import { api } from "../api";
+import { toIso } from "../dueDate";
+import { timeAgo } from "../timeAgo";
 import type { Board } from "../types";
 import ShortcutHelp from "../components/ShortcutHelp";
 import ArchivePanel from "../components/ArchivePanel";
@@ -22,7 +24,7 @@ const focusBoard = (id: string) =>
   (document.querySelector(`[data-board-id="${id}"]`) as HTMLElement | null)?.focus();
 
 export default function Home() {
-  const [boards, { refetch, mutate }] = createResource(() => api.listBoards());
+  const [boards, { refetch, mutate }] = createResource(() => api.listBoards(toIso(new Date())));
   const [archivedBoards, setArchivedBoards] = createSignal<Board[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
   const [showHelp, setShowHelp] = createSignal(false);
@@ -464,7 +466,24 @@ export default function Home() {
                 onDragEnd={handleBoardDragEnd}
                 style={board.color ? { "background": board.color } : {}}
               >
-                <span class="board-card-link">{board.title}</span>
+                <span class="board-card-body">
+                  <span class="board-card-link">{board.title}</span>
+                  <Show when={board.stats}>
+                    {(s) => (
+                      <span class="board-card-meta">
+                        <span class="board-card-count">{s().cards === 1 ? "1 card" : `${s().cards} cards`}</span>
+                        <Show when={s().overdue > 0}>
+                          <span class="board-card-overdue">{s().overdue} overdue</span>
+                        </Show>
+                        <Show when={s().edited_at > 0}>
+                          <span class="board-card-edited" title={new Date(s().edited_at).toLocaleString()}>
+                            Edited {timeAgo(s().edited_at)}
+                          </span>
+                        </Show>
+                      </span>
+                    )}
+                  </Show>
+                </span>
                 <button
                   class="board-card-delete"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleArchive(board.id); }}

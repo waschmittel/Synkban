@@ -120,17 +120,17 @@ describe("boardView", () => {
 
   it("remembers filters per board and drops deleted labels", () => {
     expect(rememberedFilter("a", [])).toBeNull();
-    const f = { open: true, text: "milk", labelIds: ["l1", "gone"] };
+    const f = { open: true, text: "milk", labelIds: ["l1", "gone"], due: "week" };
     recordBoardFilter("a", f);
     f.labelIds.push("mutated"); // stored copy is independent
-    recordBoardFilter("b", { open: false, text: "", labelIds: [] });
-    expect(rememberedFilter("a", ["l1", "l2"])).toEqual({ open: true, text: "milk", labelIds: ["l1"] });
-    expect(rememberedFilter("b", [])).toEqual({ open: false, text: "", labelIds: [] });
+    recordBoardFilter("b", { open: false, text: "", labelIds: [], due: null });
+    expect(rememberedFilter("a", ["l1", "l2"])).toEqual({ open: true, text: "milk", labelIds: ["l1"], due: "week" });
+    expect(rememberedFilter("b", [])).toEqual({ open: false, text: "", labelIds: [], due: null });
   });
 
   it("forgets boards that no longer exist", () => {
-    recordBoardFilter("a", { open: true, text: "x", labelIds: [] });
-    recordBoardFilter("b", { open: true, text: "y", labelIds: [] });
+    recordBoardFilter("a", { open: true, text: "x", labelIds: [], due: null });
+    recordBoardFilter("b", { open: true, text: "y", labelIds: [], due: null });
     forgetBoardViews(["b"]);
     expect(rememberedFilter("a", [])).toBeNull();
     expect(rememberedFilter("b", [])?.text).toBe("y");
@@ -150,7 +150,7 @@ describe("boardView", () => {
     const cards = q(root, ".cards-container");
     cards.scrollTop = 25;
     cards.dispatchEvent(new Event("scroll"));
-    recordBoardFilter("a", { open: true, text: "x", labelIds: ["l"] });
+    recordBoardFilter("a", { open: true, text: "x", labelIds: ["l"], due: "overdue" });
     flushBoardViews();
     stop();
     document.activeElement && (document.activeElement as HTMLElement).blur();
@@ -192,7 +192,7 @@ describe("boardView", () => {
     vi.useFakeTimers();
     try {
       sessionStorage.clear();
-      recordBoardFilter("a", { open: true, text: "q", labelIds: [] });
+      recordBoardFilter("a", { open: true, text: "q", labelIds: [], due: null });
       expect(sessionStorage.getItem("synkban.boardViews")).toBeNull();
       vi.advanceTimersByTime(300);
       expect(sessionStorage.getItem("synkban.boardViews")).toContain('"q"');
@@ -205,12 +205,12 @@ describe("boardView", () => {
     ["corrupt JSON", "{nope"],
     ["wrong top-level type", "[1,2]"],
     ["null", "null"],
-    ["garbage entries", '{"a":5,"b":null,"c":{"card":3,"x":"no","lists":{"l":-4,"m":"z"},"filter":{"labelIds":[1,"k"]}}}'],
+    ["garbage entries", '{"a":5,"b":null,"c":{"card":3,"x":"no","lists":{"l":-4,"m":"z"},"filter":{"labelIds":[1,"k"],"due":7}}}'],
   ])("ignores malformed storage: %s", (_n, raw) => {
     sessionStorage.setItem("synkban.boardViews", raw);
     expect(() => reloadBoardViews()).not.toThrow();
     const f = rememberedFilter("c", ["k"]);
-    if (f) expect(f).toEqual({ open: false, text: "", labelIds: ["k"] });
+    if (f) expect(f).toEqual({ open: false, text: "", labelIds: ["k"], due: null });
     expect(() => restoreBoardView(render(["m"]), "c")).not.toThrow();
   });
 
@@ -219,7 +219,7 @@ describe("boardView", () => {
       throw new Error("quota");
     });
     try {
-      recordBoardFilter("a", { open: true, text: "mem", labelIds: [] });
+      recordBoardFilter("a", { open: true, text: "mem", labelIds: [], due: null });
       expect(() => flushBoardViews()).not.toThrow();
       expect(rememberedFilter("a", [])?.text).toBe("mem");
     } finally {

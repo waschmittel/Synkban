@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cardMatchesFilter } from "./filter";
+import { cardMatchesFilter, dueMatches } from "./filter";
 import type { Card } from "./types";
 
 function makeCard(over: Partial<Card> = {}): Card {
@@ -135,5 +135,41 @@ describe("cardMatchesFilter", () => {
   it("missing description_text is treated as empty", () => {
     const card = { ...makeCard({ title: "X" }), description_text: undefined as any };
     expect(cardMatchesFilter(card, "missing", [])).toBe(false);
+  });
+});
+
+describe("due filter", () => {
+  const today = new Date(2026, 10, 17); // Tue, Nov 17 2026
+  const mon = 1;
+  it.each([
+    // [due, filter, firstDay, match]
+    [undefined, null, mon, true],
+    [undefined, "overdue", mon, false],
+    [undefined, "week", mon, false],
+    ["2026-11-16", "overdue", mon, true],
+    ["2026-11-17", "overdue", mon, false],
+    // Mon 16 … Sun 22 (Monday weeks), Sun 15 … Sat 21 (Sunday weeks).
+    ["2026-11-16", "week", mon, true],
+    ["2026-11-22", "week", mon, true],
+    ["2026-11-23", "week", mon, false],
+    ["2026-11-15", "week", mon, false],
+    ["2026-11-15", "week", 0, true],
+    ["2026-11-22", "week", 0, false],
+    // Until a day: on or before it, overdue included; undated never.
+    ["2026-12-01", "2026-12-01", mon, true],
+    ["2026-11-20", "2026-12-01", mon, true],
+    ["2020-01-01", "2026-12-01", mon, true],
+    ["2026-12-02", "2026-12-01", mon, false],
+    [undefined, "2026-12-01", mon, false],
+    ["2026-12-01", "garbage", mon, true],
+  ] as const)("%s / %s (first day %i) → %s", (due, f, first, match) =>
+    expect(dueMatches(due, f, today, first)).toBe(match),
+  );
+
+  it("combines with text and labels", () => {
+    const c = makeCard({ title: "Milk", due_date: "2026-11-10", label_ids: ["a"] });
+    expect(cardMatchesFilter(c, "milk", ["a"], "overdue", today)).toBe(true);
+    expect(cardMatchesFilter(c, "bread", ["a"], "overdue", today)).toBe(false);
+    expect(cardMatchesFilter(c, "milk", ["a"], "week", today)).toBe(false);
   });
 });

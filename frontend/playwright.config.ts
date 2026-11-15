@@ -10,6 +10,10 @@ const PORT = 8091;
 // must not share a server with the parallel-running board/card specs — a
 // concurrently-set "open last used board" would redirect their goto("/").
 export const SETTINGS_PORT = 8092;
+// Drafts are one per machine (ADR-0024): the shared servers run without them
+// (a test ending with unsaved edits would redirect another's start), the
+// drafts spec gets its own, run serially.
+export const DRAFTS_PORT = 8093;
 
 const binary = join(
   "..",
@@ -36,13 +40,19 @@ export default defineConfig({
     {
       command: binary,
       url: `http://127.0.0.1:${PORT}/api/boards`,
-      env: { PORT: String(PORT), ...serverEnv() },
+      env: { PORT: String(PORT), SYNKBAN_DRAFTS: "0", ...serverEnv() },
       reuseExistingServer: false,
     },
     {
       command: binary,
       url: `http://127.0.0.1:${SETTINGS_PORT}/api/boards`,
-      env: { PORT: String(SETTINGS_PORT), ...serverEnv() },
+      env: { PORT: String(SETTINGS_PORT), SYNKBAN_DRAFTS: "0", ...serverEnv() },
+      reuseExistingServer: false,
+    },
+    {
+      command: binary,
+      url: `http://127.0.0.1:${DRAFTS_PORT}/api/boards`,
+      env: { PORT: String(DRAFTS_PORT), ...serverEnv() },
       reuseExistingServer: false,
     },
   ],

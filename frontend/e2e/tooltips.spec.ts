@@ -43,6 +43,7 @@ test("board controls show their shortcuts", async ({ page, request }) => {
     [".list .add-trigger", /\(N\)$/],
     [".add-list-wrapper .add-trigger", /\(L\)$/],
     [".list-title", /\(R\)$/],
+    [".list-collapse", /^Collapse list \(C\)$/],
     [".card-archive", /\(Del\)$/],
     [".board-dock-dot", /\(, \/ \.\)$/],
     [".board-mode-btn:has-text('Board')", /\(V\)$/],

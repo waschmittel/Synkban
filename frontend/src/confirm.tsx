@@ -4,6 +4,7 @@ import ConfirmDialog from "./components/ConfirmDialog";
 interface ConfirmRequest {
   message: string;
   confirmLabel: string;
+  danger?: boolean;
   resolve: (yes: boolean) => void;
 }
 
@@ -11,7 +12,7 @@ export interface ConfirmHelper {
   /// Shows the confirm dialog and resolves to `true` if the user confirmed,
   /// `false` if cancelled. Pages do `if (!await confirm.ask({...})) return;`
   /// — far less bookkeeping than juggling a signal + render branch by hand.
-  ask: (opts: { message: string; confirmLabel: string }) => Promise<boolean>;
+  ask: (opts: { message: string; confirmLabel: string; danger?: boolean }) => Promise<boolean>;
   /// True when a dialog is currently open. Use to suppress global shortcuts.
   isOpen: () => boolean;
   /// Mount once in the page's JSX so the dialog has a place to render.
@@ -35,6 +36,7 @@ export function createConfirm(): ConfirmHelper {
           <ConfirmDialog
             message={req().message}
             confirmLabel={req().confirmLabel}
+            danger={req().danger}
             onConfirm={() => {
               req().resolve(true);
               setRequest(null);

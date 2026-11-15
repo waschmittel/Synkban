@@ -39,12 +39,33 @@ installTouchDrag();
 // preserved for the desktop shell's initial `?token=` load. Settings come
 // from the server (~/.config/synkban/synkban.toml): localStorage can't persist
 // them because the desktop shell serves the UI from a random port each launch.
+/// Crash safety (ADR-0024): starting the app (on "/"), a draft left by the
+/// last session wins over the startup view: start on its board, which reopens
+/// the card (or drops the draft if the card changed). A draft of a board
+/// that's gone is dropped here. A board URL (reload, link) is left alone.
+async function openCrashDraftBoard() {
+  try {
+    const draft = await api.getDraft();
+    if (!draft) return;
+    const boards = await api.listBoards();
+    if (!boards.some((b) => b.id === draft.board_id)) {
+      await api.deleteDraft(draft.card_id);
+      return;
+    }
+    const path = `/board/${draft.board_id}`;
+    if (window.location.pathname !== path) window.history.replaceState(null, "", `${path}${window.location.search}`);
+  } catch {
+    /* server unreachable: the page shows that */
+  }
+}
+
 async function bootstrap() {
   // Only the redirect must run before the router mounts, so we only await
   // settings on "/". The theme (not render-blocking) is applied afterwards
   // from the same response, reusing it when available.
   let pending: ReturnType<typeof api.getSettings> | null = null;
-  if (window.location.pathname === "/") {
+  const atStart = window.location.pathname === "/";
+  if (atStart) {
     try {
       const settings = await api.getSettings();
       pending = Promise.resolve(settings);
@@ -59,6 +80,7 @@ async function bootstrap() {
       /* settings unreachable — start on the overview, keep OS-default theme */
     }
   }
+  if (atStart) await openCrashDraftBoard();
 
   render(
     () => (

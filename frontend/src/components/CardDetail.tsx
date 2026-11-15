@@ -1,9 +1,11 @@
 import { onMount, onCleanup, createSignal, createMemo, createEffect, on, Show } from "solid-js";
 import { EditorView } from "prosemirror-view";
 import { EditorState } from "prosemirror-state";
-import type { Attachment, Card, ChecklistItem, Label } from "../types";
+import type { Attachment, Card, ChecklistItem, Draft, DraftContent, Label } from "../types";
+import { checklistOf, contentOf, labelsOf, normLabels, sameContent, serializeChecklist, serializeDoc } from "../cardContent";
+import { timeAgo } from "../timeAgo";
 import { api } from "../api";
-import { createCardEditor, docFromDescription, insertImage, isDocEmpty, removeImages } from "../proseEditor";
+import { createCardEditor, docFromDescription, insertImage, removeImages } from "../proseEditor";
 import { pastedImageFiles } from "../pasteImages";
 import { imageRefIds, stripImageRefs } from "../imageRefs";
 import { focusTrap } from "../focusTrap";
@@ -51,16 +53,13 @@ interface Props {
   control?: (c: CardDetailControl) => void;
   /// Unsaved edits appeared/went (the board marks the card and its tab).
   onDirtyChange?: (dirty: boolean) => void;
+  /// Unsaved edits are kept as a draft of this board while dirty (ADR-0024).
+  boardId?: string;
+  /// A draft from before the app closed, checked against the card: start from it.
+  draft?: Draft;
 }
 
-/// The persisted card content, normalised so two snapshots compare by value.
-interface Content {
-  title: string;
-  description: string;
-  labels: string;
-  due: string;
-  checklist: string;
-}
+type Content = DraftContent;
 
 export default function CardDetail(props: Props) {
   const pane = props.variant === "pane";
@@ -72,34 +71,21 @@ export default function CardDetail(props: Props) {
   let attachmentInputRef: HTMLInputElement | undefined;
   let view: EditorView | undefined;
 
-  const serializeDoc = (doc: ReturnType<typeof docFromDescription>) =>
-    isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
-  const normLabels = (ids: string[]) => [...ids].sort().join("\0");
-
-  const serializeChecklist = (items: ChecklistItem[]) => JSON.stringify(items);
-  const contentOf = (c: Card): Content => ({
-    title: c.title,
-    description: serializeDoc(docFromDescription(c.description)),
-    labels: normLabels(c.label_ids ?? []),
-    due: c.due_date ?? "",
-    checklist: serializeChecklist(c.checklist ?? []),
-  });
-  const sameContent = (a: Content, b: Content) =>
-    a.title === b.title && a.description === b.description && a.labels === b.labels &&
-    a.due === b.due && a.checklist === b.checklist;
-
   // Saved baseline. Dirtiness = current serialized state differs from it, so
   // reverting an edit back to the original clears dirty. The modal captures it
   // once; the pane rebases it after every save and external reload.
   const [base, setBase] = createSignal(contentOf(props.card));
+  // A restored draft is the starting point; `base` stays the stored card.
+  // (Read once: the board hands it out a single time.)
+  const draft = props.draft;
+  const start = draft?.draft ?? base();
+  const [restoredAt, setRestoredAt] = createSignal(draft?.saved_at ?? null);
 
-  const [title, setTitle] = createSignal(props.card.title);
-  const [selectedLabelIds, setSelectedLabelIds] = createSignal<string[]>(
-    props.card.label_ids ?? []
-  );
-  const [description, setDescription] = createSignal(base().description);
-  const [dueDate, setDueDate] = createSignal<string>(props.card.due_date ?? "");
-  const [checklist, setChecklist] = createSignal<ChecklistItem[]>(props.card.checklist ?? []);
+  const [title, setTitle] = createSignal(start.title);
+  const [selectedLabelIds, setSelectedLabelIds] = createSignal<string[]>(labelsOf(start));
+  const [description, setDescription] = createSignal(start.description);
+  const [dueDate, setDueDate] = createSignal<string>(start.due);
+  const [checklist, setChecklist] = createSignal<ChecklistItem[]>(checklistOf(start));
   const current = (): Content => ({
     title: title(),
     description: description(),
@@ -112,6 +98,45 @@ export default function CardDetail(props: Props) {
   const onDirtyChange = props.onDirtyChange;
   createEffect(() => onDirtyChange?.(dirty()));
   onCleanup(() => onDirtyChange?.(false));
+
+  // --- Draft: kept while dirty, so closing the app loses nothing (ADR-0024) ---
+  const cardId = props.card.id;
+  const boardId = props.boardId;
+  let draftTimer: ReturnType<typeof setTimeout> | undefined;
+  let draftStored = !!draft;
+  const storeDraft = (keepalive = false) => {
+    if (!boardId) return;
+    draftStored = true;
+    api
+      .saveDraft({ card_id: cardId, board_id: boardId, base: base(), draft: current(), saved_at: Date.now() }, keepalive)
+      .catch(() => {});
+  };
+  const dropDraft = () => {
+    if (!draftStored) return;
+    draftStored = false;
+    api.deleteDraft(cardId).catch(() => {});
+  };
+  createEffect(() => {
+    const d = dirty();
+    current();
+    base();
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => (d ? storeDraft() : dropDraft()), 300);
+  });
+  createEffect(() => !dirty() && setRestoredAt(null));
+  // Unloading: send the pending draft now. (No cleanup runs then, so the
+  // draft survives; an in-app close below means it was saved or discarded.)
+  const onPageHide = () => {
+    if (!dirty()) return;
+    clearTimeout(draftTimer);
+    storeDraft(true);
+  };
+  window.addEventListener("pagehide", onPageHide);
+  onCleanup(() => {
+    window.removeEventListener("pagehide", onPageHide);
+    clearTimeout(draftTimer);
+    dropDraft();
+  });
   /// Empty checklist/attachments collapse into "+ Checklist" / "+ Attachment".
   const [checklistOpen, setChecklistOpen] = createSignal(false);
   const showChecklist = () => checklistOpen() || checklist().length > 0;
@@ -139,7 +164,7 @@ export default function CardDetail(props: Props) {
   let dragCounter = 0;
 
   onMount(() => {
-    view = createCardEditor(editorRef, docFromDescription(props.card.description), () => {
+    view = createCardEditor(editorRef, docFromDescription(start.description), () => {
       setDescription(serializeDoc(view!.state.doc));
     }, {
       onPasteImages: attachFiles,
@@ -628,6 +653,14 @@ export default function CardDetail(props: Props) {
               <button class="btn btn-sm" onClick={handleSave}>Restore &amp; save</button>
             </div>
           </Show>
+          <Show when={restoredAt()}>
+            {(at) => (
+              <div class="pane-banner draft-banner" role="status">
+                <span>Restored your unsaved edits from {timeAgo(at())}.</span>
+                <button class="btn btn-sm" onClick={revert}>Discard</button>
+              </div>
+            )}
+          </Show>
           <Show when={pane && !props.removed && conflict()}>
             <div class="pane-banner" role="status">
               <span>This card was changed elsewhere while you were editing. Saving keeps your version.</span>
@@ -736,10 +769,10 @@ export default function CardDetail(props: Props) {
             {(at) => <span class="saved-indicator">Saved {at()}</span>}
           </Show>
           <button class="btn modal-export-btn" title={tip("Export PDF", accel("P"))} onClick={startExport}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3v12" />
-              <polyline points="7 10 12 15 17 10" />
-              <path d="M4 17v3h16v-3" />
+            <svg class="pdf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <text x="12" y="18.5" text-anchor="middle" font-size="7" font-weight="800" fill="currentColor" stroke="none" font-family="system-ui, sans-serif">PDF</text>
             </svg>
             Export PDF
           </button>

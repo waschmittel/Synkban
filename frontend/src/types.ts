@@ -27,6 +27,17 @@ export interface Board {
   archived_at?: string;
   position: number;
   mode: BoardMode;
+  /** Only from `listBoards` (home tiles). */
+  stats?: BoardStats;
+}
+
+export interface BoardStats {
+  /** Active cards. */
+  cards: number;
+  /** Active cards due before the client's today. */
+  overdue: number;
+  /** Newest file change in the board, ms since the epoch. */
+  edited_at: number;
 }
 
 /// Board layout (ADR-0022): lists side by side, or one list at a time with the
@@ -76,6 +87,8 @@ export interface ListWithCards {
   title: string;
   position: number;
   created_at: string;
+  /** Shown as a narrow strip in the board view. */
+  collapsed: boolean;
   cards: Card[];
 }
 
@@ -87,6 +100,28 @@ export interface BoardDetail {
   labels: Label[];
   mode: BoardMode;
   lists: ListWithCards[];
+}
+
+/** Card content normalised for comparison (CardDetail): label ids sorted
+ *  and joined with NUL, checklist and description as JSON strings. */
+export interface DraftContent {
+  title: string;
+  description: string;
+  labels: string;
+  due: string;
+  checklist: string;
+}
+
+/** Unsaved card edits kept across app restarts (ADR-0024). */
+export interface Draft {
+  card_id: string;
+  board_id: string;
+  /** The stored card content the edits started from. */
+  base: DraftContent;
+  /** The edited content. */
+  draft: DraftContent;
+  /** ms since the epoch. */
+  saved_at: number;
 }
 
 export type Theme = "system" | "light" | "dark";

@@ -12,7 +12,7 @@ import {
 } from "solid-js";
 import { useParams, useNavigate, useBeforeLeave, A } from "@solidjs/router";
 import { api } from "../api";
-import type { BoardMode, Card as CardType, ChecklistItem } from "../types";
+import type { BoardMode, Card as CardType, ChecklistItem, Draft } from "../types";
 import List from "../components/List";
 import AddForm from "../components/AddForm";
 import CardDetail, { type CardDetailControl } from "../components/CardDetail";
@@ -30,7 +30,10 @@ import { useBoardHeader } from "../BoardHeaderContext";
 import { useLabelDrawer } from "../LabelDrawerContext";
 import { crossListInsertPosition, listDropPosition, moveToBottom } from "../positions";
 import { adjacentList, listOfCard, pickCard, resolveSelection } from "../notesView";
-import { cardMatchesFilter as filterCard } from "../filter";
+import { cardMatchesFilter as filterCard, type DueFilter } from "../filter";
+import { findLabel, parseQuickAdd } from "../quickAdd";
+import { focusListEntry } from "../listFocus";
+import { draftCard } from "../cardContent";
 import { isTypingIn, isInUiOverlay } from "../boardInput";
 import { recordLastBoard } from "../settings";
 import { createFocusRestoration } from "../focusRestoration";
@@ -100,6 +103,7 @@ export default function BoardPage() {
   const [showFilterBar, setShowFilterBar] = createSignal(false);
   const [filterText, setFilterText] = createSignal("");
   const [filterLabelIds, setFilterLabelIds] = createSignal<string[]>([]);
+  const [filterDue, setFilterDue] = createSignal<DueFilter>(null);
 
   // List rename state
   const [renamingListId, setRenamingListId] = createSignal<string | null>(null);
@@ -294,12 +298,14 @@ export default function BoardPage() {
       setRemoved(false);
     });
     if (notes()) enterNotes();
+    reopenDraft(id);
     const f = rememberedFilter(id, b?.labels.map((l) => l.id) ?? []);
     restoring = true;
     batch(() => {
       setShowFilterBar(f?.open ?? false);
       setFilterText(f?.text ?? "");
       setFilterLabelIds(f?.labelIds ?? []);
+      setFilterDue(f?.due ?? null);
     });
     // After the filtered lists have rendered, so offsets aren't clamped.
     queueMicrotask(() => {
@@ -307,8 +313,43 @@ export default function BoardPage() {
       if (shownId() === id && params.id === id) restoreBoardView(pageEl, id);
     });
   });
+  // Crash safety (ADR-0024): the one draft of this board reopens its card,
+  // if nobody changed the card since; otherwise it's dropped. Read once at
+  // mount by the CardDetail it opens.
+  let pendingDraft: Draft | null = null;
+  const takeDraft = (cardId: string) => {
+    const d = pendingDraft?.card_id === cardId ? pendingDraft : undefined;
+    if (d) pendingDraft = null;
+    return d;
+  };
+  const reopenDraft = async (id: string) => {
+    let draft: Draft | null;
+    try {
+      draft = await api.getDraft();
+    } catch {
+      return;
+    }
+    const b = board();
+    if (!draft || draft.board_id !== id || !b || b.id !== id || params.id !== id) return;
+    const card = draftCard(draft, b.lists.flatMap((l) => l.cards));
+    if (!card) return void api.deleteDraft(draft.card_id).catch(() => {});
+    if (selectedCard() || paneDirty()) return;
+    pendingDraft = draft;
+    if (notes()) {
+      // Already shown (remembered card): remount the pane to start from the draft.
+      if (notesCardId() === card.id) {
+        selectNotes(card.list_id, null);
+        await Promise.resolve();
+      }
+      selectNotes(card.list_id, card.id);
+      focusMasterCard(card.id);
+    } else {
+      focus.setLastFocused(card.id);
+      setSelectedCard(card);
+    }
+  };
   createEffect(() => {
-    const f = { open: showFilterBar(), text: filterText(), labelIds: filterLabelIds() };
+    const f = { open: showFilterBar(), text: filterText(), labelIds: filterLabelIds(), due: filterDue() };
     if (restoredFor) recordBoardFilter(restoredFor, f);
   });
   // Forget views of boards that are gone.
@@ -368,9 +409,9 @@ export default function BoardPage() {
     const triggerAddCard = () => {
       // The list holding the focus, else the one with an open form, else the first.
       const list =
-        document.activeElement?.closest(".list") ??
+        document.activeElement?.closest(".list:not(.list--collapsed)") ??
         document.querySelector(".list:has(.add-form)") ??
-        document.querySelector(".list");
+        document.querySelector(".list:not(.list--collapsed)");
       openOrFocusAdd(list);
     };
     const navigateArrow = (e: KeyboardEvent) => {
@@ -398,18 +439,8 @@ export default function BoardPage() {
       } else if (!isCard && !isCardListTrigger) {
         e.preventDefault();
         const lists = document.querySelectorAll(".list");
-        if (e.key === "ArrowDown" || e.key === "ArrowRight") {
-          const firstList = lists[0];
-          const firstCard = firstList?.querySelector<HTMLElement>(".card");
-          if (firstCard) firstCard.focus();
-          else firstList?.querySelector<HTMLElement>(".add-trigger")?.focus();
-        } else {
-          const lastList = lists[lists.length - 1];
-          const cards = lastList?.querySelectorAll<HTMLElement>(".card");
-          const lastCard = cards?.[cards.length - 1];
-          if (lastCard) lastCard.focus();
-          else lastList?.querySelector<HTMLElement>(".add-trigger")?.focus();
-        }
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") focusListEntry(lists[0]);
+        else focusListEntry(lists[lists.length - 1], true);
       } else if (isCardListTrigger) {
         const currentList = focused!.closest(".list") as HTMLElement;
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -417,16 +448,7 @@ export default function BoardPage() {
           const adj = (e.key === "ArrowLeft"
             ? currentList.previousElementSibling
             : currentList.nextElementSibling) as HTMLElement | null;
-          if (adj?.classList.contains("list")) {
-            if (e.key === "ArrowRight") {
-              const first = adj.querySelector<HTMLElement>(".card");
-              first ? first.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
-            } else {
-              const cards = adj.querySelectorAll<HTMLElement>(".card");
-              const last = cards[cards.length - 1];
-              last ? last.focus() : adj.querySelector<HTMLElement>(".add-trigger")?.focus();
-            }
-          }
+          if (adj?.classList.contains("list")) focusListEntry(adj, e.key === "ArrowLeft");
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
           const cards = currentList.querySelectorAll<HTMLElement>(".card");
@@ -510,7 +532,17 @@ export default function BoardPage() {
         { key: "g", ...noMods, handler: (e) => { e.preventDefault(); drawer.toggle(); } },
         { key: "l", ...noMods, handler: (e) => { e.preventDefault(); triggerAddList(); } },
         { key: "n", ...noMods, handler: (e) => { e.preventDefault(); triggerAddCard(); } },
-        { key: "c", ...noMods, handler: (e) => { e.preventDefault(); triggerAddCard(); } },
+        {
+          // Collapse / expand the list holding the focus (board view only).
+          key: "c", ...noMods,
+          canFire: () => !notes(),
+          handler: (e) => {
+            const list = document.activeElement?.closest<HTMLElement>(".lists-container .list");
+            if (!list) return;
+            e.preventDefault();
+            handleToggleCollapse(list.dataset.listId!, !list.classList.contains("list--collapsed"));
+          },
+        },
         {
           key: "e", ...noMods,
           canFire: () => !!(document.activeElement?.classList.contains("card")),
@@ -684,8 +716,13 @@ export default function BoardPage() {
     handleMoveList(listId, listDropPosition(otherPositions, insertAt));
   };
 
-  const handleAddCard = async (listId: string, title: string) => {
-    const card = await api.createCard(listId, title);
+  /// Quick-add (`#label`, `due:`): unknown labels are created first (the
+  /// server reuses a same-named one, ADR-0014).
+  const handleAddCard = async (listId: string, text: string) => {
+    const q = parseQuickAdd(text, board()?.labels ?? []);
+    const created = await Promise.all(q.newLabels.map((n) => api.createLabel(params.id, n)));
+    const label_ids = [...new Set([...q.labels, ...created].map((l) => l.id))];
+    const card = await api.createCard(listId, q.title || text, { label_ids, due_date: q.due });
     if (!notes()) {
       focus.preserve(card.id);
       refetch();
@@ -694,6 +731,16 @@ export default function BoardPage() {
     // Notes: straight on to the new card's description.
     try { await refetch(); } catch { /* board error surfaces via resource */ }
     selectNotesCard(card, true);
+  };
+
+  /// Board view: a list as a narrow strip. Focus stays on the toggled list.
+  const handleToggleCollapse = async (listId: string, collapsed: boolean) => {
+    await api.updateList(listId, { collapsed });
+    try { await refetch(); } catch { /* surfaces via resource */ }
+    requestAnimationFrame(() => {
+      const list = document.querySelector(`.lists-container .list[data-list-id="${listId}"]`);
+      list?.querySelector<HTMLElement>(collapsed ? ".list-expand" : ".list-title")?.focus();
+    });
   };
 
   const handleDeleteList = async (listId: string) => {
@@ -879,8 +926,29 @@ export default function BoardPage() {
     await refetch();
   };
 
+  /// Renaming onto another label's name (case, spaces, dashes aside) merges
+  /// the two, after asking: the server relabels every card (ADR-0014).
   const handleUpdateLabel = async (labelId: string, name: string) => {
-    await api.updateLabel(labelId, name);
+    const labels = board()?.labels ?? [];
+    const from = labels.find((l) => l.id === labelId);
+    const into = findLabel(labels.filter((l) => l.id !== labelId), name);
+    if (from && into) {
+      const n = allLists().reduce((s, l) => s + l.cards.filter((c) => c.label_ids.includes(labelId)).length, 0);
+      const strip = (s: string) => s.replace(/\*+/g, "");
+      const cards = n === 1 ? "1 card" : `${n} cards`;
+      const ok = await confirm.ask({
+        message: `Merge “${strip(from.name)}” into “${strip(into.name)}”? “${strip(from.name)}” is deleted and its ${cards} (and archived ones) get “${strip(name)}” instead. This can't be undone.`,
+        confirmLabel: "Merge labels",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    try {
+      // The server merges only with the flag (409 for a clash we didn't see).
+      await api.updateLabel(labelId, name, !!(from && into));
+    } catch (err) {
+      alert(`Rename failed: ${(err as Error).message}`);
+    }
     refetch();
   };
 
@@ -895,13 +963,14 @@ export default function BoardPage() {
   const clearFilters = () => {
     setFilterText("");
     setFilterLabelIds([]);
+    setFilterDue(null);
   };
 
-  const isFiltering = () => !!filterText() || filterLabelIds().length > 0;
+  const isFiltering = () => !!filterText() || filterLabelIds().length > 0 || !!filterDue();
 
   const filteredCards = (cards: CardType[]) => {
     if (!isFiltering()) return cards;
-    return cards.filter((c) => filterCard(c, filterText(), filterLabelIds()));
+    return cards.filter((c) => filterCard(c, filterText(), filterLabelIds(), filterDue()));
   };
   const filteredLists = createMemo(() =>
     allLists().map((l) => (isFiltering() ? { ...l, cards: filteredCards(l.cards) } : l)),
@@ -1006,6 +1075,8 @@ export default function BoardPage() {
               <FilterBar
                 text={filterText()}
                 labelIds={filterLabelIds()}
+                due={filterDue()}
+                onDueChange={setFilterDue}
                 boardLabels={b().labels}
                 onTextChange={setFilterText}
                 onToggleLabel={toggleFilterLabel}
@@ -1050,6 +1121,8 @@ export default function BoardPage() {
                       {(id) => (
                         <CardDetail
                           onDirtyChange={trackDirty(id)}
+                          boardId={b().id}
+                          draft={takeDraft(id)}
                           variant="pane"
                           card={paneCard()!}
                           removed={removed()}
@@ -1080,6 +1153,8 @@ export default function BoardPage() {
                   return (
                     <List
                       list={filtered()}
+                      total={list.cards.length}
+                      onToggleCollapse={handleToggleCollapse}
                       labels={b().labels}
                       renamingListId={renamingListId()}
                       onAddCard={handleAddCard}
@@ -1124,6 +1199,8 @@ export default function BoardPage() {
         {(card) => (
           <CardDetail
             card={card()}
+            boardId={params.id}
+            draft={takeDraft(card().id)}
             boardLabels={board()?.labels ?? []}
             onCreateLabel={handleCreateLabel}
             onSave={handleCardSave}

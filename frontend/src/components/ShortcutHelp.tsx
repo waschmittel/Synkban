@@ -34,12 +34,26 @@ const BOARD_KEYS: Group = {
   rows: [
     [[k("v")], "Switch Board / Notes view"],
     [[k("l")], "Add list"],
+    [[k("#label"), k("due:fri")], "In a new card's title: set a label / due date"],
     [[k("g")], "Labels panel"],
     [[k("f")], "Filter cards"],
     [[k("a")], "Archived cards"],
     [[k(","), k("j")], "Previous board"],
     [[k("."), k("k")], "Next board"],
     [[k("b")], "All boards"],
+    [[k("?")], "This help"],
+  ],
+};
+
+/// Panels opened from a board, the same in both views.
+const PANEL_KEYS: Group = {
+  title: "Filter, labels & archive",
+  rows: [
+    [[k("Esc")], "Filter: clear it, then close the bar"],
+    [[k("↑", "↓")], "Labels / archive: previous / next"],
+    [[k("Shift", "↑"), k("Shift", "↓")], "Labels: reorder"],
+    [[k("Enter")], "Labels: rename (renaming onto another label merges, after asking)"],
+    [[k("Esc")], "Close the panel / cancel the rename"],
   ],
 };
 
@@ -60,9 +74,10 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         rows: [
           [[k("n")], "New board"],
           [[k("Shift", "↑↓←→")], "Reorder board"],
-          [[k("Del")], "Archive board"],
+          [[k("Del"), k("⌫")], "Archive board"],
           [[k("a")], "Archived boards"],
           [[k("Esc")], "Close form / archive"],
+          [[k("?")], "This help"],
         ],
       },
     ],
@@ -81,12 +96,15 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         ],
       },
       {
-        title: "Cards",
+        title: "Cards & lists",
         rows: [
-          [[k("Enter")], "Open card"],
+          [[k("Enter"), k("Space")], "Open card"],
           [[k("e")], "Edit card"],
-          [[k("n")], "Add card to this list"],
-          [[k("Del")], "Archive card"],
+          [[k("n")], "Add card to this list (Enter adds, Esc cancels)"],
+          [[k("Del"), k("⌫")], "Archive card"],
+          [[k("c")], "Collapse / expand this list"],
+          [[k("Enter")], "On a collapsed list: expand it"],
+          [[k("r"), k("F2")], "Rename list (Enter on its title too)"],
         ],
       },
       {
@@ -96,10 +114,10 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("Shift", "←"), k("Shift", "→")], "Card to the previous / next list"],
           [[k("Shift", "Home"), k("Shift", "End")], "Card to the top / bottom"],
           [[k("Shift", "Alt", "←"), k("Shift", "Alt", "→")], "List left / right"],
-          [[k("r")], "Rename list"],
         ],
       },
       BOARD_KEYS,
+      PANEL_KEYS,
     ],
   },
   {
@@ -110,6 +128,7 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         title: "Navigate",
         rows: [
           [[k("↑", "↓")], "Select card (shown beside the list)"],
+          [[k("Home"), k("End")], "First / last card"],
           [[k("←", "→")], "Previous / next list tab"],
           [[k("Enter"), k("e")], "Edit the card's description"],
           [[k("Esc")], "Back to the selected card, from anywhere"],
@@ -121,9 +140,10 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("n")], "Add card"],
           [[k("Shift", "↑"), k("Shift", "↓")], "Card up / down"],
           [[k("Shift", "←"), k("Shift", "→")], "Card to the previous / next list"],
+          [[k("Shift", "Alt", "←"), k("Shift", "Alt", "→")], "List (tab) left / right"],
           [[k("Drag")], "Drop a card on a tab to move it there"],
-          [[k("Del")], "Archive card"],
-          [[k("r")], "Rename list (or click the active tab)"],
+          [[k("Del"), k("⌫")], "Archive card"],
+          [[k("r"), k("F2")], "Rename list (or Enter / click on the active tab)"],
         ],
       },
       {
@@ -134,6 +154,7 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         ],
       },
       BOARD_KEYS,
+      PANEL_KEYS,
     ],
   },
   {
@@ -145,8 +166,9 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         rows: [
           [[k(A, "S")], "Save"],
           [[k("Esc")], "Close (asks about unsaved edits)"],
-          [[k(A, "J")], "History"],
+          [[k(A, "J")], "History (again: close it)"],
           [[k(A, "P")], "Export PDF"],
+          [[k("?")], "This help (outside text fields)"],
         ],
       },
       {
@@ -163,12 +185,13 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
       {
         title: "Due date picker",
         rows: [
-          [[k("2026-12-01"), k("tomorrow"), k("+3d")], "Type a date, then Enter"],
+          [[k("2026-12-01"), k("tomorrow"), k("fri"), k("+3d")], "Type a date, then Enter"],
           [[k("↓")], "From the field into the calendar"],
           [[k("←", "→", "↑", "↓")], "Day / week"],
           [[k("PgUp"), k("PgDn")], "Month (with Shift: year)"],
           [[k("Home"), k("End")], "Start / end of the week"],
-          [[k("Enter")], "Pick the day"],
+          [[k("Enter"), k("Space")], "Pick the day"],
+          [[k("Esc")], "Close the picker"],
         ],
       },
       {
@@ -176,9 +199,10 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         rows: [
           [[k("↑", "↓")], "Previous / next item"],
           [[k("Space")], "Check item"],
-          [[k("Enter")], "Edit item · open attachment"],
+          [[k("Enter")], "Edit item (Enter saves, Esc cancels) · open attachment"],
           [[k("Shift", "↑"), k("Shift", "↓")], "Reorder item"],
-          [[k("Del")], "Delete item / attachment"],
+          [[k("Del"), k("⌫")], "Delete item (asks) / attachment"],
+          [[k("Enter")], "In “Add item”: add it and stay for the next"],
         ],
       },
       {
@@ -200,8 +224,33 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
         rows: [
           [[k(A, "B")], "Bold"],
           [[k(A, "I")], "Italic"],
+          [[k(A, "`")], "Inline code"],
+          [[k(A, "Z")], "Undo"],
+          [[k(A, "Shift", "Z"), k(A, "Y")], "Redo"],
+          [[k("Shift", "Enter"), k(A, "Enter")], "Line break"],
           [[k(A, "K"), k("Right-click")], "Editor menu: link, code, image, style, table"],
           [[k("Esc")], "Close the menu, else leave the card"],
+        ],
+      },
+      {
+        title: "Text styles",
+        rows: [
+          [[k("Ctrl", "Shift", "0")], "Plain text"],
+          [[k("Ctrl", "Shift", "1", "2", "3")], "Heading 1–3"],
+          [[k("Ctrl", "Shift", "\\")], "Code block"],
+          [[k("Ctrl", ">")], "Quote"],
+          [[k("Alt", "↑"), k("Alt", "↓")], "Join with the block above / below"],
+        ],
+      },
+      {
+        title: "While typing",
+        rows: [
+          [[k("#"), k("##"), k("###")], "+ Space at a line start: heading"],
+          [[k("-"), k("*")], "+ Space: bulleted list"],
+          [[k("1.")], "+ Space: numbered list"],
+          [[k(">")], "+ Space: quote"],
+          [[k("```")], "Code block"],
+          [[k("⌫")], "Right after one of these: undo it"],
         ],
       },
       {
@@ -210,6 +259,8 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("Tab"), k(A, "]")], "Nest item"],
           [[k("Shift", "Tab"), k(A, "[")], "Outdent item"],
           [[k("Enter")], "New item (empty: end the list)"],
+          [[k("Ctrl", "Shift", "8")], "Bulleted list"],
+          [[k("Ctrl", "Shift", "9")], "Numbered list"],
         ],
       },
       {

@@ -293,8 +293,17 @@ describe("label operations", () => {
       "/api/labels/label-1",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ name: "Feature" }),
+        body: JSON.stringify({ name: "Feature", merge: false }),
       })
+    );
+  });
+
+  it("updateLabel sends the merge confirmation only when asked", async () => {
+    const fn = mockFetch({});
+    await api.updateLabel("label-1", "Bug", true);
+    expect(fn).toHaveBeenCalledWith(
+      "/api/labels/label-1",
+      expect.objectContaining({ body: JSON.stringify({ name: "Bug", merge: true }) })
     );
   });
 

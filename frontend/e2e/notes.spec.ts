@@ -684,7 +684,7 @@ test("Esc from anywhere returns the keyboard to the selected card", async ({ pag
   await master(page, "Chosen").click();
 
   // Pane background (nothing focusable): Esc, then the arrows work again.
-  await pane(page).locator(".description-row .detail-row-label").click();
+  await pane(page).locator(".due-date-area .detail-row-label").click();
   await expect(master(page, "Chosen")).not.toBeFocused();
   await page.keyboard.press("Escape");
   await expect(master(page, "Chosen")).toBeFocused();
@@ -847,7 +847,7 @@ test("card detail layout, both views: icons left of their sections in one column
   /// Each section icon is centred on the first line of its content.
   const expectIconsCentred = async (root: string) => {
     const off = await page.locator(`${root} .detail-row`).evaluateAll((rows) =>
-      rows.map((r) => {
+      rows.filter((r) => r.querySelector(".detail-row-label svg")!.getBoundingClientRect().height > 0).map((r) => {
         const icon = r.querySelector(".detail-row-label svg")!.getBoundingClientRect();
         const first = [
           ...r.querySelectorAll<HTMLElement>(
@@ -871,6 +871,11 @@ test("card detail layout, both views: icons left of their sections in one column
     const icon = await page.locator(`${root} .modal-header-icon svg`).boundingBox();
     expect(icon!.width).toBe(16);
     for (let i = 0; i < sections; i++) {
+      // Notes: the description is the page — no icon (see the editor test).
+      if (root === ".notes-detail" && (await rows.nth(i).getAttribute("class"))!.includes("description-row")) {
+        await expect(rows.nth(i).locator(".detail-row-label")).toBeHidden();
+        continue;
+      }
       const label = await rows.nth(i).locator(".detail-row-label").boundingBox();
       const body = await rows.nth(i).locator(".detail-row-body").boundingBox();
       const svg = await rows.nth(i).locator(".detail-row-label svg").boundingBox();
@@ -893,7 +898,7 @@ test("card detail layout, both views: icons left of their sections in one column
     const add = page.locator(`${root} .detail-add-attachment`);
     await expect(add).toHaveCount(sections === 4 ? 1 : 0);
     if (sections === 4) {
-      const body = await page.locator(`${root} .description-row .detail-row-body`).boundingBox();
+      const body = await page.locator(`${root} .checklist-area .detail-row-body`).boundingBox();
       expect(Math.abs((await add.boundingBox())!.x - body!.x)).toBeLessThan(1);
     }
     // Long title: clipped with an ellipsis, from its start, when not being edited.
@@ -937,7 +942,7 @@ test("card detail layout, both views: icons left of their sections in one column
   await check(".modal-overlay", 5);
 });
 
-test("prose stops at the text measure; tables and code blocks grow past it", async ({ page, request }) => {
+test("prose stops at the text measure; tables are centred, code blocks too once wider than it", async ({ page, request }) => {
   const s = await seed(request, [{ title: "Inbox", cards: ["Wide"] }]);
   const p = (text: string) => ({ type: "paragraph", content: [{ type: "text", text }] });
   const cell = (t: string, h = false) => ({ type: h ? "table_header" : "table_cell", content: [p(t)] });
@@ -956,6 +961,8 @@ test("prose stops at the text measure; tables and code blocks grow past it", asy
       },
       { type: "table", content: [{ type: "table_row", content: [cell("tiny", true)] }] },
       { type: "code_block", content: [{ type: "text", text: "x".repeat(400) }] },
+      { type: "code_block", content: [{ type: "text", text: "x".repeat(150) }] },
+      { type: "code_block", content: [{ type: "text", text: "short" }] },
     ],
   };
   await request.put(`/api/cards/${s.lists[0].cards[0]}`, { data: { description: JSON.stringify(doc) } });
@@ -974,7 +981,24 @@ test("prose stops at the text measure; tables and code blocks grow past it", asy
     const ch90 = probe.getBoundingClientRect().width;
     probe.remove();
     const tables = pm.querySelectorAll("table");
+    const pres = pm.querySelectorAll("pre");
+    // Gap left minus gap right inside the editor's content box: 0 = centred.
+    const cs = getComputedStyle(pm);
+    const box = pm.getBoundingClientRect();
+    const left = box.left + parseFloat(cs.paddingLeft);
+    const right = box.right - parseFloat(cs.paddingRight) - (pm.offsetWidth - pm.clientWidth);
+    const off = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return Math.round(r.left - left - (right - r.right));
+    };
+    const pBox = pm.querySelector("p")!.getBoundingClientRect();
     return {
+      pOff: off(pm.querySelector("p")!),
+      pLeft: pBox.left,
+      tableOffs: [...tables].map(off),
+      preOffs: [...pres].map(off),
+      midPre: pres[1].getBoundingClientRect().width,
+      shortPre: pres[2].getBoundingClientRect(),
       ch90,
       p: w("p"),
       h1: w("h1"),
@@ -994,6 +1018,14 @@ test("prose stops at the text measure; tables and code blocks grow past it", asy
   expect(Math.abs(m.tinyTable - m.p)).toBeLessThan(2);
   expect(m.pre).toBeGreaterThan(m.p + 50);
   expect(m.pre).toBeLessThanOrEqual(m.content);
+  // Centred: the text column, every table, every code block.
+  for (const o of [m.pOff, ...m.tableOffs, ...m.preOffs]) expect(Math.abs(o)).toBeLessThanOrEqual(2);
+  // A code block wider than the measure but narrower than the pane: centred, not at the column's edge.
+  expect(m.midPre).toBeGreaterThan(m.p + 50);
+  expect(m.midPre).toBeLessThan(m.content - 50);
+  // A short one is the column: same edge as the text.
+  expect(Math.abs(m.shortPre.left - m.pLeft)).toBeLessThan(2);
+  expect(Math.abs(m.shortPre.width - m.p)).toBeLessThan(2);
 });
 
 test("the card dialog keeps its layout: full-width tables, text within the dialog", async ({

@@ -3,6 +3,7 @@ import type { Card as CardType, Label } from "../types";
 import { crossListInsertPosition, listDropPosition, moveToBottom, moveToTop, withinListMoveDown, withinListMoveUp } from "../positions";
 import { tip } from "../platform";
 import { dueInfo } from "../dueDate";
+import { focusListEntry } from "../listFocus";
 
 interface Props {
   card: CardType;
@@ -45,10 +46,7 @@ export default function Card(props: Props) {
     document.querySelectorAll(".drop-placeholder").forEach((el) => el.remove());
   };
 
-  const focusAddTrigger = (list: Element | null) => {
-    const trigger = list?.querySelector(".add-trigger") as HTMLElement | null;
-    trigger?.focus();
-  };
+  const focusAddTrigger = (list: Element | null) => focusListEntry(list);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const el = e.currentTarget as HTMLElement;
@@ -137,6 +135,11 @@ export default function Card(props: Props) {
           : currentList?.previousElementSibling) as HTMLElement | null;
         if (!adjList?.classList.contains("list")) return;
         const targetListId = adjList.dataset.listId!;
+        // Collapsed: no cards on screen, to the end.
+        if (adjList.classList.contains("list--collapsed")) {
+          props.onMove(props.card.id, targetListId, parseFloat(adjList.dataset.maxPosition || "0") + 1);
+          return;
+        }
         const curCards = Array.from(currentList!.querySelectorAll<HTMLElement>(".card"));
         const curIdx = curCards.indexOf(el);
         const adjPositions = Array.from(adjList.querySelectorAll<HTMLElement>(".card"))

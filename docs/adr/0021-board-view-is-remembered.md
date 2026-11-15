@@ -1,6 +1,6 @@
 # Switching boards remembers where you were
 
-Per board, `boardView.ts` keeps the last focused card, the filter (bar open, text, labels), the horizontal scroll of `.lists-container` and the vertical scroll of every list, in `sessionStorage` (per tab; survives reloads, gone when the tab closes).
+Per board, `boardView.ts` keeps the last focused card, the filter (bar open, text, labels, due), the horizontal scroll of `.lists-container` and the vertical scroll of every list, in `sessionStorage` (per tab; survives reloads, gone when the tab closes).
 
 ## Why
 

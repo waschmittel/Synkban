@@ -25,7 +25,8 @@
 | **Archived** | Soft-deleted **Board**/**Card**; hidden but restorable; must precede permanent deletion (ADR-0006) | Deleted, trashed |
 | **Orphaned Card** | An archived **Card** whose **List** was deleted (`archived_cards/`); restoring needs a target `list_id` | Lost card |
 | **Saved Card** | The persisted state of a **Card**; PDF export and history use it, never unsaved modal edits (ADR-0007) | Committed card |
-| **Dirty** | The card modal has unsaved edits; closing goes through the unsaved guard | Modified |
+| **Dirty** | The card modal has unsaved edits; closing goes through the unsaved guard; marked by a dot on the detail's card icon | Modified |
+| **Draft** | The open card's unsaved edits — one per machine, in the config dir — so a crash loses nothing; app start reopens it only if the card is unchanged since (ADR-0024) | Autosave, backup, kept edits |
 | **Warning** | A data-integrity notice for a corrupt/unreadable file the walkers skipped (`/api/warnings`) | Error banner |
 | **Data Directory** | Root of all board files; resolved `--data-dir` > `DATA_DIR` > config > default (ADR-0002) | Storage folder |
 | **Settings** | User preferences in `synkban.toml` (`startup_view`, `last_board_id`, `theme`, `data_dir`), served by the backend | Preferences, config (for UI choices) |
@@ -44,7 +45,10 @@
 | **Label Drawer** | Right-side slide-out for managing **Labels** | Label panel |
 | **Archive Panel** | Shared overlay (`ArchivePanel`) listing archived cards or boards with Restore/Delete | Trash |
 | **Board Dock** | Fixed pill of dots at the bottom of a board to switch boards (`,`/`.`) | Pager |
-| **Filter Bar** | Text + label filter below the board title bar (AND semantics) | Search bar |
+| **Filter Bar** | Text, due-date (one of overdue / this week / until a day) and label filter below the board title bar (AND semantics) | Search bar |
+| **Quick-add** | `#label` and `due:` tokens in a new card's title, applied on creation; labels matched ignoring case, spaces and dashes (ADR-0025) | Smart add, magic syntax |
+| **Collapsed List** | A board-view **List** shown as a narrow strip (count, vertical title); stored in `list.json` (ADR-0025) | Minimised column |
+| **Label Merge** | Renaming a **Label** onto another's name, after a confirmation: one label remains, all cards carry it; not undoable (ADR-0014) | — |
 | **Editor Menu** | The context-sensitive `Accel+K` popup in the description editor: link, code, text style, table (ADR-0016) | Table menu, command palette |
 | **Text Style** | Block type of a description paragraph: Plain text, Code block, Heading 1–3 (never "H1") | Block type, format |
 | **Header Row** | First row of a description table; always the header, source of column alignment (ADR-0017) | Table head |

@@ -67,8 +67,12 @@ export function dueInfo(iso: string | null | undefined, today = new Date(), loca
     : { days, tone: "future", short: date, long };
 }
 
-/// Typed entry in the date picker: `YYYY-MM-DD`, `today`, `tomorrow`, or an
-/// offset `+3` / `+3d` / `+2w` / `-1d`. Null when not understood.
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+/// Typed entry in the date picker and quick-add `due:`: `YYYY-MM-DD`, `today`,
+/// `tomorrow`, a weekday (`fri`: the next one after today), or an offset
+/// `+3` / `+3d` / `+2w` / `-1d`. Null when not understood.
+
 export function parseDueInput(text: string, today = new Date()): string | null {
   const t = text.trim().toLowerCase();
   if (!t) return null;
@@ -76,6 +80,8 @@ export function parseDueInput(text: string, today = new Date()): string | null {
   if (iso) return toIso(iso);
   if ("today".startsWith(t) && t.length >= 3) return toIso(startOfDay(today));
   if ("tomorrow".startsWith(t) && t.length >= 3) return toIso(addDays(today, 1));
+  const wd = WEEKDAYS.findIndex((w) => t.length >= 3 && w.startsWith(t));
+  if (wd >= 0) return toIso(addDays(today, ((wd - today.getDay() + 6) % 7) + 1));
   const m = /^([+-])\s*(\d{1,4})\s*([dw]?)$/.exec(t);
   if (m) {
     const n = +m[2] * (m[3] === "w" ? 7 : 1) * (m[1] === "-" ? -1 : 1);

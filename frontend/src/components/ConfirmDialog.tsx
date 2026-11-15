@@ -12,6 +12,8 @@ import { tip } from "../platform";
 interface Props {
   message: string;
   confirmLabel: string;
+  /// Destructive: red confirm button, Cancel focused (Enter doesn't confirm).
+  danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -47,13 +49,19 @@ export default function ConfirmDialog(props: Props) {
         <p>{props.message}</p>
         <div class="unsaved-dialog-actions">
           <button
-            ref={(el) => requestAnimationFrame(() => el.focus())}
-            class="btn btn-primary"
+            ref={(el) => !props.danger && requestAnimationFrame(() => el.focus())}
+            class="btn"
+            classList={{ "btn-primary": !props.danger, "btn-danger": props.danger }}
             onClick={props.onConfirm}
           >
             {props.confirmLabel}
           </button>
-          <button class="btn btn-cancel" onClick={props.onCancel} title={tip("Cancel", "Esc")}>
+          <button
+            ref={(el) => props.danger && requestAnimationFrame(() => el.focus())}
+            class="btn btn-cancel"
+            onClick={props.onCancel}
+            title={tip("Cancel", "Esc")}
+          >
             Cancel
           </button>
         </div>

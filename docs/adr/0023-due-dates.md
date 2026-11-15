@@ -19,8 +19,9 @@ The year shows only when it isn't this year; dates use the browser locale. Tones
 ## Rules
 
 - **The detail shows a chip** (`DueDateSection`), "Set due date" when empty, plus a clear ×. Click, `Enter` or `Accel+U` opens **`DuePicker`**, portaled to `body` (the dialog body would clip it), registered via `focusTrap` so the card's trap yields.
-- **Typing first:** the picker opens on a text field accepting `YYYY-MM-DD`, `today`/`tomorrow` (3+ letters), `+3`/`+3d`/`+2w`/`-1d`; Enter sets it, nonsense is marked invalid, empty Enter clears. `↓` enters the month grid: arrows ±day/week, `PgUp/PgDn` ±month (`Shift`: year), `Home/End` week start/end (locale's first weekday), `Enter`/`Space` pick. Quick buttons: Today, Tomorrow, Next week, Clear.
+- **Typing first:** the picker opens on a text field accepting `YYYY-MM-DD`, `today`/`tomorrow` (3+ letters), a weekday (`fri`, 3+ letters: the next one after today), `+3`/`+3d`/`+2w`/`-1d`; Enter sets it, nonsense is marked invalid, empty Enter clears. `↓` enters the month grid: arrows ±day/week, `PgUp/PgDn` ±month (`Shift`: year), `Home/End` week start/end (locale's first weekday), `Enter`/`Space` pick. Quick buttons: Today, Tomorrow, Next week, Clear.
 - The picker owns its keys via `dialogKeys`: `Esc` closes only the picker and returns focus to the chip; a card shortcut (`Accel+S`, `+G`, …) closes it and is re-sent from the chip (closing detaches the original event's target, so it would never reach the card). A pointer outside closes it.
+- The same picker sets the filter bar's "on a day" due filter (ADR-0025).
 - Stored value unchanged: `YYYY-MM-DD`, validated server-side (ADR-0007).
 
 ## Considered and rejected
