@@ -307,14 +307,10 @@ mod tests {
         update_card(
             d.path(),
             &c2.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
 

@@ -247,3 +247,17 @@ pub struct UpdateSettings {
     #[serde(default, deserialize_with = "deserialize_double_option")]
     pub data_dir: Option<Option<String>>,
 }
+
+/// Partial card update; `None` leaves a field unchanged.
+#[derive(Default)]
+pub struct CardPatch<'a> {
+    pub title: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub position: Option<f64>,
+    pub list_id: Option<&'a str>,
+    pub label_ids: Option<&'a [String]>,
+    pub archived: Option<bool>,
+    /// `Some(None)` clears the due date.
+    pub due_date: Option<Option<&'a str>>,
+    pub checklist: Option<Vec<ChecklistItem>>,
+}

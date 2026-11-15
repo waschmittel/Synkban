@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::errors::AppError;
-use crate::models::{Card, CardContent, CardHistory, ChecklistItem, HistoryEntry};
+use crate::models::{Card, CardContent, CardHistory, CardPatch, HistoryEntry};
 use crate::store::card_index::{self, CardLocation};
 use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::lists::find_board_for_list;
@@ -259,49 +259,28 @@ fn max_position(data_dir: &Path, board_id: &str, list_id: &str) -> Result<f64, A
         .fold(0.0, f64::max))
 }
 
-#[allow(clippy::too_many_arguments)] // mirrors the PUT body; every field optional
-pub fn update_card(
-    data_dir: &Path,
-    card_id: &str,
-    title: Option<&str>,
-    description: Option<&str>,
-    position: Option<f64>,
-    new_list_id: Option<&str>,
-    label_ids: Option<&[String]>,
-    archived: Option<bool>,
-    due_date: Option<Option<&str>>,
-    checklist: Option<Vec<ChecklistItem>>,
-) -> Result<Card, AppError> {
-    let mut card = update_card_with_history(
-        data_dir,
-        card_id,
-        title,
-        description,
-        position,
-        new_list_id,
-        label_ids,
-        archived,
-        due_date,
-        checklist,
-    )?;
+pub fn update_card(data_dir: &Path, card_id: &str, patch: CardPatch) -> Result<Card, AppError> {
+    let mut card = update_card_with_history(data_dir, card_id, patch)?;
     // History is served by `get_card_history`, not inlined in card responses.
     card.history = Vec::new();
     Ok(card)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn update_card_with_history(
     data_dir: &Path,
     card_id: &str,
-    title: Option<&str>,
-    description: Option<&str>,
-    position: Option<f64>,
-    new_list_id: Option<&str>,
-    label_ids: Option<&[String]>,
-    archived: Option<bool>,
-    due_date: Option<Option<&str>>,
-    checklist: Option<Vec<ChecklistItem>>,
+    patch: CardPatch,
 ) -> Result<Card, AppError> {
+    let CardPatch {
+        title,
+        description,
+        position,
+        list_id: new_list_id,
+        label_ids,
+        archived,
+        due_date,
+        checklist,
+    } = patch;
     let loc = card_index::locate(data_dir, card_id)?;
     let (source_board_id, old_list_id, old_path, is_orphaned) = match &loc {
         CardLocation::InList { board_id, list_id } => {
@@ -489,6 +468,7 @@ pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ChecklistItem;
     use crate::store::attachments::create_attachment;
     use crate::store::boards::{create_board, get_board};
     use crate::store::io::drain_file_ops;
@@ -563,14 +543,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            Some("New"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                title: Some("New"),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.title, "New");
@@ -585,14 +561,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            Some("desc"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                description: Some("desc"),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.description, "desc");
@@ -607,14 +579,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            Some(5.5),
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                position: Some(5.5),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.position, 5.5);
@@ -633,14 +601,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            Some(&ids),
-            None,
-            None,
-            None,
+            CardPatch {
+                label_ids: Some(&ids),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.label_ids, vec![l1.id, l2.id]);
@@ -656,14 +620,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(updated.archived);
@@ -674,14 +634,10 @@ mod tests {
         let restored = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(false),
-            None,
-            None,
+            CardPatch {
+                archived: Some(false),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(!restored.archived);
@@ -699,14 +655,10 @@ mod tests {
         let archived = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(archived.archived_at.is_some());
@@ -714,14 +666,10 @@ mod tests {
         let restored = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(false),
-            None,
-            None,
+            CardPatch {
+                archived: Some(false),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(restored.archived_at.is_none());
@@ -738,14 +686,10 @@ mod tests {
         update_card(
             d.path(),
             &c2.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         // Second-resolution timestamps: ensure c1 archives in a later second.
@@ -753,14 +697,10 @@ mod tests {
         update_card(
             d.path(),
             &c1.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -778,14 +718,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(Some("2024-06-15")),
-            None,
+            CardPatch {
+                due_date: Some(Some("2024-06-15")),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.due_date, Some("2024-06-15".into()));
@@ -800,27 +736,19 @@ mod tests {
         update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(Some("2024-06-15")),
-            None,
+            CardPatch {
+                due_date: Some(Some("2024-06-15")),
+                ..Default::default()
+            },
         )
         .unwrap();
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(None),
-            None,
+            CardPatch {
+                due_date: Some(None),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(updated.due_date.is_none());
@@ -835,27 +763,19 @@ mod tests {
         update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(Some("2024-06-15")),
-            None,
+            CardPatch {
+                due_date: Some(Some("2024-06-15")),
+                ..Default::default()
+            },
         )
         .unwrap();
         let updated = update_card(
             d.path(),
             &c.id,
-            Some("New Title"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                title: Some("New Title"),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.due_date, Some("2024-06-15".into()));
@@ -882,14 +802,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(items),
+            CardPatch {
+                checklist: Some(items),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.checklist.len(), 2);
@@ -900,14 +816,10 @@ mod tests {
         let again = update_card(
             d.path(),
             &c.id,
-            Some("New"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                title: Some("New"),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(again.checklist.len(), 2);
@@ -916,14 +828,10 @@ mod tests {
         let cleared = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(Vec::new()),
+            CardPatch {
+                checklist: Some(Vec::new()),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(cleared.checklist.is_empty());
@@ -942,14 +850,10 @@ mod tests {
         update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            Some(&[keep.id.clone(), gone.id.clone()]),
-            None,
-            None,
-            None,
+            CardPatch {
+                label_ids: Some(&[keep.id.clone(), gone.id.clone()]),
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -960,14 +864,10 @@ mod tests {
         let updated = update_card(
             d.path(),
             &c.id,
-            Some("C2"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                title: Some("C2"),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(updated.label_ids, vec![keep.id]);
@@ -984,14 +884,10 @@ mod tests {
         let moved = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            Some(&l2.id),
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                list_id: Some(&l2.id),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert_eq!(moved.list_id, l2.id);
@@ -1020,14 +916,10 @@ mod tests {
         let moved = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            Some(&l2.id),
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                list_id: Some(&l2.id),
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -1049,14 +941,10 @@ mod tests {
         let err = update_card(
             d.path(),
             "fake",
-            Some("X"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            CardPatch {
+                title: Some("X"),
+                ..Default::default()
+            },
         )
         .unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
@@ -1081,14 +969,10 @@ mod tests {
         update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         delete_card(d.path(), &c.id).unwrap();
@@ -1108,14 +992,10 @@ mod tests {
         update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         delete_card(d.path(), &c.id).unwrap();
@@ -1147,14 +1027,10 @@ mod tests {
         update_card(
             d.path(),
             &c1.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         delete_list(d.path(), &l2.id).unwrap();
@@ -1174,14 +1050,10 @@ mod tests {
         let err = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(false),
-            None,
-            None,
+            CardPatch {
+                archived: Some(false),
+                ..Default::default()
+            },
         )
         .unwrap_err();
         assert!(matches!(err, AppError::BadRequest(_)));
@@ -1189,14 +1061,11 @@ mod tests {
         let restored = update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            Some(&l2.id),
-            None,
-            Some(false),
-            None,
-            None,
+            CardPatch {
+                list_id: Some(&l2.id),
+                archived: Some(false),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(!restored.archived);
@@ -1250,14 +1119,11 @@ mod tests {
         update_card(
             d.path(),
             &c.id,
-            None,
-            None,
-            None,
-            Some(&l2.id),
-            None,
-            Some(false),
-            None,
-            None,
+            CardPatch {
+                list_id: Some(&l2.id),
+                archived: Some(false),
+                ..Default::default()
+            },
         )
         .unwrap();
         assert!(!arch_dir.exists());
@@ -1274,7 +1140,15 @@ mod tests {
     }
 
     fn set_title(d: &Path, id: &str, t: &str) -> Card {
-        update_card(d, id, Some(t), None, None, None, None, None, None, None).unwrap()
+        update_card(
+            d,
+            id,
+            CardPatch {
+                title: Some(t),
+                ..Default::default()
+            },
+        )
+        .unwrap()
     }
 
     #[test]
@@ -1301,14 +1175,11 @@ mod tests {
         update_card(
             d.path(),
             &id,
-            None,
-            None,
-            Some(5.0),
-            None,
-            None,
-            Some(true),
-            None,
-            None,
+            CardPatch {
+                position: Some(5.0),
+                archived: Some(true),
+                ..Default::default()
+            },
         )
         .unwrap();
         // Same title again is not a change either.
@@ -1322,18 +1193,16 @@ mod tests {
         update_card(
             d.path(),
             &id,
-            None,
-            Some("{}"),
-            None,
-            None,
-            None,
-            None,
-            Some(Some("2030-01-02")),
-            Some(vec![ChecklistItem {
-                id: "i".into(),
-                text: "t".into(),
-                done: false,
-            }]),
+            CardPatch {
+                description: Some("{}"),
+                due_date: Some(Some("2030-01-02")),
+                checklist: Some(vec![ChecklistItem {
+                    id: "i".into(),
+                    text: "t".into(),
+                    done: false,
+                }]),
+                ..Default::default()
+            },
         )
         .unwrap();
         let h = get_card_history(d.path(), &id).unwrap();
