@@ -26,7 +26,12 @@ export interface Board {
   archived: boolean;
   archived_at?: string;
   position: number;
+  mode: BoardMode;
 }
+
+/// Board layout (ADR-0022): lists side by side, or one list at a time with the
+/// selected card edited beside it.
+export type BoardMode = "kanban" | "notes";
 
 export interface Card {
   id: string;
@@ -80,6 +85,7 @@ export interface BoardDetail {
   created_at: string;
   color?: string;
   labels: Label[];
+  mode: BoardMode;
   lists: ListWithCards[];
 }
 

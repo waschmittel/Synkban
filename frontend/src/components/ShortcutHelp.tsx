@@ -1,200 +1,361 @@
-import { onCleanup } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
 import { accelLabel, tip } from "../platform";
 
+/// Where the help was opened; its tab is shown first.
+export type HelpContext = "home" | "board" | "notes" | "card" | "editor";
+
+/// The context for the focused element on a board page.
+export function helpContextOf(el: Element | null, notes: boolean): HelpContext {
+  if (el?.closest(".ProseMirror")) return "editor";
+  if (el?.closest(".modal-content")) return "card";
+  return notes ? "notes" : "board";
+}
+
 interface Props {
+  context: HelpContext;
   onClose: () => void;
 }
 
-function Chord(props: { keys: string[] }) {
-  return (
-    <>
-      {props.keys.map((k, i) => (
-        <>
-          {i > 0 && <span class="shortcut-sep">+</span>}
-          <kbd>{k}</kbd>
-        </>
-      ))}
-    </>
-  );
+/// One shortcut: alternative chords (each a list of keys) and what it does.
+type Row = [chords: string[][], desc: string];
+interface Group {
+  title: string;
+  rows: Row[];
 }
 
-function Row(props: { keys: string[]; alt?: string[]; desc: string }) {
+const A = accelLabel;
+const k = (...keys: string[]) => keys;
+
+/// Whole-board keys, the same in both views.
+const BOARD_KEYS: Group = {
+  title: "Board",
+  rows: [
+    [[k("v")], "Switch Board / Notes view"],
+    [[k("l")], "Add list"],
+    [[k("g")], "Labels panel"],
+    [[k("f")], "Filter cards"],
+    [[k("a")], "Archived cards"],
+    [[k(","), k("j")], "Previous board"],
+    [[k("."), k("k")], "Next board"],
+    [[k("b")], "All boards"],
+  ],
+};
+
+export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
+  {
+    id: "home",
+    label: "Boards",
+    groups: [
+      {
+        title: "Navigate",
+        rows: [
+          [[k("↑", "↓", "←", "→")], "Move between boards"],
+          [[k("Enter")], "Open board"],
+        ],
+      },
+      {
+        title: "Organise",
+        rows: [
+          [[k("n")], "New board"],
+          [[k("Shift", "↑↓←→")], "Reorder board"],
+          [[k("Del")], "Archive board"],
+          [[k("a")], "Archived boards"],
+          [[k("Esc")], "Close form / archive"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "board",
+    label: "Board",
+    groups: [
+      {
+        title: "Navigate",
+        rows: [
+          [[k("↑", "↓")], "Previous / next card (wraps)"],
+          [[k("←", "→")], "Neighbouring list"],
+          [[k("Home"), k("PgUp")], "First card of the list"],
+          [[k("End"), k("PgDn")], "Last card of the list"],
+        ],
+      },
+      {
+        title: "Cards",
+        rows: [
+          [[k("Enter")], "Open card"],
+          [[k("e")], "Edit card"],
+          [[k("n")], "Add card to this list"],
+          [[k("Del")], "Archive card"],
+        ],
+      },
+      {
+        title: "Move",
+        rows: [
+          [[k("Shift", "↑"), k("Shift", "↓")], "Card up / down (wraps)"],
+          [[k("Shift", "←"), k("Shift", "→")], "Card to the previous / next list"],
+          [[k("Shift", "Home"), k("Shift", "End")], "Card to the top / bottom"],
+          [[k("Shift", "Alt", "←"), k("Shift", "Alt", "→")], "List left / right"],
+          [[k("r")], "Rename list"],
+        ],
+      },
+      BOARD_KEYS,
+    ],
+  },
+  {
+    id: "notes",
+    label: "Notes",
+    groups: [
+      {
+        title: "Navigate",
+        rows: [
+          [[k("↑", "↓")], "Select card (shown beside the list)"],
+          [[k("←", "→")], "Previous / next list tab"],
+          [[k("Enter"), k("e")], "Edit the card's description"],
+          [[k("Esc")], "Back to the selected card, from anywhere"],
+        ],
+      },
+      {
+        title: "Cards & lists",
+        rows: [
+          [[k("n")], "Add card"],
+          [[k("Shift", "↑"), k("Shift", "↓")], "Card up / down"],
+          [[k("Shift", "←"), k("Shift", "→")], "Card to the previous / next list"],
+          [[k("Drag")], "Drop a card on a tab to move it there"],
+          [[k("Del")], "Archive card"],
+          [[k("r")], "Rename list (or click the active tab)"],
+        ],
+      },
+      {
+        title: "Editing",
+        rows: [
+          [[k(A, "S")], "Save, keep editing"],
+          [[k("Esc")], "Leave the card (unsaved edits: Save / Discard / Cancel)"],
+        ],
+      },
+      BOARD_KEYS,
+    ],
+  },
+  {
+    id: "card",
+    label: "Card",
+    groups: [
+      {
+        title: "Card",
+        rows: [
+          [[k(A, "S")], "Save"],
+          [[k("Esc")], "Close (asks about unsaved edits)"],
+          [[k(A, "J")], "History"],
+          [[k(A, "P")], "Export PDF"],
+        ],
+      },
+      {
+        title: "Go to",
+        rows: [
+          [[k(A, "E")], "Title (Enter: on to the description)"],
+          [[k(A, "U")], "Due date"],
+          [[k(A, "G")], "Labels"],
+          [[k(A, "D")], "Description"],
+          [[k(A, "L")], "Checklist"],
+          [[k(A, "O")], "Add attachment"],
+        ],
+      },
+      {
+        title: "Due date picker",
+        rows: [
+          [[k("2026-12-01"), k("tomorrow"), k("+3d")], "Type a date, then Enter"],
+          [[k("↓")], "From the field into the calendar"],
+          [[k("←", "→", "↑", "↓")], "Day / week"],
+          [[k("PgUp"), k("PgDn")], "Month (with Shift: year)"],
+          [[k("Home"), k("End")], "Start / end of the week"],
+          [[k("Enter")], "Pick the day"],
+        ],
+      },
+      {
+        title: "Checklist & attachments",
+        rows: [
+          [[k("↑", "↓")], "Previous / next item"],
+          [[k("Space")], "Check item"],
+          [[k("Enter")], "Edit item · open attachment"],
+          [[k("Shift", "↑"), k("Shift", "↓")], "Reorder item"],
+          [[k("Del")], "Delete item / attachment"],
+        ],
+      },
+      {
+        title: "History",
+        rows: [
+          [[k("↑", "↓")], "Newer / older version"],
+          [[k("Home"), k("End")], "Current / oldest version"],
+          [[k("PgUp"), k("PgDn")], "Ten versions"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "editor",
+    label: "Editor",
+    groups: [
+      {
+        title: "Text",
+        rows: [
+          [[k(A, "B")], "Bold"],
+          [[k(A, "I")], "Italic"],
+          [[k(A, "K"), k("Right-click")], "Editor menu: link, code, image, style, table"],
+          [[k("Esc")], "Close the menu, else leave the card"],
+        ],
+      },
+      {
+        title: "Lists",
+        rows: [
+          [[k("Tab"), k(A, "]")], "Nest item"],
+          [[k("Shift", "Tab"), k(A, "[")], "Outdent item"],
+          [[k("Enter")], "New item (empty: end the list)"],
+        ],
+      },
+      {
+        title: "In the menu",
+        rows: [
+          [[k("↑", "↓"), k("Enter")], "Highlight an item, run it"],
+          [[k("L"), k("U")], "Add/edit link, remove link"],
+          [[k("I"), k("M")], "Inline code, insert image"],
+          [[k("0"), k("B"), k("1", "2", "3")], "Plain, code block, heading 1–3"],
+        ],
+      },
+      {
+        title: "Tables",
+        rows: [
+          [[k("Tab"), k("Shift", "Tab")], "Next / previous cell (last cell adds a row)"],
+          [[k("Enter")], "Next row (last row: leave the table)"],
+          [[k("Shift", "Enter")], "Line break in the cell"],
+          [[k("W", "S", "A", "D")], "Menu: move row / column"],
+          [[k("Shift", "↑↓←→")], "Menu: insert row / column"],
+          [[k("1", "2", "3")], "Menu: align column"],
+          [[k("R", "C", "T")], "Menu: delete row / column / table"],
+        ],
+      },
+    ],
+  },
+];
+
+function Keys(props: { chords: string[][] }) {
   return (
-    <div class="shortcut-row">
-      <span class="shortcut-keys">
-        <Chord keys={props.keys} />
-        {props.alt && (
+    <span class="shortcut-keys">
+      <For each={props.chords}>
+        {(chord, i) => (
           <>
-            <span class="shortcut-sep">/</span>
-            <Chord keys={props.alt} />
+            {i() > 0 && <span class="shortcut-or">or</span>}
+            <span class="shortcut-chord">
+              <For each={chord}>{(key) => <kbd>{key}</kbd>}</For>
+            </span>
           </>
         )}
-      </span>
-      <span class="shortcut-desc">{props.desc}</span>
-    </div>
+      </For>
+    </span>
   );
 }
 
-function Section(props: { title: string; children: any }) {
-  return (
-    <div class="shortcut-section">
-      <h4 class="shortcut-section-title">{props.title}</h4>
-      {props.children}
-    </div>
-  );
-}
-
+/// Shortcut reference in tabs, opened on the tab for where the user is.
+/// ←/→ (or 1–5) switch tabs; ? or Esc close.
 export default function ShortcutHelp(props: Props) {
+  const [tab, setTab] = createSignal(props.context);
+  const index = () => TABS.findIndex((t) => t.id === tab());
+  const current = () => TABS[index()];
+  let tabsEl!: HTMLDivElement;
+
+  const select = (i: number) => {
+    setTab(TABS[(i + TABS.length) % TABS.length].id);
+    if (tabsEl.contains(document.activeElement)) tabsEl.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+  };
+
+  // Back to where the user was (a card, the editor) once it closes.
+  const before = document.activeElement as HTMLElement | null;
+  onCleanup(() => queueMicrotask(() => {
+    const lost = !document.activeElement || document.activeElement === document.body;
+    if (lost && before?.isConnected) before.focus();
+  }));
+
   const handleOverlayClick = (e: MouseEvent) => {
     if (e.target === e.currentTarget) props.onClose();
   };
 
-  // Owned via dialogKeys so close keys work even while focus is still on the
-  // element behind the overlay (the help modal never auto-focuses anything).
+  // Owned via dialogKeys so the keys work even while focus is still on the
+  // element behind the overlay (the help never auto-focuses anything).
   onCleanup(
     dialogKeys((e) => {
-      if (e.key === "Escape" || e.key === "?") {
-        e.preventDefault();
-        e.stopPropagation();
-        props.onClose();
-      }
-    })
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const n = Number(e.key);
+      if (e.key === "Escape" || e.key === "?") props.onClose();
+      else if (e.key === "ArrowLeft" || e.key === "ArrowRight") select(index() + (e.key === "ArrowLeft" ? -1 : 1));
+      else if (n >= 1 && n <= TABS.length) select(n - 1);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    }),
   );
 
   return (
-    <div
-      class="shortcut-help-overlay"
-      ref={(el) => onCleanup(focusTrap(el))}
-      onClick={handleOverlayClick}
-    >
-      <div class="shortcut-help-modal">
+    <div class="shortcut-help-overlay" ref={(el) => onCleanup(focusTrap(el))} onClick={handleOverlayClick}>
+      <div class="shortcut-help-modal" role="dialog" aria-label="Keyboard shortcuts">
         <div class="shortcut-help-header">
-          <h3>Keyboard Shortcuts</h3>
+          <h3>Keyboard shortcuts</h3>
+          <div
+            class="shortcut-tabs"
+            role="tablist"
+            ref={(el) => {
+              tabsEl = el;
+              // Start on the current tab (the trap would pick the first one).
+              requestAnimationFrame(() => el.querySelector<HTMLElement>('[aria-selected="true"]')?.focus());
+            }}
+          >
+            <For each={TABS}>
+              {(t, i) => (
+                <button
+                  class="shortcut-tab"
+                  role="tab"
+                  aria-selected={tab() === t.id}
+                  tabindex={tab() === t.id ? 0 : -1}
+                  data-tab={t.id}
+                  title={tip(t.label, String(i() + 1))}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                  <Show when={t.id === props.context}>
+                    <span class="shortcut-tab-here" title="Where you are">●</span>
+                  </Show>
+                </button>
+              )}
+            </For>
+          </div>
           <button class="shortcut-help-close" onClick={props.onClose} title={tip("Close", "Esc")}>
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-            >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
-        <div class="shortcut-help-body">
-          <Section title="Home">
-            <Row keys={["↑", "↓", "←", "→"]} desc="Navigate between boards" />
-            <Row keys={["Shift", "↑↓←→"]} desc="Reorder focused board" />
-            <Row keys={["Enter"]} desc="Open board" />
-            <Row keys={["n"]} desc="Create new board" />
-            <Row keys={["Del"]} desc="Archive focused board" />
-            <Row keys={["a"]} desc="Toggle archived boards" />
-            <Row keys={["Esc"]} desc="Close form / archive" />
-          </Section>
-          <Section title="Navigation">
-            <Row keys={["↑", "↓"]} desc="Move between cards (wraps)" />
-            <Row keys={["←", "→"]} desc="Jump to adjacent list" />
-            <Row keys={["Home"]} alt={["PgUp"]} desc="Focus first card in list" />
-            <Row keys={["End"]} alt={["PgDn"]} desc="Focus last card in list" />
-          </Section>
-          <Section title="Move Card">
-            <Row keys={["Shift", "↑"]} desc="Move card up (wraps to bottom)" />
-            <Row keys={["Shift", "↓"]} desc="Move card down (wraps to top)" />
-            <Row keys={["Shift", "←"]} desc="Move card to prev list" />
-            <Row keys={["Shift", "→"]} desc="Move card to next list" />
-            <Row keys={["Shift", "Home"]} alt={["PgUp"]} desc="Move card to top of list" />
-            <Row keys={["Shift", "End"]} alt={["PgDn"]} desc="Move card to bottom of list" />
-          </Section>
-          <Section title="Move / Rename List">
-            <Row keys={["Shift", "Alt", "←"]} desc="Move list left" />
-            <Row keys={["Shift", "Alt", "→"]} desc="Move list right" />
-            <Row keys={["r"]} desc="Rename focused list" />
-          </Section>
-          <Section title="Cards">
-            <Row keys={["Enter"]} desc="Open focused card" />
-            <Row keys={["e"]} desc="Edit focused card" />
-            <Row keys={["n"]} desc="Add card to current list" />
-            <Row keys={["Del"]} desc="Archive focused card (confirm)" />
-          </Section>
-          <Section title="Board">
-            <Row keys={["b"]} desc="Back to boards overview" />
-            <Row keys={[", / j"]} desc="Previous board" />
-            <Row keys={[". / k"]} desc="Next board" />
-            <Row keys={["l"]} desc="Add new list" />
-            <Row keys={["g"]} desc="Toggle label panel" />
-            <Row keys={["f"]} desc="Toggle filter bar" />
-            <Row keys={["a"]} desc="Toggle archive panel" />
-          </Section>
-          <Section title="Archive">
-            <Row keys={["↑", "↓"]} desc="Navigate archived cards" />
-            <Row keys={["Esc"]} desc="Close archive" />
-          </Section>
-          <Section title="Card Detail">
-            <Row keys={[accelLabel, "S"]} desc="Save" />
-            <Row keys={[accelLabel, "B"]} desc="Bold selection (title)" />
-            <Row keys={[accelLabel, "I"]} desc="Italic selection (title)" />
-            <Row keys={["Esc"]} desc="Close (with unsaved guard)" />
-            <Row keys={["Enter"]} desc="Title → focus editor" />
-            <Row keys={[accelLabel, "E"]} desc="Focus title (edit)" />
-            <Row keys={[accelLabel, "G"]} desc="Focus labels" />
-            <Row keys={[accelLabel, "D"]} desc="Focus description" />
-            <Row keys={[accelLabel, "L"]} desc="Focus checklist (list)" />
-            <Row keys={[accelLabel, "O"]} desc="Add attachment (open file)" />
-            <Row keys={[accelLabel, "U"]} desc="Open due date picker" />
-            <Row keys={[accelLabel, "J"]} desc="Open card history" />
-            <Row keys={[accelLabel, "P"]} desc="Export card as PDF" />
-            <Row keys={["?"]} desc="Toggle shortcuts help" />
-          </Section>
-          <Section title="Card History">
-            <Row keys={["↑", "↓"]} desc="Newer / older version" />
-            <Row keys={["Home"]} desc="Current version" />
-            <Row keys={["End"]} desc="Oldest version" />
-            <Row keys={["PgUp", "PgDn"]} desc="Jump ten versions" />
-            <Row keys={["Esc"]} alt={[accelLabel, "J"]} desc="Close history" />
-          </Section>
-          <Section title="Checklist">
-            <Row keys={["↑", "↓"]} desc="Navigate checklist items" />
-            <Row keys={["Space"]} desc="Toggle item done" />
-            <Row keys={["Enter"]} desc="Edit item text" />
-            <Row keys={["Del"]} desc="Delete item" />
-          </Section>
-          <Section title="Description editor">
-            <Row keys={[accelLabel, "K"]} desc="Editor menu: link, code, image, text style, table" />
-            <Row keys={["↑", "↓"]} alt={["Enter"]} desc="In menus: highlight an item, run it" />
-            <Row keys={["L", "U", "I", "M"]} desc="In menu: add/edit link, remove link, inline code, insert image" />
-            <Row keys={["0", "B", "1", "2", "3"]} desc="In menu (outside tables): plain, code block, heading 1–3" />
-            <Row keys={["Right-click"]} desc="Same editor menu, at the pointer" />
-            <Row keys={["Tab"]} alt={["Shift", "Tab"]} desc="Next / previous cell (Tab on last cell adds a row)" />
-            <Row keys={["Enter"]} desc="Next row, same column (last row: leave table)" />
-            <Row keys={["Shift", "Enter"]} desc="Line break inside the cell" />
-            <Row keys={["W", "S", "A", "D"]} desc="In menu (tables): move row up / down, column left / right" />
-            <Row keys={["Shift", "↑↓←→"]} desc="In menu: insert row / column" />
-            <Row keys={["1", "2", "3"]} desc="In menu: align column left / center / right" />
-            <Row keys={["R", "C", "T"]} desc="In menu: delete row / column / table" />
-            <Row keys={["Esc"]} desc="Close menu" />
-          </Section>
-          <Section title="Description Editor">
-            <Row keys={["Tab"]} desc="Nest list item (indent)" />
-            <Row keys={["Shift", "Tab"]} desc="Outdent list item" />
-            <Row keys={[accelLabel, "]"]} desc="Nest list item (alt)" />
-            <Row keys={[accelLabel, "["]} desc="Outdent list item (alt)" />
-            <Row keys={["Enter"]} desc="Split list item" />
-          </Section>
-          <Section title="Attachments">
-            <Row keys={["Tab"]} desc="Navigate attachments" />
-            <Row keys={["Del"]} desc="Delete focused attachment" />
-            <Row keys={["Enter"]} desc="Preview/download attachment" />
-          </Section>
-          <Section title="Global">
-            <Row keys={["?"]} desc="Show / hide this help" />
-          </Section>
+        <div class="shortcut-help-body" role="tabpanel" data-tab={tab()}>
+          <For each={current().groups}>
+            {(g) => (
+              <section class="shortcut-section">
+                <h4 class="shortcut-section-title">{g.title}</h4>
+                <For each={g.rows}>
+                  {([chords, desc]) => (
+                    <div class="shortcut-row">
+                      <span class="shortcut-desc">{desc}</span>
+                      <Keys chords={chords} />
+                    </div>
+                  )}
+                </For>
+              </section>
+            )}
+          </For>
         </div>
-        <div class="shortcut-help-footer">Synkban {__APP_VERSION__}</div>
+        <div class="shortcut-help-footer">
+          <span>
+            <kbd>←</kbd> <kbd>→</kbd> switch tabs · <kbd>?</kbd> or <kbd>Esc</kbd> close
+          </span>
+          <span>Synkban {__APP_VERSION__}</span>
+        </div>
       </div>
     </div>
   );

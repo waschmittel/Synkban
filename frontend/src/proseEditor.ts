@@ -190,9 +190,17 @@ export function createCardEditor(
     .concat(items.blockMenu);
 
   const listItem = schema.nodes.list_item;
+  // In a list Tab/Shift+Tab always belong to the editor: an item that can't
+  // move (the first one has nothing to nest under) is a no-op, not a focus
+  // jump out of the description. Outside lists and tables Tab moves on.
+  const inList = (state: EditorState) => {
+    const { $from } = state.selection;
+    for (let d = $from.depth; d > 0; d--) if ($from.node(d).type === listItem) return true;
+    return false;
+  };
   const listKeymap = keymap({
-    "Tab": sinkListItem(listItem),
-    "Shift-Tab": liftListItem(listItem),
+    "Tab": (state, dispatch) => inList(state) && (sinkListItem(listItem)(state, dispatch), true),
+    "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(listItem)(state, dispatch), true),
   });
   // Opens the context menu (link, text style, table).
   const tableMenuKeymap = keymap({
@@ -201,6 +209,10 @@ export function createCardEditor(
       openEditorMenu(view);
       return true;
     },
+    // Escape belongs to the card (close the modal, leave the Notes pane), not
+    // to the base keymap's "select parent node": that selection outlived the
+    // Escape and the next keystroke replaced the whole block.
+    "Escape": () => true,
   });
 
   const autolinkPaste = handleAutolinkPaste(schema);

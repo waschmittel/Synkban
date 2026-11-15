@@ -200,6 +200,7 @@ test("immediate reopen after save shows checklist items persisted via Save", asy
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Task card" }).click();
 
+  await page.locator(".detail-add-checklist").click();
   await page.locator(".checklist-add-input").fill("step one");
   await page.keyboard.press("Enter");
   await expect(page.locator(".checklist-item")).toHaveCount(1);

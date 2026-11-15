@@ -168,6 +168,20 @@ async function createWindow() {
     }
   });
 
+  // The page vetoes unloading while the Notes pane has unsaved edits
+  // (beforeunload, ADR-0022). Electron would silently keep the window open, so ask.
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(mainWindow, {
+      type: 'question',
+      buttons: ['Leave', 'Stay'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'You have unsaved changes.',
+      detail: 'Leave and discard them?',
+    });
+    if (choice === 0) event.preventDefault();
+  });
+
   mainWindow.loadURL(`${appOrigin}/?token=${token}`);
 }
 

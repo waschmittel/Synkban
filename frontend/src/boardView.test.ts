@@ -10,6 +10,9 @@ import {
   forgetBoardViews,
   reloadBoardViews,
   flushBoardViews,
+  lastFocusedCard,
+  rememberNotesCard,
+  notesCardFor,
 } from "./boardView";
 
 function render(listIds: string[]): HTMLElement {
@@ -158,6 +161,31 @@ describe("boardView", () => {
     expect(document.activeElement).toBe(q(fresh, "[data-card-id=l1-c2]"));
     expect(q(fresh, ".cards-container").scrollTop).toBe(25);
     expect(rememberedFilter("a", ["l"])?.text).toBe("x");
+  });
+
+  it("remembers the Notes card per list and the focused card, across a reload", () => {
+    const root = render(["l1"]);
+    stop = trackBoardView(root, () => id);
+    q(root, "[data-card-id=l1-c2]").focus();
+    stop();
+    rememberNotesCard("a", "l1", "l1-c2");
+    rememberNotesCard("a", "l2", "x");
+    rememberNotesCard("a", "l2", null); // cleared (empty list)
+    flushBoardViews();
+    reloadBoardViews();
+    expect(lastFocusedCard("a")).toBe("l1-c2");
+    expect(notesCardFor("a", "l1")).toBe("l1-c2");
+    expect(notesCardFor("a", "l2")).toBeUndefined();
+    expect(notesCardFor("unknown", "l1")).toBeUndefined();
+    expect(lastFocusedCard("unknown")).toBeNull();
+  });
+
+  it("drops malformed Notes entries from storage", () => {
+    sessionStorage.setItem("synkban.boardViews", '{"a":{"notes":{"l1":"c","l2":5,"l3":null}}}');
+    reloadBoardViews();
+    expect(notesCardFor("a", "l1")).toBe("c");
+    expect(notesCardFor("a", "l2")).toBeUndefined();
+    expect(notesCardFor("a", "l3")).toBeUndefined();
   });
 
   it("writes lazily after a debounce", () => {

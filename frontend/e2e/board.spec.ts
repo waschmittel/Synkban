@@ -486,13 +486,6 @@ test("card-detail accelerator shortcuts focus each section", async ({
   ).json();
   await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Shortcut card" } });
 
-  // Neuter showPicker so accel+U's real native date picker doesn't open and
-  // steal window focus from later shortcuts in this sequence (picker behaviour
-  // is asserted separately). This test only checks section focus.
-  await page.addInitScript(() => {
-    HTMLInputElement.prototype.showPicker = function () {};
-  });
-
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Shortcut card" }).click();
   // The title is focused a frame after mount; a shortcut pressed before that
@@ -508,17 +501,23 @@ test("card-detail accelerator shortcuts focus each section", async ({
   await page.keyboard.press("ControlOrMeta+e");
   await expect(page.locator(".modal-title-input")).toBeFocused();
 
-  // Accel+L → checklist add input (L = list; C would steal copy).
+  // Accel+L → opens the collapsed checklist at its add input (L = list; C would steal copy).
+  await expect(page.locator(".checklist-add-input")).toHaveCount(0);
   await page.keyboard.press("ControlOrMeta+l");
   await expect(page.locator(".checklist-add-input")).toBeFocused();
 
-  // Accel+U → due-date input (also opens the picker; stubbed above).
+  // Accel+U → the due-date picker, on its text field.
   await page.keyboard.press("ControlOrMeta+u");
-  await expect(page.locator(".due-date-input")).toBeFocused();
+  await expect(page.locator(".due-picker-input")).toBeFocused();
 
-  // Accel+G → focuses the label row (no board labels here → "New label" chip).
+  // Accel+G from inside the picker closes it and focuses the label row
+  // (no board labels here → "New label" chip).
   await page.keyboard.press("ControlOrMeta+g");
+  await expect(page.locator(".due-picker")).toHaveCount(0);
   await expect(page.locator(".label-new-chip")).toBeFocused();
+  // Leaving the empty checklist collapses it again.
+  await expect(page.locator(".checklist-add-input")).toHaveCount(0);
+  await expect(page.locator(".detail-add-checklist")).toBeVisible();
 });
 
 // Regression: the checklist shortcut used to be Ctrl/Cmd+C and fired even
@@ -552,7 +551,7 @@ test("card-detail leaves Ctrl+C and Cmd+C to the browser", async ({ page, reques
   await page.keyboard.press("Meta+c");
 
   await expect(page.locator(".modal-title-input")).toBeFocused();
-  await expect(page.locator(".checklist-add-input")).not.toBeFocused();
+  await expect(page.locator(".checklist-add-input")).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__cPrevented)).toEqual([false, false]);
 });
 
@@ -579,7 +578,7 @@ test("card-detail Ctrl/Cmd+O opens the attachment file picker", async ({
   expect(chooser).toBeTruthy();
 });
 
-test("card-detail Ctrl/Cmd+U focuses the due-date input and opens the picker", async ({
+test("due date: Accel+U opens the picker; typed and calendar entry, all by keyboard", async ({
   page,
   request,
 }) => {
@@ -589,31 +588,116 @@ test("card-detail Ctrl/Cmd+U focuses the due-date input and opens the picker", a
   const list = await (
     await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
   ).json();
-  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Due card" } });
-
-  // Record showPicker() invocations (the native picker UI itself isn't
-  // observable). showPicker only exists on date/color/file inputs, so a call
-  // on the type="date" input proves accel+U hit the right element — the bug was
-  // it targeting the type="text" input, where showPicker is a no-op.
-  await page.addInitScript(() => {
-    (window as any).__pickerOpens = [];
-    HTMLInputElement.prototype.showPicker = function () {
-      (window as any).__pickerOpens.push(this.type);
-    };
-  });
+  const card = await (
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Due card" } })
+  ).json();
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const inDays = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return iso(d);
+  };
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Due card" }).click();
   await expect(page.locator(".modal-title-input")).toBeFocused();
+  const chip = page.locator(".due-chip");
+  await expect(chip).toHaveText("Set due date");
 
+  // Typed: an offset, Enter sets it and returns to the chip.
   await page.keyboard.press("ControlOrMeta+u");
+  const input = page.locator(".due-picker-input");
+  await expect(input).toBeFocused();
+  await input.fill("+3d");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".due-picker")).toHaveCount(0);
+  await expect(chip).toBeFocused();
+  await expect(chip).toHaveText(/ · in 3 days$/);
+  await expect(chip).toHaveClass(/due-chip--future/);
 
-  // The visible text input gets focus…
-  await expect(page.locator(".due-date-input")).toBeFocused();
-  // …and the native picker was opened on the date input.
-  await expect
-    .poll(() => page.evaluate(() => (window as any).__pickerOpens))
-    .toContain("date");
+  // Nonsense is refused in place.
+  await page.keyboard.press("Enter");
+  await expect(input).toBeFocused();
+  await input.fill("someday");
+  await page.keyboard.press("Enter");
+  await expect(input).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator(".due-picker")).toBeVisible();
+
+  // Calendar: ↓ into the grid on the current date, → a day, PgDn a month.
+  await input.fill("");
+  await input.fill(inDays(3));
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator(`.due-picker-day[data-date="${inDays(3)}"]`)).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(`.due-picker-day[data-date="${inDays(4)}"]`)).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.locator(`.due-picker-day[data-date="${inDays(-3)}"]`)).toBeFocused();
+  await page.keyboard.press("PageDown");
+  const next = await page.evaluate(() => document.activeElement?.getAttribute("data-date"));
+  expect(next).not.toBe(inDays(-3));
+  await page.keyboard.press("PageUp");
+  await expect(page.locator(`.due-picker-day[data-date="${inDays(-3)}"]`)).toBeFocused();
+  // Esc closes only the picker; the card stays open with the old date.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".due-picker")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+  await expect(chip).toBeFocused();
+  await expect(chip).toHaveText(/in 3 days/);
+
+  // Enter on a day picks it: overdue within a week says how much.
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ArrowDown");
+  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("Enter");
+  await expect(chip).toHaveText(/ · overdue 2 days$/);
+  await expect(chip).toHaveClass(/due-chip--overdue/);
+
+  // The clear button empties it; a pointer outside closes the picker.
+  await page.locator(".due-date-clear").click();
+  await expect(chip).toHaveText("Set due date");
+  await chip.click();
+  await expect(page.locator(".due-picker")).toBeVisible();
+  await page.locator(".modal-title-input").click();
+  await expect(page.locator(".due-picker")).toHaveCount(0);
+
+  // Quick pick + save: stored as an ISO day, the card badge words it.
+  await chip.click();
+  await page.locator(".due-picker-quick", { hasText: "Tomorrow" }).click();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  const stored = await (await request.get(`/api/boards/${board.id}`)).json();
+  expect(stored.lists[0].cards.find((c: { id: string }) => c.id === card.id).due_date).toBe(inDays(1));
+  await expect(page.locator(".card .due-badge")).toHaveText("Tomorrow");
+});
+
+test("due badges: relative within a week, else the date", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Due Badges" } })).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  const iso = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const cases: [number, RegExp, string][] = [
+    [0, /^Today$/, "today"],
+    [7, /^in 7d$/, "future"],
+    [8, /^[A-Z][a-z]{2} \d+|^\d+ [A-Z][a-z]{2}/, "future"],
+    [-7, /^Overdue 7d$/, "overdue"],
+    [-8, /^Overdue · /, "overdue"],
+  ];
+  for (const [days] of cases) {
+    const c = await (await request.post(`/api/lists/${list.id}/cards`, { data: { title: `Due ${days}` } })).json();
+    await request.put(`/api/cards/${c.id}`, { data: { due_date: iso(days) } });
+  }
+  await page.goto(`/board/${board.id}`);
+  for (const [days, text, tone] of cases) {
+    const badge = page.locator(".card", { hasText: new RegExp(`^Due ${days}(?!\\d)`) }).locator(".due-badge");
+    await expect(badge).toHaveText(text);
+    await expect(badge).toHaveClass(new RegExp(`due-badge--${tone}`));
+  }
 });
 
 test("clicking a link in the description opens it in a new tab", async ({
@@ -1248,4 +1332,33 @@ test("Arrow Up/Down wrap between cards; Shift+Arrow wraps when moving a card", a
   await page.keyboard.press("Shift+ArrowDown");
   await expect(only).toBeFocused();
   await expect(page.locator(".list").nth(1).locator(".card")).toHaveCount(1);
+});
+
+test("list rename: Enter commits, Esc cancels (the unmount blur doesn't commit)", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Rename lists" } })).json();
+  await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Before" } });
+  const title = async () =>
+    (await (await request.get(`/api/boards/${board.id}`)).json()).lists[0].title;
+  await page.goto(`/board/${board.id}`);
+  const input = page.locator(".list-title-input");
+
+  await page.locator(".list-title").click();
+  await input.fill("After");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".list-title")).toHaveText("After");
+  await expect.poll(title).toBe("After");
+
+  await page.locator(".list-title").click();
+  await input.fill("Discarded");
+  await page.keyboard.press("Escape");
+  await expect(input).toHaveCount(0);
+  await expect(page.locator(".list-title")).toHaveText("After");
+  await page.waitForTimeout(300); // a stray commit would land by now
+  expect(await title()).toBe("After");
+
+  // Clicking away still commits.
+  await page.locator(".list-title").click();
+  await input.fill("Blurred");
+  await page.locator(".board-page").click({ position: { x: 5, y: 5 } });
+  await expect.poll(title).toBe("Blurred");
 });

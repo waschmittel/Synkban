@@ -77,6 +77,15 @@ describe("isInInput", () => {
     expect(isInInput(child)).toBe(true);
   });
 
+  it("returns true for a day button in the (portaled) .due-picker", () => {
+    const picker = document.createElement("div");
+    picker.className = "due-picker";
+    const day = document.createElement("button");
+    picker.appendChild(day);
+    document.body.appendChild(picker);
+    expect(isInInput(day)).toBe(true);
+  });
+
   it("returns false for a button on the page outside any guarded surface", () => {
     const btn = document.createElement("button");
     document.body.appendChild(btn);

@@ -17,6 +17,9 @@ async function seedCard(request: APIRequestContext, boardTitle: string) {
 // card content, persisted via the card Save, not via dedicated endpoints).
 async function addItems(page: Page, texts: string[]) {
   const addInput = page.locator(".checklist-add-input");
+  // An empty checklist is collapsed into "+ Checklist".
+  if (!(await addInput.count())) await page.locator(".detail-add-checklist").click();
+  await expect(addInput).toBeFocused();
   for (const t of texts) {
     await addInput.fill(t);
     await addInput.press("Enter");
@@ -26,7 +29,7 @@ async function addItems(page: Page, texts: string[]) {
 
 // Save the card (persists checklist) and wait for the modal to close.
 async function saveCard(page: Page) {
-  await page.locator(".modal-footer .btn-primary").click();
+  await page.locator(".modal-save-btn").click();
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
 }
 

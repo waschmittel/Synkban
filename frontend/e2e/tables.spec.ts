@@ -238,7 +238,7 @@ test("toolbar button opens the same menu, Escape closes it, and tables persist",
   // Escape closed only the menu, not the card modal.
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  await page.locator(".modal-footer .btn-primary").click();
+  await page.locator(".modal-save-btn").click();
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await page.locator(".card", { hasText: "Table card" }).click();
   await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(1);
@@ -279,7 +279,7 @@ test("column alignment: menu keys, header always centred, new rows inherit", asy
   expect(await align(".editor-wrapper .ProseMirror td", 8)).toBe("right"); // row 3, col 2
 
   // Survives saving and reopening.
-  await page.locator(".modal-footer .btn-primary").click();
+  await page.locator(".modal-save-btn").click();
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await page.locator(".card", { hasText: "Table card" }).click();
   expect(await align(".editor-wrapper .ProseMirror td", 8)).toBe("right");

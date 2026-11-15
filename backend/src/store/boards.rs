@@ -26,6 +26,8 @@ pub(crate) struct BoardFile {
     pub archived_at: Option<String>,
     #[serde(default)]
     pub position: f64,
+    #[serde(default)]
+    pub mode: BoardMode,
 }
 
 impl From<BoardFile> for Board {
@@ -38,6 +40,7 @@ impl From<BoardFile> for Board {
             archived: b.archived,
             archived_at: b.archived_at,
             position: b.position,
+            mode: b.mode,
         }
     }
 }
@@ -100,6 +103,7 @@ pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
         archived: false,
         archived_at: None,
         position: max_pos + 1.0,
+        mode: BoardMode::Kanban,
     };
     write_board_file(data_dir, &bf)?;
     Ok(Board::from(bf))
@@ -170,6 +174,7 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
         created_at: bf.created_at,
         color: bf.color,
         labels: bf.labels,
+        mode: bf.mode,
         lists: lists_with_cards,
     })
 }
@@ -180,6 +185,7 @@ pub fn update_board(
     title: Option<&str>,
     color: Option<&str>,
     archived: Option<bool>,
+    mode: Option<BoardMode>,
 ) -> Result<Board, AppError> {
     let mut bf = read_board_file(data_dir, board_id)?;
     if let Some(t) = title {
@@ -195,6 +201,9 @@ pub fn update_board(
             bf.archived_at = None;
         }
         bf.archived = a;
+    }
+    if let Some(m) = mode {
+        bf.mode = m;
     }
     write_board_file(data_dir, &bf)?;
     Ok(Board::from(bf))
@@ -323,7 +332,7 @@ mod tests {
     fn update_board_title() {
         let d = tmp();
         let b = create_board(d.path(), "Old").unwrap();
-        let updated = update_board(d.path(), &b.id, Some("New"), None, None).unwrap();
+        let updated = update_board(d.path(), &b.id, Some("New"), None, None, None).unwrap();
         assert_eq!(updated.title, "New");
         assert_eq!(get_board(d.path(), &b.id).unwrap().title, "New");
     }
@@ -332,14 +341,45 @@ mod tests {
     fn update_board_color() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let updated = update_board(d.path(), &b.id, None, Some("#ff0000"), None).unwrap();
+        let updated = update_board(d.path(), &b.id, None, Some("#ff0000"), None, None).unwrap();
         assert_eq!(updated.color, Some("#ff0000".into()));
+    }
+
+    #[test]
+    fn board_mode_defaults_to_kanban_and_persists() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        assert_eq!(b.mode, BoardMode::Kanban);
+        let updated =
+            update_board(d.path(), &b.id, None, None, None, Some(BoardMode::Notes)).unwrap();
+        assert_eq!(updated.mode, BoardMode::Notes);
+        assert_eq!(get_board(d.path(), &b.id).unwrap().mode, BoardMode::Notes);
+        // Other updates leave it alone.
+        update_board(d.path(), &b.id, Some("Renamed"), None, None, None).unwrap();
+        assert_eq!(
+            read_board_file(d.path(), &b.id).unwrap().mode,
+            BoardMode::Notes
+        );
+    }
+
+    #[test]
+    fn board_file_without_mode_reads_as_kanban() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let path = board_dir(d.path(), &b.id).join("board.json");
+        let mut v: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        v.as_object_mut().unwrap().remove("mode");
+        fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(
+            read_board_file(d.path(), &b.id).unwrap().mode,
+            BoardMode::Kanban
+        );
     }
 
     #[test]
     fn update_board_not_found() {
         let d = tmp();
-        let err = update_board(d.path(), "fake", Some("X"), None, None).unwrap_err();
+        let err = update_board(d.path(), "fake", Some("X"), None, None, None).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
@@ -375,7 +415,7 @@ mod tests {
         let d = tmp();
         let a = create_board(d.path(), "A").unwrap();
         let b = create_board(d.path(), "B").unwrap();
-        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true), None).unwrap();
         reorder_boards(d.path(), &[b.id, a.id]).unwrap();
         let active = list_boards(d.path()).unwrap();
         assert_eq!(active.len(), 1);
@@ -395,10 +435,10 @@ mod tests {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
         assert!(!b.archived);
-        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true), None).unwrap();
         assert!(list_boards(d.path()).unwrap().is_empty());
         assert_eq!(list_archived_boards(d.path()).unwrap().len(), 1);
-        update_board(d.path(), &b.id, None, None, Some(false)).unwrap();
+        update_board(d.path(), &b.id, None, None, Some(false), None).unwrap();
         assert_eq!(list_boards(d.path()).unwrap().len(), 1);
         assert!(list_archived_boards(d.path()).unwrap().is_empty());
     }
@@ -408,9 +448,9 @@ mod tests {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
         assert!(b.archived_at.is_none());
-        let archived = update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        let archived = update_board(d.path(), &b.id, None, None, Some(true), None).unwrap();
         assert!(archived.archived_at.is_some());
-        let restored = update_board(d.path(), &b.id, None, None, Some(false)).unwrap();
+        let restored = update_board(d.path(), &b.id, None, None, Some(false), None).unwrap();
         assert!(restored.archived_at.is_none());
     }
 
@@ -420,9 +460,9 @@ mod tests {
         let a = create_board(d.path(), "A").unwrap();
         let b = create_board(d.path(), "B").unwrap();
 
-        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true), None).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1100));
-        update_board(d.path(), &a.id, None, None, Some(true)).unwrap();
+        update_board(d.path(), &a.id, None, None, Some(true), None).unwrap();
 
         let archived = list_archived_boards(d.path()).unwrap();
         let titles: Vec<&str> = archived.iter().map(|b| b.title.as_str()).collect();
@@ -441,7 +481,7 @@ mod tests {
     fn delete_board_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true), None).unwrap();
         delete_board(d.path(), &b.id).unwrap();
         assert!(!board_dir(d.path(), &b.id).exists());
         assert!(list_boards(d.path()).unwrap().is_empty());
@@ -460,7 +500,7 @@ mod tests {
         let b = create_board(d.path(), "Board").unwrap();
         let l = create_list(d.path(), &b.id, "List").unwrap();
         create_card(d.path(), &l.id, "Card").unwrap();
-        update_board(d.path(), &b.id, None, None, Some(true)).unwrap();
+        update_board(d.path(), &b.id, None, None, Some(true), None).unwrap();
         delete_board(d.path(), &b.id).unwrap();
         assert!(!board_dir(d.path(), &b.id).exists());
     }

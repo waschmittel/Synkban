@@ -18,4 +18,5 @@ Simple tables keep the format, the PDF layout (ADR-0012), the diff and the text 
 
 An app version without table support shows a table description as raw JSON (`docFromDescription` treats a node-parse failure as plain text). **All clients sharing a data dir must be upgraded together.**
 
+- **Width:** in the card modal tables span the full width (fixed layout). In the Notes pane (ADR-0022) they use auto layout: at least the 90ch text measure, growing with their content, wrapping at word boundaries; wider than the pane, the description scrolls sideways.
 - Menu keys for moving rows/columns are `W`/`S`/`A`/`D` (arrows navigate the menu, ADR-0016).

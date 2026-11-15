@@ -2,15 +2,24 @@ import { For, Show } from "solid-js";
 import type { Card as CardType, Label } from "../types";
 import { crossListInsertPosition, listDropPosition, moveToBottom, moveToTop, withinListMoveDown, withinListMoveUp } from "../positions";
 import { tip } from "../platform";
+import { dueInfo } from "../dueDate";
 
 interface Props {
   card: CardType;
   labels: Label[];
   onArchive: (id: string) => void;
-  onClick: (card: CardType) => void;
+  /// `byKey`: Enter/Space rather than a pointer click (Notes mode keeps a click's focus).
+  onClick: (card: CardType, byKey?: boolean) => void;
   onMove: (cardId: string, targetListId: string, position: number) => void;
   onMoveList: (listId: string, position: number) => void;
+  /// Notes mode: the card is the one shown in the detail pane.
+  selected?: boolean;
+  /// Notes mode: ←/→ (focus), Shift+←/→ (move card), Shift+Alt+←/→ (move
+  /// list) target the neighbouring list tab instead of a sibling column.
+  onSideKey?: (card: CardType, dir: -1 | 1, kind: SideKey) => void;
 }
+
+export type SideKey = "focus" | "move" | "moveList";
 
 export function renderTitle(title: string): string {
   return title
@@ -55,7 +64,7 @@ export default function Card(props: Props) {
 
     if (key === "Enter" || key === " ") {
       e.preventDefault();
-      props.onClick(props.card);
+      props.onClick(props.card, true);
       return;
     }
     if (key === "Delete" || key === "Backspace") {
@@ -65,6 +74,14 @@ export default function Card(props: Props) {
     }
 
     const currentList = el.closest(".list") as HTMLElement | null;
+
+    if (props.onSideKey && (key === "ArrowLeft" || key === "ArrowRight")) {
+      e.preventDefault();
+      e.stopPropagation();
+      const kind: SideKey = e.shiftKey ? (e.altKey ? "moveList" : "move") : "focus";
+      props.onSideKey(props.card, key === "ArrowLeft" ? -1 : 1, kind);
+      return;
+    }
 
     // Shift+Alt+Left/Right: reorder list itself (preserve focus on the same card).
     if (e.shiftKey && e.altKey && (key === "ArrowLeft" || key === "ArrowRight")) {
@@ -191,21 +208,15 @@ export default function Card(props: Props) {
   const checklistDone = () => props.card.checklist?.filter((i) => i.done).length ?? 0;
 
   const getDueDateDisplay = () => {
-    const dd = props.card.due_date;
-    if (!dd) return null;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const due = new Date(dd + "T00:00:00");
-    const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
-    if (diffDays < 0) return { text: `Overdue ${-diffDays}d`, cls: "due-badge--overdue" };
-    if (diffDays === 0) return { text: "Today", cls: "due-badge--today" };
-    if (diffDays === 1) return { text: "Tomorrow", cls: "due-badge--soon" };
-    return { text: `in ${diffDays}d`, cls: "due-badge--future" };
+    const d = dueInfo(props.card.due_date);
+    return d && { text: d.short, title: `Due ${d.long}`, cls: `due-badge--${d.tone}` };
   };
 
   return (
     <div
       class="card"
+      classList={{ "card--selected": !!props.selected }}
+      aria-current={props.selected ? "true" : undefined}
       tabindex="0"
       draggable={true}
       onDragStart={handleDragStart}
@@ -236,7 +247,7 @@ export default function Card(props: Props) {
             <div class="card-badges">
               <Show when={getDueDateDisplay()}>
                 {(dd) => (
-                  <span class={`due-badge ${dd().cls}`} title={`Due: ${props.card.due_date}`}>
+                  <span class={`due-badge ${dd().cls}`} title={dd().title}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                       <line x1="16" y1="2" x2="16" y2="6" />

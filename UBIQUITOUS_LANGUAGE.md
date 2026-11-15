@@ -14,7 +14,7 @@
 | **Checklist** | The single flat list of **Checklist Items** (`id`, `text`, `done`) on a **Card**; card content (ADR-0007) | Subtasks, todo list |
 | **Attachment** | A file on a **Card**, stored as binary + optional thumbnail + sidecar, never in card JSON (ADR-0004) | Upload, file |
 | **Inline Image** | A reference in the description to an image **Attachment** of the same card; always valid (ADR-0020) | Embedded image, image URL |
-| **Due Date** | Optional `YYYY-MM-DD` on a **Card**, shown as a colour-coded badge | Deadline |
+| **Due Date** | Optional `YYYY-MM-DD` on a **Card**, shown as a colour-coded badge (relative within 7 days, else the date; ADR-0023) and in the detail as a chip opening the date picker | Deadline |
 | **History** | Last 100 content snapshots of a **Card**, newest first via `/history` (ADR-0005) | Audit log, changelog |
 | **Position** | `f64` fractional index ordering boards, lists, cards (midpoint insertion; gaps are fine) | Index, rank |
 
@@ -36,6 +36,11 @@
 | --- | --- | --- |
 | **Accel** | The platform accelerator: Cmd on macOS, Ctrl elsewhere (ADR-0008) | Ctrl/Cmd, Mod (outside ProseMirror keymaps) |
 | **Card Modal** | The detail dialog for a **Card** (`CardDetail`) with sections for title, labels, due date, description, checklist, attachments | Card detail page |
+| **Kanban Mode** | A **Board** shown as lists side by side; cards open in the **Card Modal** (default) | Board view (that's ADR-0021's scroll/focus memory) |
+| **Notes Mode** | A **Board** shown one list at a time: lists as **List Tabs**, the active list's cards as master, the selected card in the **Notes Pane**; stored per board (`mode`, ADR-0022) | Note view, document mode |
+| **List Tab** | A **List** as a tab in **Notes Mode**; shows its card count, accepts dropped cards; the active one is the list's title (rename, delete) | — |
+| **Notes Pane** | The inline card editor of **Notes Mode** (`CardDetail variant="pane"`): Save stays, Revert instead of Cancel | Detail view, sidebar |
+| **Text Measure** | The 90ch cap on description prose; tables and code blocks may grow past it | Line length |
 | **Label Drawer** | Right-side slide-out for managing **Labels** | Label panel |
 | **Archive Panel** | Shared overlay (`ArchivePanel`) listing archived cards or boards with Restore/Delete | Trash |
 | **Board Dock** | Fixed pill of dots at the bottom of a board to switch boards (`,`/`.`) | Pager |

@@ -2,6 +2,7 @@ import { createSignal, Index, Show } from "solid-js";
 import type { ChecklistItem } from "../types";
 import { moveRovingFocus } from "../rovingFocus";
 import { accel, tip } from "../platform";
+import DetailRow from "./DetailRow";
 
 interface Props {
   items: ChecklistItem[];
@@ -12,6 +13,8 @@ interface Props {
   onMove: (itemId: string, toIndex: number) => void;
   onToggleAll: (done: boolean) => void;
   addInputRef?: (el: HTMLInputElement) => void;
+  /// Focus left the add field of an empty checklist (it collapses again).
+  onIdle?: () => void;
 }
 
 /// Checklist in the card detail modal. Edits mutate the parent's local state
@@ -178,26 +181,16 @@ export default function ChecklistSection(props: Props) {
   };
 
   return (
-    <div class="checklist-area">
-      <div class="modal-section-header checklist-header" style={{ "margin-top": "16px" }}>
+    <DetailRow
+      class="checklist-area"
+      title={tip("Checklist", accel("L"))}
+      icon={
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="9 11 12 14 22 4" />
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </svg>
-        <span class="modal-label" title={tip("Focus checklist", accel("L"))}>Checklist</span>
-        <Show when={props.items.length > 0}>
-          <span class="checklist-progress" classList={{ "checklist-progress--complete": allDone() }}>
-            {doneCount()}/{props.items.length}
-          </span>
-          <button
-            class="checklist-toggle-all"
-            onClick={() => props.onToggleAll(!allDone())}
-            title={allDone() ? "Uncheck all items" : "Check all items"}
-          >
-            {allDone() ? "Uncheck all" : "Check all"}
-          </button>
-        </Show>
-      </div>
+      }
+    >
       <div class="checklist-items">
         <Index each={props.items}>
           {(item, index) => (
@@ -303,6 +296,7 @@ export default function ChecklistSection(props: Props) {
           )}
         </Index>
       </div>
+      <div class="checklist-add-row">
       <input
         ref={props.addInputRef}
         class="checklist-add-input"
@@ -311,6 +305,8 @@ export default function ChecklistSection(props: Props) {
         title={tip("Add checklist item", accel("L"))}
         value={newText()}
         onInput={(e) => setNewText(e.currentTarget.value)}
+        // Not on a window switch: the field should still be there on return.
+        onBlur={() => document.hasFocus() && props.items.length === 0 && !newText().trim() && props.onIdle?.()}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
@@ -318,6 +314,19 @@ export default function ChecklistSection(props: Props) {
           }
         }}
       />
-    </div>
+        <Show when={props.items.length > 0}>
+          <span class="checklist-progress" classList={{ "checklist-progress--complete": allDone() }}>
+            {doneCount()}/{props.items.length}
+          </span>
+          <button
+            class="checklist-toggle-all"
+            onClick={() => props.onToggleAll(!allDone())}
+            title={allDone() ? "Uncheck all items" : "Check all items"}
+          >
+            {allDone() ? "Uncheck all" : "Check all"}
+          </button>
+        </Show>
+      </div>
+    </DetailRow>
   );
 }

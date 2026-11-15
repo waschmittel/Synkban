@@ -45,6 +45,36 @@ test("board controls show their shortcuts", async ({ page, request }) => {
     [".list-title", /\(R\)$/],
     [".card-archive", /\(Del\)$/],
     [".board-dock-dot", /\(, \/ \.\)$/],
+    [".board-mode-btn:has-text('Board')", /\(V\)$/],
+    [".board-mode-btn:has-text('Notes')", /\(V\)$/],
+  ]);
+});
+
+test("notes view controls show their shortcuts", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Tooltip Notes" } })).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Later" } });
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Note card" } });
+  await request.put(`/api/boards/${board.id}`, { data: { mode: "notes" } });
+
+  await page.goto(`/board/${board.id}`);
+  await expect(page.locator(".notes-detail")).toBeVisible();
+  await expectTitles(page, [
+    [".notes-tab:not(.notes-tab--active) .notes-tab-btn", /\(← \/ →\)$/],
+    [".notes-tab--active .notes-tab-btn", /click to rename \(R\)$/],
+    [".notes-master .add-trigger", /\(N\)$/],
+    [".notes-tabs .add-list-wrapper .add-trigger", /\(L\)$/],
+    [".notes-master .card-archive", /\(Del\)$/],
+    [".notes-detail .modal-title-input", new RegExp(`${A("E")}\\)$`)],
+    [".notes-detail .modal-save-btn", new RegExp(`${A("S")}\\)$`)],
+    // Empty checklist / attachments collapse into "+" buttons with the section keys.
+    [".notes-detail .detail-add-checklist", new RegExp(`^Add checklist \\(${A("L")}\\)$`)],
+    [".notes-detail .detail-add-attachment", new RegExp(`^Add attachment \\(${A("O")}\\)$`)],
+    [".notes-detail .due-chip", new RegExp(`^Set due date \\(${A("U")}\\)$`)],
+    [".notes-detail .modal-export-btn", new RegExp(`${A("P")}\\)$`)],
+    [".notes-detail .modal-history-btn", new RegExp(`${A("J")}\\)$`)],
   ]);
 });
 
@@ -75,14 +105,18 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
   await expectTitles(page, [
     [".modal-title-input", new RegExp(`${A("E")}\\)$`)],
     [".modal-close", /\(Esc\)$/],
-    [".modal-section-header:has-text('Labels') .modal-label", new RegExp(`${A("G")}\\)$`)],
-    [".due-date-calendar-btn", new RegExp(`${A("U")}\\)$`)],
-    [".modal-section-header:has-text('Description') .modal-label", new RegExp(`${A("D")}\\)$`)],
+    // Section icons carry the section name and its shortcut.
+    [".due-date-area .detail-row-label", new RegExp(`^Due date \\(${A("U")}\\)$`)],
+    [".label-section .detail-row-label", new RegExp(`^Labels \\(${A("G")}\\)$`)],
+    [".description-row .detail-row-label", new RegExp(`^Description \\(${A("D")}\\)$`)],
+    [".checklist-area .detail-row-label", new RegExp(`^Checklist \\(${A("L")}\\)$`)],
+    [".attachments-area .detail-row-label", new RegExp(`^Attachments \\(${A("O")}\\)$`)],
+    [".due-chip", new RegExp(`${A("U")}\\)$`)],
     [".checklist-add-input", new RegExp(`${A("L")}\\)$`)],
     [".checklist-item .checklist-delete, .checklist-item [title^='Remove item']", /\(Del\)$/],
     [".attachment-upload", new RegExp(`${A("O")}\\)$`)],
     [".attachment-delete", /\(Del\)$/],
-    [".modal-footer .btn-primary", new RegExp(`${A("S")}\\)$`)],
+    [".modal-save-btn", new RegExp(`${A("S")}\\)$`)],
     [".modal-footer .btn-cancel", /\(Esc\)$/],
     [".modal-export-btn", new RegExp(`${A("P")}\\)$`)],
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],

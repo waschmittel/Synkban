@@ -295,7 +295,7 @@ test("attached images can be inserted, previewed and vanish from the text when d
   await page.keyboard.press("Escape");
 
   // Saved description holds the reference, not a URL.
-  await page.locator(".modal-footer .btn-primary").click();
+  await page.locator(".modal-save-btn").click();
   await page.locator(".card", { hasText: "Editor card" }).click();
   await expect(editor(page).locator("img.editor-image")).toHaveCount(1);
 
@@ -380,7 +380,7 @@ test("attachments show whether the description uses them; deleting asks first", 
   await expect(page.locator(".attachment-ref")).toHaveCount(0);
 
   await page.locator(".attachment-insert").click();
-  await expect(page.locator(".attachment-ref")).toHaveText(/in description/);
+  await expect(page.locator(".attachment-ref")).toHaveText("in text");
 
   // Cancel keeps both.
   await page.locator(".attachment-delete").click();
@@ -491,4 +491,53 @@ test("copying an inline image to another card copies the attachment", async ({ p
   await expect(img).toHaveCount(1);
   await expect.poll(() => img.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator(".attachment-ref")).toHaveCount(1);
+});
+
+test("Tab nests list items and Shift+Tab lifts them; in a list Tab never leaves the editor", async ({ page, request }) => {
+  await openEditor(page, request, "Editor Lists");
+  await page.keyboard.type("- one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("two");
+  await page.keyboard.press("Tab");
+  await expect(editor(page)).toBeFocused();
+  await expect(editor(page).locator("ul > li > ul > li")).toHaveText("two");
+  // Typing goes on in the nested item.
+  await page.keyboard.type("!");
+  await expect(editor(page).locator("ul ul li")).toHaveText("two!");
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(editor(page)).toBeFocused();
+  await expect(editor(page).locator("ul ul")).toHaveCount(0);
+  await expect(editor(page).locator("ul > li")).toHaveCount(2);
+
+  // First item: nothing to nest under. Tab is a no-op, not a focus jump.
+  await editor(page).getByText("one", { exact: true }).click();
+  await settle(page); // ProseMirror picks up the click's selection asynchronously
+  await page.keyboard.press("Tab");
+  await expect(editor(page)).toBeFocused();
+  await expect(editor(page).locator("ul ul")).toHaveCount(0);
+  await page.keyboard.type("?");
+  await expect(editor(page).locator("ul > li").first()).toContainText("?");
+
+  // Ordered lists too.
+  await editor(page).locator("ul > li").last().click();
+  await settle(page);
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter"); // leave the bullet list
+  await page.keyboard.type("1. first");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("second");
+  await page.keyboard.press("Tab");
+  await expect(editor(page).locator("ol > li > ol > li")).toHaveText("second");
+
+  // Outside lists and tables Tab still moves on, so the keyboard can leave.
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("plain");
+  await expect(editor(page).locator(":scope > p").last()).toHaveText("plain");
+  await page.keyboard.press("Tab");
+  await expect(editor(page)).not.toBeFocused();
 });

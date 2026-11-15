@@ -535,7 +535,7 @@ export default function Home() {
       </Show>
 
       <Show when={showHelp()}>
-        <ShortcutHelp onClose={() => setShowHelp(false)} />
+        <ShortcutHelp context="home" onClose={() => setShowHelp(false)} />
       </Show>
     </div>
   );

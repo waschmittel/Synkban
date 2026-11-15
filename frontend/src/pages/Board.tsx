@@ -3,18 +3,22 @@ import {
   createSignal,
   createEffect,
   batch,
+  createMemo,
+  untrack,
   For,
   Show,
   onMount,
   onCleanup,
 } from "solid-js";
-import { useParams, useNavigate, A } from "@solidjs/router";
+import { useParams, useNavigate, useBeforeLeave, A } from "@solidjs/router";
 import { api } from "../api";
-import type { Card as CardType, ChecklistItem } from "../types";
+import type { BoardMode, Card as CardType, ChecklistItem } from "../types";
 import List from "../components/List";
 import AddForm from "../components/AddForm";
-import CardDetail from "../components/CardDetail";
-import ShortcutHelp from "../components/ShortcutHelp";
+import CardDetail, { type CardDetailControl } from "../components/CardDetail";
+import NotesView from "../components/NotesView";
+import type { SideKey } from "../components/Card";
+import ShortcutHelp, { helpContextOf, type HelpContext } from "../components/ShortcutHelp";
 import LabelDrawer from "../components/LabelDrawer";
 import ArchivePanel from "../components/ArchivePanel";
 import WarningBanner from "../components/WarningBanner";
@@ -24,7 +28,8 @@ import BoardColorPicker from "../components/BoardColorPicker";
 import { createConfirm } from "../confirm";
 import { useBoardHeader } from "../BoardHeaderContext";
 import { useLabelDrawer } from "../LabelDrawerContext";
-import { listDropPosition } from "../positions";
+import { crossListInsertPosition, listDropPosition, moveToBottom } from "../positions";
+import { adjacentList, listOfCard, pickCard, resolveSelection } from "../notesView";
 import { cardMatchesFilter as filterCard } from "../filter";
 import { isTypingIn, isInUiOverlay } from "../boardInput";
 import { recordLastBoard } from "../settings";
@@ -36,6 +41,9 @@ import {
   recordBoardFilter,
   rememberedFilter,
   forgetBoardViews,
+  lastFocusedCard,
+  notesCardFor,
+  rememberNotesCard,
 } from "../boardView";
 import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
@@ -68,10 +76,19 @@ export default function BoardPage() {
   };
 
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
+  /// The open card (modal or Notes pane) while it has unsaved edits.
+  const [dirtyCardId, setDirtyCardId] = createSignal<string | null>(null);
+  const trackDirty = (id: string) => (d: boolean) =>
+    setDirtyCardId((cur) => (d ? id : cur === id ? null : cur));
   const [warnings, setWarnings] = createSignal<string[]>([]);
   const refreshWarnings = () =>
     api.getWarnings().then((r) => setWarnings(r.warnings)).catch(() => {});
   const [showHelp, setShowHelp] = createSignal(false);
+  const [helpContext, setHelpContext] = createSignal<HelpContext>("board");
+  const toggleHelp = () => {
+    if (!showHelp()) setHelpContext(helpContextOf(document.activeElement, notes()));
+    setShowHelp((v) => !v);
+  };
   const [showColorPicker, setShowColorPicker] = createSignal(false);
 
   // Archive state
@@ -86,6 +103,159 @@ export default function BoardPage() {
 
   // List rename state
   const [renamingListId, setRenamingListId] = createSignal<string | null>(null);
+
+  // --- Board mode (ADR-0022) ---
+  // Applied from board.json once per visit (not on polls, so a toggle on
+  // another device can't flip the screen mid-edit); toggling writes it back.
+  const [mode, setMode] = createSignal<BoardMode>("kanban");
+  const notes = () => mode() === "notes";
+  const [activeListId, setActiveListId] = createSignal<string | null>(null);
+  const [notesCardId, setNotesCardId] = createSignal<string | null>(null);
+  const [removed, setRemoved] = createSignal(false);
+  let notesIndex = 0; // index of the selected card, picks a replacement when it vanishes
+  let lastPaneCard: CardType | undefined;
+  let pane: CardDetailControl | undefined;
+  const allLists = () => (board.error ? [] : board()?.lists ?? []);
+  const paneCard = createMemo(() => {
+    const id = notesCardId();
+    if (!id) return undefined;
+    const card = allLists().flatMap((l) => l.cards).find((c) => c.id === id);
+    if (card) lastPaneCard = card;
+    return card ?? (lastPaneCard?.id === id ? lastPaneCard : undefined);
+  });
+  const paneDirty = () => notes() && !!paneCard() && !!pane?.dirty();
+  /// True when leaving the pane's card is fine (clean, saved or discarded).
+  const confirmLeavePane = async () => !paneDirty() || (await pane!.confirmLeave());
+
+  const focusMasterCard = (cardId: string | null) => {
+    const q = (sel: string) => document.querySelector<HTMLElement>(`.notes-master ${sel}`);
+    (
+      (cardId && q(`.card[data-card-id="${cardId}"]`)) ||
+      q(".card") ||
+      q(".add-trigger") ||
+      pageEl
+    )?.focus();
+  };
+
+  const selectNotes = (listId: string | null, cardId: string | null) => {
+    batch(() => {
+      setActiveListId(listId);
+      setNotesCardId(cardId);
+      setRemoved(false);
+    });
+    const list = allLists().find((l) => l.id === listId);
+    notesIndex = Math.max(0, list?.cards.findIndex((c) => c.id === cardId) ?? 0);
+    if (listId) rememberNotesCard(params.id, listId, cardId);
+    if (cardId) focus.setLastFocused(cardId);
+  };
+
+  /// Entering Notes: the card focused on the board (either mode) wins, then
+  /// the first list with its last shown card.
+  const enterNotes = () => {
+    const lists = allLists();
+    const focused = lastFocusedCard(params.id);
+    const holder = listOfCard(lists, focused);
+    const list = holder ?? lists[0];
+    selectNotes(list?.id ?? null, holder ? focused : pickCard(list, list && notesCardFor(params.id, list.id)));
+  };
+
+  const switchMode = async (next: BoardMode) => {
+    const b = board();
+    if (!b || next === mode() || !(await confirmLeavePane())) return;
+    const cardId = notesCardId();
+    setMode(next);
+    if (next === "notes") {
+      enterNotes();
+      requestAnimationFrame(() => focusMasterCard(notesCardId()));
+    } else if (cardId) focus.preserve(cardId);
+    api.updateBoard(b.id, { mode: next }).catch((err) => alert(`Could not save the view mode: ${(err as Error).message}`));
+  };
+
+  /// Enter (`focusDescription`) goes on to the description; a click keeps the
+  /// focus on the card, so the arrows go on working.
+  const selectNotesCard = async (card: CardType, focusDescription: boolean) => {
+    if (card.id !== notesCardId()) {
+      if (!(await confirmLeavePane())) return focusMasterCard(notesCardId());
+      selectNotes(card.list_id, card.id);
+    }
+    // Synchronously: keys typed right after Enter must land in the editor.
+    // (The pane for a new card mounts within `selectNotes`.)
+    if (focusDescription) pane?.focusDescription();
+    else focusMasterCard(card.id);
+  };
+
+  /// Clean pane: focusing a card (arrows, Tab) shows it. Dirty: focus just
+  /// moves; Enter/click asks first.
+  const handleNotesFocus = (card: CardType) => {
+    if (card.id !== notesCardId() && !paneDirty()) selectNotes(card.list_id, card.id);
+  };
+
+  const selectNotesList = async (listId: string, focusCard = false) => {
+    if (listId !== activeListId()) {
+      const list = filteredLists().find((l) => l.id === listId);
+      const cardId = pickCard(list, notesCardFor(params.id, listId));
+      if (cardId !== notesCardId() && !(await confirmLeavePane())) return focusMasterCard(notesCardId());
+      selectNotes(listId, cardId);
+    }
+    // Synchronously (Solid has patched the DOM): a fast next key must find the
+    // focus on the new list, not on <body>. The rAF covers a late mount (and
+    // leaves alone a focus the user has moved on meanwhile).
+    if (focusCard) {
+      focusMasterCard(notesCardId());
+      requestAnimationFrame(() => document.activeElement === document.body && focusMasterCard(notesCardId()));
+    }
+  };
+
+  const handleSideKey = (card: CardType, dir: -1 | 1, kind: SideKey) => {
+    const lists = allLists();
+    if (kind === "moveList") return moveListByKey(card.list_id, dir < 0 ? "left" : "right");
+    const adj = adjacentList(lists, card.list_id, dir);
+    if (!adj) return;
+    if (kind === "focus") return selectNotesList(adj.id, true);
+    const idx = lists.find((l) => l.id === card.list_id)?.cards.findIndex((c) => c.id === card.id) ?? 0;
+    handleMoveCard(card.id, adj.id, crossListInsertPosition(adj.cards.map((c) => c.position), idx));
+  };
+
+  /// A card dropped on a list tab goes to the bottom of that list.
+  const handleDropOnList = async (cardId: string, listId: string) => {
+    const target = allLists().find((l) => l.id === listId);
+    if (!target || target.cards.some((c) => c.id === cardId)) return;
+    const last = target.cards[target.cards.length - 1];
+    await api.updateCard(cardId, { list_id: listId, position: last ? moveToBottom(last.position) : 1 });
+    refetch();
+  };
+
+  // Keep the selection valid across refetches (moves, archives, deletions,
+  // other devices): see `resolveSelection`.
+  createEffect(() => {
+    if (!notes() || board.error) return;
+    const b = board();
+    if (!b || b.id !== params.id) return;
+    untrack(() => {
+      const sel = resolveSelection(
+        b.lists,
+        { listId: activeListId(), cardId: notesCardId(), index: notesIndex },
+        paneDirty(),
+      );
+      if (sel.removed) setRemoved(true);
+      else if (sel.listId !== activeListId() || sel.cardId !== notesCardId() || removed())
+        selectNotes(sel.listId, sel.cardId);
+      else notesIndex = Math.max(0, b.lists.find((l) => l.id === sel.listId)?.cards.findIndex((c) => c.id === sel.cardId) ?? 0);
+    });
+  });
+
+  // Unsaved pane edits survive neither navigation (dock, `,`/`.`, `b`) nor
+  // closing the window without asking.
+  useBeforeLeave((e) => {
+    if (e.defaultPrevented || !paneDirty()) return;
+    e.preventDefault();
+    pane!.confirmLeave().then((ok) => ok && e.retry(true));
+  });
+  const onBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (paneDirty()) e.preventDefault();
+  };
+  window.addEventListener("beforeunload", onBeforeUnload);
+  onCleanup(() => window.removeEventListener("beforeunload", onBeforeUnload));
 
   createEffect(() => {
     // Reading an errored resource throws; bail out before touching board().
@@ -117,6 +287,13 @@ export default function BoardPage() {
     }
     restoredFor = id;
     const b = board();
+    batch(() => {
+      setMode(b?.mode ?? "kanban");
+      setNotesCardId(null);
+      setActiveListId(null);
+      setRemoved(false);
+    });
+    if (notes()) enterNotes();
     const f = rememberedFilter(id, b?.labels.map((l) => l.id) ?? []);
     restoring = true;
     batch(() => {
@@ -204,7 +381,21 @@ export default function BoardPage() {
         !!focused.closest(".list") &&
         !focused.closest(".add-list-wrapper");
 
-      if (!isCard && !isCardListTrigger) {
+      if (notes() && !isCard) {
+        // One list on screen: the arrows start from the selected card, and
+        // ←/→ on the add trigger switch tabs like they do on a card.
+        e.preventDefault();
+        if (isCardListTrigger && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+          const adj = adjacentList(allLists(), activeListId(), e.key === "ArrowLeft" ? -1 : 1);
+          if (adj) selectNotesList(adj.id, true);
+          return;
+        }
+        if (isCardListTrigger && e.key === "ArrowUp") {
+          const cards = document.querySelectorAll<HTMLElement>(".notes-master .card");
+          return cards[cards.length - 1]?.focus();
+        }
+        if (!isCardListTrigger) focusMasterCard(notesCardId());
+      } else if (!isCard && !isCardListTrigger) {
         e.preventDefault();
         const lists = document.querySelectorAll(".list");
         if (e.key === "ArrowDown" || e.key === "ArrowRight") {
@@ -260,6 +451,19 @@ export default function BoardPage() {
       },
       { key: "Escape", canFire: () => !!renamingListId(), handler: () => setRenamingListId(null) },
       { key: "Escape", canFire: () => header.renaming(), handler: () => header.setRenaming(false) },
+      // Notes: Esc from anywhere (pane background, title bar, …) brings the
+      // keyboard back to the selected card — via the pane's guard, as Esc
+      // inside it does. Already on a card: stay there.
+      {
+        key: "Escape",
+        canFire: () => notes(),
+        handler: () => {
+          drawer.close();
+          if (document.activeElement?.closest(".notes-master .card")) return;
+          if (paneCard() && pane) pane.leave();
+          else focusMasterCard(notesCardId());
+        },
+      },
       {
         key: "Escape",
         handler: () => {
@@ -301,7 +505,7 @@ export default function BoardPage() {
       [
         ...escDefs,
         ...arrowDefs,
-        { key: "?", ...noMods, handler: (e) => { e.preventDefault(); setShowHelp((v) => !v); } },
+        { key: "?", ...noMods, handler: (e) => { e.preventDefault(); toggleHelp(); } },
         { key: "f", ...noMods, handler: (e) => { e.preventDefault(); setShowFilterBar((v) => !v); } },
         { key: "g", ...noMods, handler: (e) => { e.preventDefault(); drawer.toggle(); } },
         { key: "l", ...noMods, handler: (e) => { e.preventDefault(); triggerAddList(); } },
@@ -310,7 +514,13 @@ export default function BoardPage() {
         {
           key: "e", ...noMods,
           canFire: () => !!(document.activeElement?.classList.contains("card")),
-          handler: (e) => { e.preventDefault(); (document.activeElement as HTMLElement).click(); },
+          handler: (e) => {
+            e.preventDefault();
+            const el = document.activeElement as HTMLElement;
+            const card = notes() && allLists().flatMap((l) => l.cards).find((c) => c.id === el.dataset.cardId);
+            if (card) selectNotesCard(card, true);
+            else el.click();
+          },
         },
         {
           key: "r", ...noMods,
@@ -333,6 +543,7 @@ export default function BoardPage() {
         },
         { key: "Backspace", ...noMods, handler: (e) => e.preventDefault() },
         { key: "b", ...noMods, handler: (e) => { e.preventDefault(); navigate("/"); } },
+        { key: "v", ...noMods, handler: (e) => { e.preventDefault(); switchMode(notes() ? "kanban" : "notes"); } },
         ...cycleDefs,
         ...navDefs,
       ],
@@ -340,7 +551,7 @@ export default function BoardPage() {
       { baseCanFire: (e) => !isTypingIn(e.target) && !isInUiOverlay(e.target) && !confirm.isOpen() },
     );
 
-    const handleToggleShortcuts = () => setShowHelp((v) => !v);
+    const handleToggleShortcuts = () => toggleHelp();
     const handleCommitRename = () => commitRename();
 
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
@@ -375,6 +586,7 @@ export default function BoardPage() {
   // --- Archive ---
 
   const handleArchiveCard = async (cardId: string) => {
+    if (cardId === notesCardId() && !(await confirmLeavePane())) return;
     if (!await confirm.ask({ message: "Archive this card?", confirmLabel: "Archive" })) return;
     const el = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
     let neighborId: string | null = null;
@@ -435,17 +647,23 @@ export default function BoardPage() {
   // --- List / Card actions ---
 
   const handleAddList = async (title: string) => {
-    await api.createList(params.id, title);
-    refetch();
+    const list = await api.createList(params.id, title);
+    try { await refetch(); } catch { /* board error surfaces via resource */ }
+    if (notes()) selectNotesList(list.id);
   };
 
-  const handleRenameList = async (listId: string, title: string) => {
+  /// `refocus` (Notes, Enter in the tab): the keyboard goes back to the selected
+  /// card, and stays there across the refetch.
+  const handleRenameList = async (listId: string, title: string, refocus = false) => {
     setRenamingListId(null);
+    if (refocus) requestAnimationFrame(() => focusMasterCard(notesCardId()));
     const b = board();
     const list = b?.lists.find((l) => l.id === listId);
     const trimmed = title.trim();
     if (!list || !trimmed || trimmed === list.title) return;
     await api.updateList(listId, { title: trimmed });
+    const cardId = notesCardId();
+    if (refocus && cardId && document.activeElement?.closest(".notes-master")) focus.preserve(cardId);
     refetch();
   };
 
@@ -454,28 +672,32 @@ export default function BoardPage() {
     refetch();
   };
 
+  // From the data, not the DOM: in Notes mode only one list is rendered.
   const moveListByKey = (listId: string, direction: "left" | "right") => {
-    const container = document.querySelector(".lists-container");
-    if (!container) return;
-    const lists = Array.from(container.querySelectorAll<HTMLElement>(".list"));
-    const idx = lists.findIndex((el) => el.dataset.listId === listId);
+    const lists = allLists();
+    const idx = lists.findIndex((l) => l.id === listId);
     if (idx < 0) return;
     if (direction === "left" && idx <= 0) return;
     if (direction === "right" && idx >= lists.length - 1) return;
-    const otherPositions = lists
-      .filter((_, i) => i !== idx)
-      .map((l) => parseFloat(l.dataset.listPosition || "0"));
+    const otherPositions = lists.filter((_, i) => i !== idx).map((l) => l.position);
     const insertAt = direction === "left" ? idx - 1 : idx + 1;
     handleMoveList(listId, listDropPosition(otherPositions, insertAt));
   };
 
   const handleAddCard = async (listId: string, title: string) => {
     const card = await api.createCard(listId, title);
-    focus.preserve(card.id);
-    refetch();
+    if (!notes()) {
+      focus.preserve(card.id);
+      refetch();
+      return;
+    }
+    // Notes: straight on to the new card's description.
+    try { await refetch(); } catch { /* board error surfaces via resource */ }
+    selectNotesCard(card, true);
   };
 
   const handleDeleteList = async (listId: string) => {
+    if (paneCard()?.list_id === listId && !(await confirmLeavePane())) return;
     const b = board();
     const list = b?.lists.find((l) => l.id === listId);
     if (list && list.cards.length > 0) {
@@ -521,6 +743,32 @@ export default function BoardPage() {
     try { await refetch(); } catch { /* board error surfaces via resource */ }
     setSelectedCard(null);
     focus.preserve(id);
+  };
+
+  /// Notes pane: Save writes and stays (ADR-0022).
+  const handlePaneSave = async (
+    id: string,
+    title: string,
+    description: string,
+    labelIds: string[],
+    dueDate: string | null,
+    checklist: ChecklistItem[]
+  ) => {
+    await api.updateCard(id, { title, description, label_ids: labelIds, due_date: dueDate, checklist });
+    try { await refetch(); } catch { /* board error surfaces via resource */ }
+  };
+
+  /// Notes pane: bring back a card archived elsewhere, into the active list.
+  const handlePaneRestore = async () => {
+    const id = notesCardId();
+    if (!id) return false;
+    try {
+      await api.restoreCard(id, activeListId() ?? undefined);
+      return true;
+    } catch (err) {
+      alert(`Restore failed: ${(err as Error).message}`);
+      return false;
+    }
   };
 
   const handleModalClose = async () => {
@@ -655,6 +903,9 @@ export default function BoardPage() {
     if (!isFiltering()) return cards;
     return cards.filter((c) => filterCard(c, filterText(), filterLabelIds()));
   };
+  const filteredLists = createMemo(() =>
+    allLists().map((l) => (isFiltering() ? { ...l, cards: filteredCards(l.cards) } : l)),
+  );
 
   return (
     <div
@@ -689,6 +940,37 @@ export default function BoardPage() {
         {(b) => (
           <>
             <div class="board-title-bar">
+              <div class="board-mode-switch" role="group" aria-label="View">
+                <button
+                  class="board-mode-btn"
+                  classList={{ "board-mode-btn--active": !notes() }}
+                  aria-pressed={!notes()}
+                  onClick={() => switchMode("kanban")}
+                  title={tip("Board view", "V")}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="5" height="16" rx="1" />
+                    <rect x="10" y="4" width="5" height="11" rx="1" />
+                    <rect x="17" y="4" width="4" height="7" rx="1" />
+                  </svg>
+                  Board
+                </button>
+                <button
+                  class="board-mode-btn"
+                  classList={{ "board-mode-btn--active": notes() }}
+                  aria-pressed={notes()}
+                  onClick={() => switchMode("notes")}
+                  title={tip("Notes view", "V")}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <line x1="9" y1="4" x2="9" y2="20" />
+                    <line x1="12" y1="9" x2="18" y2="9" />
+                    <line x1="12" y1="13" x2="18" y2="13" />
+                  </svg>
+                  Notes
+                </button>
+              </div>
               <button
                 class="board-filter-btn"
                 classList={{ "board-filter-btn--active": showFilterBar() || isFiltering() }}
@@ -732,6 +1014,60 @@ export default function BoardPage() {
                 autofocus={!restoring}
               />
             </Show>
+            <Show
+              when={!notes()}
+              fallback={
+                <NotesView
+                  boardId={b().id}
+                  lists={b().lists}
+                  filtered={filteredLists()}
+                  filtering={isFiltering()}
+                  labels={b().labels}
+                  activeListId={activeListId()}
+                  selectedCardId={paneCard() ? notesCardId() : null}
+                  dirtyCardId={dirtyCardId()}
+                  renamingListId={renamingListId()}
+                  onSelectList={(id) => selectNotesList(id)}
+                  onCardClick={(card, byKey) => selectNotesCard(card, !!byKey)}
+                  onCardFocus={handleNotesFocus}
+                  onSideKey={handleSideKey}
+                  onDropOnList={handleDropOnList}
+                  onAddList={handleAddList}
+                  onAddCard={handleAddCard}
+                  onArchiveCard={handleArchiveCard}
+                  onDeleteList={handleDeleteList}
+                  onDropCard={handleDropCard}
+                  onMoveCard={handleMoveCard}
+                  onMoveList={handleMoveList}
+                  onRequestRename={setRenamingListId}
+                  onRenameList={handleRenameList}
+                  onRenameCancel={() => {
+                    setRenamingListId(null);
+                    requestAnimationFrame(() => focusMasterCard(notesCardId()));
+                  }}
+                  detail={
+                    <Show when={paneCard() ? notesCardId() : null} keyed>
+                      {(id) => (
+                        <CardDetail
+                          onDirtyChange={trackDirty(id)}
+                          variant="pane"
+                          card={paneCard()!}
+                          removed={removed()}
+                          boardLabels={b().labels}
+                          onCreateLabel={handleCreateLabel}
+                          onSave={handlePaneSave}
+                          onClose={() => focusMasterCard(notesCardId())}
+                          onRestore={handlePaneRestore}
+                          onAttachmentsChanged={() => refetch()}
+                          onToggleHelp={() => toggleHelp()}
+                          control={(c) => (pane = c)}
+                        />
+                      )}
+                    </Show>
+                  }
+                />
+              }
+            >
             <div
               class="lists-container"
               onDragOver={handleListDragOver}
@@ -769,6 +1105,7 @@ export default function BoardPage() {
                 />
               </div>
             </div>
+            </Show>
 
             <LabelDrawer
               open={drawer.isOpen()}
@@ -791,7 +1128,7 @@ export default function BoardPage() {
             onCreateLabel={handleCreateLabel}
             onSave={handleCardSave}
             onClose={handleModalClose}
-            onToggleHelp={() => setShowHelp((v) => !v)}
+            onToggleHelp={() => toggleHelp()}
           />
         )}
       </Show>
@@ -816,7 +1153,7 @@ export default function BoardPage() {
       </Show>
 
       <Show when={showHelp()}>
-        <ShortcutHelp onClose={() => setShowHelp(false)} />
+        <ShortcutHelp context={helpContext()} onClose={() => setShowHelp(false)} />
       </Show>
       </Show>
 

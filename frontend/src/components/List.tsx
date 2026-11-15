@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
 import type { Card as CardType, Label, ListWithCards } from "../types";
-import Card from "./Card";
+import Card, { type SideKey } from "./Card";
 import AddForm from "./AddForm";
 import { tip } from "../platform";
 
@@ -11,15 +11,24 @@ interface Props {
   onAddCard: (listId: string, title: string) => void;
   onArchiveCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
-  onCardClick: (card: CardType) => void;
+  onCardClick: (card: CardType, byKey?: boolean) => void;
   onDropCard: (cardId: string, targetListId: string, position: number) => void;
   onMoveCard: (cardId: string, targetListId: string, position: number) => void;
   onMoveList: (listId: string, position: number) => void;
   onRequestRename: (listId: string | null) => void;
   onRenameList: (listId: string, title: string) => void;
+  /// Notes mode (ADR-0022): the card shown in the detail pane.
+  selectedCardId?: string | null;
+  onSideKey?: (card: CardType, dir: -1 | 1, kind: SideKey) => void;
+  /// Notes mode: the tab is the list's title (and rename/delete).
+  hideHeader?: boolean;
+  /// Hint shown when the list has no (matching) cards.
+  emptyText?: string;
 }
 
 export default function List(props: Props) {
+  // Enter/Esc settle a rename; the blur from the input unmounting mustn't commit again.
+  let settled = false;
   const handleDragOver = (e: DragEvent) => {
     if (!e.dataTransfer?.types.includes("application/card-id")) return;
     e.preventDefault();
@@ -110,6 +119,7 @@ export default function List(props: Props) {
       data-list-id={props.list.id}
       data-list-position={props.list.position}
     >
+      <Show when={!props.hideHeader}>
       <div class="list-header">
         <Show
           when={props.renamingListId === props.list.id}
@@ -132,7 +142,10 @@ export default function List(props: Props) {
           }
         >
           <input
-            ref={(el) => requestAnimationFrame(() => { el.focus(); el.select(); })}
+            ref={(el) => {
+              settled = false;
+              requestAnimationFrame(() => { el.focus(); el.select(); });
+            }}
             class="list-title-input"
             type="text"
             value={props.list.title}
@@ -140,13 +153,15 @@ export default function List(props: Props) {
               e.stopPropagation();
               if (e.key === "Enter") {
                 e.preventDefault();
+                settled = true;
                 props.onRenameList(props.list.id, e.currentTarget.value);
               } else if (e.key === "Escape") {
                 e.preventDefault();
+                settled = true;
                 props.onRequestRename(null);
               }
             }}
-            onBlur={(e) => props.onRenameList(props.list.id, e.currentTarget.value)}
+            onBlur={(e) => !settled && props.onRenameList(props.list.id, e.currentTarget.value)}
           />
         </Show>
         <button
@@ -157,6 +172,7 @@ export default function List(props: Props) {
           &times;
         </button>
       </div>
+      </Show>
       <div class="cards-container">
         <For each={props.list.cards}>
           {(card) => (
@@ -167,9 +183,14 @@ export default function List(props: Props) {
               onClick={props.onCardClick}
               onMove={props.onMoveCard}
               onMoveList={props.onMoveList}
+              selected={props.selectedCardId === card.id}
+              onSideKey={props.onSideKey}
             />
           )}
         </For>
+        <Show when={props.emptyText && props.list.cards.length === 0}>
+          <p class="list-empty">{props.emptyText}</p>
+        </Show>
       </div>
       <AddForm
         placeholder="Card title..."

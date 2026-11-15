@@ -15,6 +15,8 @@ interface BoardView {
   filter: BoardFilter | null;
   x: number;
   lists: Record<string, number>;
+  /// Notes mode: the card last shown per list (ADR-0022).
+  notes: Record<string, string>;
 }
 
 const KEY = "synkban.boardViews";
@@ -36,6 +38,9 @@ function load(): Map<string, BoardView> {
       const lists: Record<string, number> = {};
       if (r.lists && typeof r.lists === "object")
         for (const [l, y] of Object.entries(r.lists)) lists[l] = num(y);
+      const notes: Record<string, string> = {};
+      if (r.notes && typeof r.notes === "object")
+        for (const [l, c] of Object.entries(r.notes)) if (typeof c === "string") notes[l] = c;
       out.set(id, {
         card: typeof r.card === "string" ? r.card : null,
         filter:
@@ -44,6 +49,7 @@ function load(): Map<string, BoardView> {
             : null,
         x: num(r.x),
         lists,
+        notes,
       });
     }
   } catch {
@@ -81,7 +87,7 @@ if (typeof window !== "undefined") {
 
 const view = (boardId: string): BoardView => {
   let v = views.get(boardId);
-  if (!v) views.set(boardId, (v = { card: null, filter: null, x: 0, lists: {} }));
+  if (!v) views.set(boardId, (v = { card: null, filter: null, x: 0, lists: {}, notes: {} }));
   return v;
 };
 
@@ -189,3 +195,18 @@ export function restoreBoardView(root: ParentNode, boardId: string): void {
   if (!isTypingIn(document.activeElement)) card?.focus({ preventScroll: true });
   restoreBoardScroll(root, boardId);
 }
+
+/// The card last focused on `boardId` (either mode), if any.
+export const lastFocusedCard = (boardId: string): string | null => views.get(boardId)?.card ?? null;
+
+/// Notes mode: remember `cardId` as the card shown for `listId`.
+export function rememberNotesCard(boardId: string, listId: string, cardId: string | null): void {
+  const notes = view(boardId).notes;
+  if (cardId) notes[listId] = cardId;
+  else delete notes[listId];
+  persist();
+}
+
+/// Notes mode: the card last shown for `listId`, if any.
+export const notesCardFor = (boardId: string, listId: string): string | undefined =>
+  views.get(boardId)?.notes[listId];

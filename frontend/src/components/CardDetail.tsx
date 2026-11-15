@@ -1,5 +1,6 @@
-import { onMount, onCleanup, createSignal, createMemo, Show } from "solid-js";
+import { onMount, onCleanup, createSignal, createMemo, createEffect, on, Show } from "solid-js";
 import { EditorView } from "prosemirror-view";
+import { EditorState } from "prosemirror-state";
 import type { Attachment, Card, ChecklistItem, Label } from "../types";
 import { api } from "../api";
 import { createCardEditor, docFromDescription, insertImage, isDocEmpty, removeImages } from "../proseEditor";
@@ -7,7 +8,7 @@ import { pastedImageFiles } from "../pasteImages";
 import { imageRefIds, stripImageRefs } from "../imageRefs";
 import { focusTrap } from "../focusTrap";
 import { handleMarkdownShortcut } from "../mdInput";
-import { accel, accelLabel, hasAccel, tip } from "../platform";
+import { accel, hasAccel, tip } from "../platform";
 import CardLabelSection from "./CardLabelSection";
 import ChecklistSection from "./ChecklistSection";
 import DueDateSection from "./DueDateSection";
@@ -17,20 +18,54 @@ import ConfirmDialog from "./ConfirmDialog";
 import UnsavedDialog from "./UnsavedDialog";
 import HistoryDialog from "./HistoryDialog";
 import ExportPdfDialog from "./ExportPdfDialog";
+import DetailRow from "./DetailRow";
+
+/// Handle the Notes pane hands to its board (ADR-0022).
+export interface CardDetailControl {
+  dirty: () => boolean;
+  /// Resolves true once it's fine to leave the card: clean, saved or
+  /// discarded via the unsaved dialog; false when the user cancelled.
+  confirmLeave: () => Promise<boolean>;
+  focusDescription: () => void;
+  /// Esc: back to the master card, asking first when dirty.
+  leave: () => void;
+}
 
 interface Props {
   card: Card;
   boardLabels: Label[];
   onCreateLabel: (name: string) => Promise<Label>;
   onSave: (id: string, title: string, description: string, labelIds: string[], dueDate: string | null, checklist: ChecklistItem[]) => void | Promise<void>;
+  /// Modal: close it. Pane: hand focus back to the card list.
   onClose: () => void;
   onToggleHelp?: () => void;
+  /// "modal" (default) closes on Save; "pane" is the inline Notes editor: Save
+  /// stays, Cancel is Revert, Esc asks before leaving dirty edits (ADR-0022).
+  variant?: "modal" | "pane";
+  /// Pane: the card vanished from the board (archived/deleted elsewhere).
+  removed?: boolean;
+  /// Pane: bring a removed card back; resolves false if that failed.
+  onRestore?: () => Promise<boolean>;
+  /// Pane: attachments changed (the board refreshes its badges).
+  onAttachmentsChanged?: () => void;
+  control?: (c: CardDetailControl) => void;
+  /// Unsaved edits appeared/went (the board marks the card and its tab).
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+/// The persisted card content, normalised so two snapshots compare by value.
+interface Content {
+  title: string;
+  description: string;
+  labels: string;
+  due: string;
+  checklist: string;
 }
 
 export default function CardDetail(props: Props) {
+  const pane = props.variant === "pane";
   let editorRef!: HTMLDivElement;
   let titleInputRef!: HTMLInputElement;
-  let dueDateRef!: HTMLInputElement;
   let openDuePicker: (() => void) | undefined;
   let checklistAddRef!: HTMLInputElement;
   let focusLabels: (() => void) | undefined;
@@ -41,37 +76,61 @@ export default function CardDetail(props: Props) {
     isDocEmpty(doc) ? "" : JSON.stringify(doc.toJSON());
   const normLabels = (ids: string[]) => [...ids].sort().join("\0");
 
-  // Persisted snapshot, captured once. Dirtiness = current serialized state
-  // differs from this, so reverting an edit back to the original clears dirty.
-  const originalTitle = props.card.title;
-  const [originalDescription, setOriginalDescription] = createSignal(
-    serializeDoc(docFromDescription(props.card.description)),
-  );
-  const originalLabelIds = normLabels(props.card.label_ids ?? []);
-  const originalDueDate = props.card.due_date ?? "";
   const serializeChecklist = (items: ChecklistItem[]) => JSON.stringify(items);
-  const originalChecklist = serializeChecklist(props.card.checklist ?? []);
+  const contentOf = (c: Card): Content => ({
+    title: c.title,
+    description: serializeDoc(docFromDescription(c.description)),
+    labels: normLabels(c.label_ids ?? []),
+    due: c.due_date ?? "",
+    checklist: serializeChecklist(c.checklist ?? []),
+  });
+  const sameContent = (a: Content, b: Content) =>
+    a.title === b.title && a.description === b.description && a.labels === b.labels &&
+    a.due === b.due && a.checklist === b.checklist;
+
+  // Saved baseline. Dirtiness = current serialized state differs from it, so
+  // reverting an edit back to the original clears dirty. The modal captures it
+  // once; the pane rebases it after every save and external reload.
+  const [base, setBase] = createSignal(contentOf(props.card));
 
   const [title, setTitle] = createSignal(props.card.title);
   const [selectedLabelIds, setSelectedLabelIds] = createSignal<string[]>(
     props.card.label_ids ?? []
   );
-  const [description, setDescription] = createSignal(originalDescription());
+  const [description, setDescription] = createSignal(base().description);
   const [dueDate, setDueDate] = createSignal<string>(props.card.due_date ?? "");
   const [checklist, setChecklist] = createSignal<ChecklistItem[]>(props.card.checklist ?? []);
-  const dirty = createMemo(
-    () =>
-      title() !== originalTitle ||
-      description() !== originalDescription() ||
-      normLabels(selectedLabelIds()) !== originalLabelIds ||
-      dueDate().trim() !== originalDueDate ||
-      serializeChecklist(checklist()) !== originalChecklist
-  );
+  const current = (): Content => ({
+    title: title(),
+    description: description(),
+    labels: normLabels(selectedLabelIds()),
+    due: dueDate().trim(),
+    checklist: serializeChecklist(checklist()),
+  });
+  const dirty = createMemo(() => !sameContent(current(), base()));
+  // Captured: on unmount the prop getter may read a <Show> that already closed.
+  const onDirtyChange = props.onDirtyChange;
+  createEffect(() => onDirtyChange?.(dirty()));
+  onCleanup(() => onDirtyChange?.(false));
+  /// Empty checklist/attachments collapse into "+ Checklist" / "+ Attachment".
+  const [checklistOpen, setChecklistOpen] = createSignal(false);
+  const showChecklist = () => checklistOpen() || checklist().length > 0;
+  const showAttachments = () => uploading() || attachments().length > 0;
+  const openChecklist = () => {
+    setChecklistOpen(true);
+    checklistAddRef?.focus();
+  };
+  /// Pane: the stored card changed elsewhere while this one was dirty.
+  const [conflict, setConflict] = createSignal<Card | null>(null);
+  /// Pane: brief confirmation after a save, since nothing closes.
+  const [savedAt, setSavedAt] = createSignal<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = createSignal(false);
   const [showHistory, setShowHistory] = createSignal(false);
   const [showExport, setShowExport] = createSignal(false);
   const [attachments, setAttachments] = createSignal<Attachment[]>(props.card.attachments ?? []);
-  const [uploading, setUploading] = createSignal(false);
+  /// Uploads in flight (several files can go at once).
+  const [uploads, setUploads] = createSignal(0);
+  const uploading = () => uploads() > 0;
   const [previewAtt, setPreviewAtt] = createSignal<Attachment | null>(null);
   const [deleteAtt, setDeleteAtt] = createSignal<Attachment | null>(null);
   /// Attachments the description shows inline (live, from the editor).
@@ -90,7 +149,8 @@ export default function CardDetail(props: Props) {
       copyAttachment: async (from, id) => {
         try {
           const att = await api.copyAttachment(props.card.id, from, id);
-          setAttachments((prev) => [...prev, att]);
+          setAttachments((prev) => [...prev.filter((a) => a.id !== att.id), att]);
+          props.onAttachmentsChanged?.();
           return att;
         } catch {
           return undefined; // the reference is dropped (source gone)
@@ -101,6 +161,7 @@ export default function CardDetail(props: Props) {
         if (att) setPreviewAtt(att);
       },
     });
+    props.control?.({ dirty, confirmLeave, focusDescription: () => view?.focus(), leave: () => guardedClose() });
     // Board.tsx dispatches this when its global Escape handler fires while the
     // modal is open but focus is outside it (e.g. on <body>) — route through
     // the dirty guard instead of closing unconditionally.
@@ -112,7 +173,84 @@ export default function CardDetail(props: Props) {
     document.removeEventListener("request-card-close", handleCloseRequest);
   });
 
+  // --- Pane: load / revert / external changes ---
+
+  /// Replace the editor content without an undo step back to the old version.
+  const setEditorDoc = (description: string) => {
+    if (!view) return;
+    view.updateState(EditorState.create({ doc: docFromDescription(description), plugins: view.state.plugins }));
+    setDescription(serializeDoc(view.state.doc));
+  };
+
+  const load = (card: Card) => {
+    setBase(contentOf(card));
+    setTitle(card.title);
+    setSelectedLabelIds(card.label_ids ?? []);
+    setDueDate(card.due_date ?? "");
+    setChecklist(card.checklist ?? []);
+    setChecklistOpen(false);
+    setEditorDoc(card.description);
+    setConflict(null);
+  };
+
+  /// Back to the saved state (the stored card, with any newer stored version).
+  const revert = () => load(conflict() ?? props.card);
+
+  // Snapshot being saved right now: its refetch must not look like a foreign
+  // change, even though it lands before `base` is rebased.
+  let saving: Content | null = null;
+
+  if (pane) {
+    createEffect(
+      on(
+        () => props.card,
+        (card) => {
+          setAttachments(card.attachments ?? []);
+          const incoming = contentOf(card);
+          if (sameContent(incoming, base())) return;
+          if (saving && sameContent(incoming, saving)) return setBase(saving);
+          if (dirty()) setConflict(card);
+          else load(card);
+        },
+        { defer: true },
+      ),
+    );
+  }
+
+  // Pane: the unsaved dialog decides whether a leave may proceed.
+  let resolveLeave: ((ok: boolean) => void) | undefined;
+  // No focus trap around the pane: put the caret back where it was on Cancel.
+  let focusBeforeLeave: HTMLElement | null = null;
+  const settleLeave = (ok: boolean) => {
+    setShowUnsavedDialog(false);
+    const r = resolveLeave;
+    resolveLeave = undefined;
+    if (!ok && focusBeforeLeave?.isConnected) focusBeforeLeave.focus();
+    focusBeforeLeave = null;
+    r?.(ok);
+  };
+  function confirmLeave(): Promise<boolean> {
+    if (!dirty()) return Promise.resolve(true);
+    resolveLeave?.(false);
+    focusBeforeLeave = document.activeElement as HTMLElement | null;
+    setShowUnsavedDialog(true);
+    return new Promise((r) => (resolveLeave = r));
+  }
+  const leaveSave = async () => {
+    try {
+      await handleSave();
+    } catch {
+      return settleLeave(false);
+    }
+    settleLeave(!dirty());
+  };
+  const leaveDiscard = () => {
+    revert();
+    settleLeave(true);
+  };
+
   const handleCloseRequest = () => {
+    if (pane) return;
     if (showUnsavedDialog() || showHistory() || showExport() || deleteAtt()) return;
     if (previewAtt()) {
       setPreviewAtt(null);
@@ -137,15 +275,16 @@ export default function CardDetail(props: Props) {
   // --- Attachments ---
 
   const uploadFile = async (file: File): Promise<Attachment | undefined> => {
-    setUploading(true);
+    setUploads((n) => n + 1);
     try {
       const att = await api.uploadAttachment(props.card.id, file);
-      setAttachments((prev) => [...prev, att]);
+      setAttachments((prev) => [...prev.filter((a) => a.id !== att.id), att]);
+      props.onAttachmentsChanged?.();
       return att;
     } catch (err) {
       alert(`Upload failed: ${(err as Error).message}`);
     } finally {
-      setUploading(false);
+      setUploads((n) => n - 1);
     }
   };
 
@@ -190,9 +329,10 @@ export default function CardDetail(props: Props) {
   // saved baseline loses them as well (unsaved edits stay unsaved).
   const handleDeleteAttachment = async (attId: string) => {
     await api.deleteAttachment(props.card.id, attId);
-    setOriginalDescription((d) => stripImageRefs(d, attId));
+    setBase((b) => ({ ...b, description: stripImageRefs(b.description, attId) }));
     if (view) removeImages(view, attId);
     setAttachments((prev) => prev.filter((a) => a.id !== attId));
+    props.onAttachmentsChanged?.();
   };
 
   // --- Checklist ---
@@ -233,7 +373,11 @@ export default function CardDetail(props: Props) {
 
   // --- Modal-wide file drag/drop ---
 
+  /// The pane sits on the board: card drags pass through to the list tabs.
+  const ignoreDrag = (e: DragEvent) => pane && !e.dataTransfer?.types.includes("Files");
+
   const handleDragEnter = (e: DragEvent) => {
+    if (ignoreDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
     dragCounter++;
@@ -241,11 +385,13 @@ export default function CardDetail(props: Props) {
   };
 
   const handleDragOver = (e: DragEvent) => {
+    if (ignoreDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
   };
 
   const handleDragLeave = (e: DragEvent) => {
+    if (ignoreDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
     dragCounter--;
@@ -256,6 +402,7 @@ export default function CardDetail(props: Props) {
   };
 
   const handleDrop = (e: DragEvent) => {
+    if (ignoreDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
     dragCounter = 0;
@@ -267,12 +414,26 @@ export default function CardDetail(props: Props) {
 
   // --- Save / close ---
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!view) return;
     const desc = serializeDoc(view.state.doc);
     const dd = dueDate().trim();
-    return props.onSave(props.card.id, title(), desc, selectedLabelIds(), dd || null, checklist());
+    if (!pane) return props.onSave(props.card.id, title(), desc, selectedLabelIds(), dd || null, checklist());
+    if (props.removed && !(await props.onRestore?.())) return;
+    const snapshot = { ...current(), description: desc };
+    saving = snapshot;
+    try {
+      await props.onSave(props.card.id, title(), desc, selectedLabelIds(), dd || null, checklist());
+      setBase(snapshot);
+      setConflict(null);
+      setSavedAt(new Date().toTimeString().slice(0, 5));
+    } finally {
+      saving = null;
+    }
   };
+
+  // The "Saved" note goes as soon as the card is edited again.
+  createEffect(on(dirty, (d) => d && setSavedAt(null), { defer: true }));
 
   // --- PDF export ---
 
@@ -296,6 +457,10 @@ export default function CardDetail(props: Props) {
   };
 
   const guardedClose = () => {
+    if (pane) {
+      confirmLeave().then((ok) => ok && props.onClose());
+      return;
+    }
     if (dirty()) {
       setShowUnsavedDialog(true);
       return;
@@ -354,7 +519,7 @@ export default function CardDetail(props: Props) {
       }
       if (k === "l") {
         e.preventDefault();
-        checklistAddRef?.focus();
+        openChecklist();
         return;
       }
       if (k === "o") {
@@ -375,7 +540,6 @@ export default function CardDetail(props: Props) {
       }
       if (k === "u") {
         e.preventDefault();
-        dueDateRef?.focus();
         openDuePicker?.();
         return;
       }
@@ -404,10 +568,10 @@ export default function CardDetail(props: Props) {
 
   return (
     <div
-      class="modal-overlay"
-      ref={(el) => onCleanup(focusTrap(el))}
+      class={pane ? "notes-detail" : "modal-overlay"}
+      ref={(el) => !pane && onCleanup(focusTrap(el))}
       classList={{ "modal-overlay--drop-active": draggingFile() }}
-      onClick={handleOverlayClick}
+      onClick={pane ? undefined : handleOverlayClick}
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
       onDragEnter={handleDragEnter}
@@ -415,7 +579,7 @@ export default function CardDetail(props: Props) {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div class="modal-content">
+      <div class="modal-content" classList={{ "modal-content--pane": pane }} data-pane-card={pane ? props.card.id : undefined}>
         <Show when={draggingFile()}>
           <div class="drop-zone-overlay">
             <div class="drop-zone-message">
@@ -428,81 +592,149 @@ export default function CardDetail(props: Props) {
         </Show>
         <div class="modal-header">
           <div class="modal-header-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <Show when={dirty()}>
+              <span class="dirty-dot" title="Unsaved changes" />
+            </Show>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <line x1="3" y1="9" x2="21" y2="9" />
             </svg>
           </div>
           <input
-            ref={(el) => { titleInputRef = el; requestAnimationFrame(() => el.focus()); }}
+            ref={(el) => { titleInputRef = el; if (!pane) requestAnimationFrame(() => el.focus()); }}
             class="modal-title-input"
             type="text"
             value={title()}
             onInput={(e) => setTitle(e.currentTarget.value)}
             onKeyDown={handleTitleKeyDown}
+            // Back to the start, so the ellipsis cuts the end, not the beginning.
+            onBlur={(e) => (e.currentTarget.scrollLeft = 0)}
             placeholder="Card title..."
             title={tip("Edit title", accel("E"))}
           />
-          <button class="modal-close" onClick={guardedClose} title="Close (Esc)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <Show when={!pane}>
+            <button class="modal-close" onClick={guardedClose} title="Close (Esc)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </Show>
         </div>
         <div class="modal-body">
-          <CardLabelSection
-            boardLabels={props.boardLabels}
-            selectedIds={selectedLabelIds()}
-            onToggleLabel={toggleLabel}
-            onCreateLabel={createLabel}
-            focusRef={(f) => (focusLabels = f)}
-          />
-          <DueDateSection
-            value={dueDate()}
-            onChange={(v) => setDueDate(v)}
-            inputRef={(el) => (dueDateRef = el)}
-            openPickerRef={(open) => (openDuePicker = open)}
-          />
-          <div class="modal-section-header">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="17" y1="10" x2="3" y2="10" />
-              <line x1="21" y1="6" x2="3" y2="6" />
-              <line x1="21" y1="14" x2="3" y2="14" />
-              <line x1="17" y1="18" x2="3" y2="18" />
-            </svg>
-            <span class="modal-label" title={tip("Edit description", accel("D"))}>Description</span>
+          <Show when={pane && props.removed}>
+            <div class="pane-banner pane-banner--removed" role="status">
+              <span>This card was archived or deleted elsewhere. Your unsaved edits are kept until you leave it.</span>
+              <button class="btn btn-sm" onClick={handleSave}>Restore &amp; save</button>
+            </div>
+          </Show>
+          <Show when={pane && !props.removed && conflict()}>
+            <div class="pane-banner" role="status">
+              <span>This card was changed elsewhere while you were editing. Saving keeps your version.</span>
+              <button class="btn btn-sm" onClick={revert}>Load theirs</button>
+            </div>
+          </Show>
+          <div class="card-meta">
+            <DueDateSection value={dueDate()} onChange={setDueDate} openRef={(open) => (openDuePicker = open)} />
+            <div class="card-meta-labels">
+              <CardLabelSection
+                boardLabels={props.boardLabels}
+                selectedIds={selectedLabelIds()}
+                onToggleLabel={toggleLabel}
+                onCreateLabel={createLabel}
+                focusRef={(f) => (focusLabels = f)}
+              />
+            </div>
           </div>
-          <div class="editor-wrapper" ref={editorRef!} />
-          <div class="editor-hint">
-            <kbd>{accelLabel}</kbd>+<kbd>B</kbd> bold &middot; <kbd>{accelLabel}</kbd>+<kbd>I</kbd> italic &middot; <kbd>Tab</kbd>/<kbd>Shift</kbd>+<kbd>Tab</kbd> nest list &middot; <kbd>{accelLabel}</kbd>+<kbd>S</kbd> save
-          </div>
-          <ChecklistSection
-            items={checklist()}
-            onAdd={handleAddChecklistItem}
-            onToggle={handleToggleChecklistItem}
-            onRename={handleRenameChecklistItem}
-            onDelete={handleDeleteChecklistItem}
-            onMove={handleMoveChecklistItem}
-            onToggleAll={handleToggleAllChecklist}
-            addInputRef={(el) => (checklistAddRef = el)}
-          />
-          <AttachmentsSection
-            cardId={props.card.id}
-            attachments={attachments()}
-            uploading={uploading()}
-            onUpload={uploadFile}
-            referenced={referenced()}
-            onDelete={requestDelete}
-            onPreview={setPreviewAtt}
-            onInsert={(att) => view && insertImage(view, att)}
-            fileInputRef={(el) => (attachmentInputRef = el)}
+          <DetailRow
+            class="description-row"
+            title={tip("Description", accel("D"))}
+            icon={
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="17" y1="10" x2="3" y2="10" />
+                <line x1="21" y1="6" x2="3" y2="6" />
+                <line x1="21" y1="14" x2="3" y2="14" />
+                <line x1="17" y1="18" x2="3" y2="18" />
+              </svg>
+            }
+          >
+            <div class="editor-wrapper" ref={editorRef!} />
+          </DetailRow>
+          <Show when={showChecklist()}>
+            <ChecklistSection
+              items={checklist()}
+              onAdd={handleAddChecklistItem}
+              onToggle={handleToggleChecklistItem}
+              onRename={handleRenameChecklistItem}
+              onDelete={handleDeleteChecklistItem}
+              onMove={handleMoveChecklistItem}
+              onToggleAll={handleToggleAllChecklist}
+              onIdle={() => setChecklistOpen(false)}
+              addInputRef={(el) => (checklistAddRef = el)}
+            />
+          </Show>
+          <Show when={showAttachments()}>
+            <AttachmentsSection
+              cardId={props.card.id}
+              attachments={attachments()}
+              uploading={uploading()}
+              onAdd={() => attachmentInputRef?.click()}
+              referenced={referenced()}
+              onDelete={requestDelete}
+              onPreview={setPreviewAtt}
+              onInsert={(att) => view && insertImage(view, att)}
+            />
+          </Show>
+          <Show when={!showChecklist() || !showAttachments()}>
+            <div class="detail-add-row">
+              <Show when={!showChecklist()}>
+                <button type="button" class="detail-add-btn detail-add-checklist" title={tip("Add checklist", accel("L"))} onClick={openChecklist}>
+                  Checklist
+                </button>
+              </Show>
+              <Show when={!showAttachments()}>
+                <button type="button" class="detail-add-btn detail-add-attachment" title={tip("Add attachment", accel("O"))} onClick={() => attachmentInputRef?.click()}>
+                  Attachment
+                </button>
+              </Show>
+            </div>
+          </Show>
+          <input
+            type="file"
+            multiple
+            class="attachment-file-input"
+            hidden
+            ref={(el) => (attachmentInputRef = el)}
+            onChange={(e) => {
+              const files = Array.from(e.currentTarget.files ?? []);
+              e.currentTarget.value = "";
+              for (const f of files) uploadFile(f);
+            }}
           />
         </div>
         <div class="modal-footer">
-          <button class="btn btn-primary" onClick={handleSave} title={tip("Save", accel("S"))}>Save</button>
-          <button class="btn btn-cancel" onClick={guardedClose} title={tip("Cancel", "Esc")}>Cancel</button>
-          {dirty() && <span class="unsaved-indicator">Unsaved changes</span>}
+          <button
+            class="btn modal-save-btn"
+            classList={{ "btn-primary": dirty(), "btn-quiet": !dirty() }}
+            onClick={handleSave}
+            title={tip(dirty() ? "Save" : "Save (no changes)", accel("S"))}
+          >
+            Save
+          </button>
+          <Show
+            when={pane}
+            fallback={<button class="btn btn-cancel" onClick={guardedClose} title={tip("Cancel", "Esc")}>Cancel</button>}
+          >
+            <button class="btn btn-cancel" onClick={revert} disabled={!dirty()} title="Revert to the saved card">Revert</button>
+          </Show>
+          {dirty() && (
+            <span class="unsaved-indicator">
+              Unsaved changes
+            </span>
+          )}
+          <Show when={pane && !dirty() && savedAt()}>
+            {(at) => <span class="saved-indicator">Saved {at()}</span>}
+          </Show>
           <button class="btn modal-export-btn" title={tip("Export PDF", accel("P"))} onClick={startExport}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 3v12" />
@@ -523,11 +755,18 @@ export default function CardDetail(props: Props) {
       </div>
 
       <Show when={showUnsavedDialog()}>
-        <UnsavedDialog
-          onSave={handleSave}
-          onDiscard={props.onClose}
-          onCancel={() => setShowUnsavedDialog(false)}
-        />
+        <Show
+          when={pane}
+          fallback={
+            <UnsavedDialog
+              onSave={handleSave}
+              onDiscard={props.onClose}
+              onCancel={() => setShowUnsavedDialog(false)}
+            />
+          }
+        >
+          <UnsavedDialog onSave={leaveSave} onDiscard={leaveDiscard} onCancel={() => settleLeave(false)} />
+        </Show>
       </Show>
 
       <Show when={showExport()}>

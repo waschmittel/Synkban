@@ -1,0 +1,33 @@
+# Boards have a Notes mode: one list at a time, the card edited beside it
+
+Each board is shown in **Kanban mode** (lists side by side, cards open in the modal) or **Notes mode** (`NotesView`): lists become tabs, the active list is the master column, the selected card is edited inline in the **Notes pane** — the card modal's layout (`CardDetail variant="pane"`). `V` or the title-bar switch toggles it.
+
+## Why
+
+Cards with long descriptions are notes; opening, closing and reopening a modal per card is too much friction for writing and reading through them.
+
+## Rules
+
+- **Stored per board** (`board.json` `mode: "kanban" | "notes"`, `#[serde(default)]` kanban, `PUT /api/boards/:id {mode}`), so it syncs. It is applied **once per visit**, not on polls: a toggle on another device must not flip the screen mid-edit. An older backend rewriting `board.json` drops the field (the board falls back to Kanban).
+- **Reuse, don't re-draw.** The master is the board's own `List`/`Card`; the pane is `CardDetail`. Differences are explicit props: `Card.onSideKey` (←/→ switch tabs, `Shift+←/→` move to the neighbour list, `Shift+Alt+←/→` move the list), `selected`, `List.emptyText`, `List.hideHeader` (the **active tab is the list title**: click it, `R` or `Enter`/`F2` on it renames, its × deletes); pane: no ✕, Cancel → **Revert**, no focus trap, `.notes-detail` counts as an overlay for board shortcuts (`isInUiOverlay`).
+- **One surface.** Master column and pane are a single shadowed panel under the tabs, top-left corner always square (same colour as the master, whichever tab is active); the selected card shows the focus highlight without the ring; the pane has no shadow, radius or slide-in. `.modal-content.modal-content--pane` needs both classes to beat `.modal-content`, which is declared later. The description takes the pane's spare height (`flex: 1 0 auto` — a plain basis lets the `overflow: hidden` wrapper shrink and clip). Due date sits left of the labels (in the modal: above them).
+- **Card detail layout (both views, `DetailRow`).** Each section's label sits left of its content: an icon with a tooltip (name + shortcut), no text. All icons are 16 px, in one column with the title's card icon. Checklist progress and Check all moved beside the add-item input. The title ends in an ellipsis when not being edited (scrolled back to its start on blur). No hint under the editor (the help dialog has the keys). An **empty checklist or attachments section collapses** into a quiet "+ Checklist" / "+ Attachment" row in the content column (`Accel+L` / `Accel+O` open them too); an opened checklist left empty collapses again when focus leaves it (not on a window switch). **Attachments are tiles** (thumbnail or file extension, name, size; actions on hover/focus) in a grid with a dashed add tile. The due date is a chip (ADR-0023).
+- **Unsaved edits are marked** in both views: a dot on the detail's card icon (top left; in Notes also on the list's tab) and "Unsaved changes" in the footer — not on the master/board card, where it only repeated the open detail; Save is the primary button only while dirty (`btn-quiet` otherwise). `CardDetail.onDirtyChange` (pane) feeds `Board.dirtyCardId` for the tab (captured once: on unmount the prop getter can read a closed `<Show>`).
+- **Master titles** stop after two lines (the pane shows the whole title).
+- **Keyboard stays on the master.** A click on a card selects it and keeps focus there; `Enter`/`e` go to the description. `Esc` from anywhere outside the editor (pane background, title bar, a pane button) returns to the selected card — through the pane's guard, so dirty edits ask; on a card it stays. Arrows with no card focused start at the selected card; `←/→` on the master's add trigger switch tabs.
+- **Save saves and stays** (ADR-0007 otherwise): the saved snapshot becomes the dirty baseline, "Saved HH:MM" confirms. The snapshot being saved is not mistaken for a foreign change when its refetch lands.
+- **Leaving a dirty card asks** (Save / Discard / Cancel, Save focused): another card (click/Enter), another tab, `V`, archiving or deleting its list, router navigation (`useBeforeLeave`: dock, `,`/`.`, `b`), and `beforeunload` (Electron: native Leave/Stay via `will-prevent-unload`). **`Esc` in the pane** (or from outside it, above) asks too when dirty — Discard reverts to the saved card — and otherwise returns focus to the master card. Cancel puts the caret back.
+- **Selection** (`notesView.ts`, pure): clean, focus shows the card (arrows browse); dirty, focus only moves. A card that still exists wins and pulls its tab along (moved by keys, drag or elsewhere). A vanished clean card is replaced by its index neighbour; a vanished **dirty** card stays open with a banner and **Restore & save**. The last card per list and the entry card come from the board view memory (ADR-0021).
+- **Changed elsewhere:** clean pane reloads silently; dirty pane keeps the edits with a banner and **Load theirs**; Save keeps mine (theirs stays in history).
+- **Drag a card onto a tab** to move it to the bottom of that list (no-op on its own tab).
+- **Filter** filters the master; tabs show `matching/total`; a selected card that stops matching stays open.
+- **Text measure:** description prose is capped at 90ch of the body font (`@property --text-measure`, so headings share the edge). In the pane, tables (auto layout, wrap at word boundaries) and code blocks start at the measure and grow with their content; past the pane width the description scrolls sideways. The modal is narrower than the measure and keeps its fixed full-width tables (ADR-0017).
+- The editor's base-keymap `Escape` (select parent node) is disabled: its node selection outlived the Escape and the next keystroke replaced the whole block.
+- Narrow windows (< 760 px) stack the master above the pane.
+- Covered by `notesView.test.ts`, `boardView.test.ts`, `e2e/notes.spec.ts`, `e2e/detail.spec.ts`, `e2e/tooltips.spec.ts`, backend store + integration tests.
+
+## Considered and rejected
+
+- **Autosave on leaving a card** — contradicts ADR-0007's explicit Save. **Per-card drafts** — lost on reload, easy to forget.
+- **Mode per device (`synkban.toml`)** — the request was per board; boards that are notebooks are notebooks everywhere.
+- **A purpose-built master list and a compact detail layout** — two renderings of the same card to keep in sync.

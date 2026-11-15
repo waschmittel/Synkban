@@ -11,18 +11,20 @@ export function isTypingIn(target: EventTarget | null): boolean {
   );
 }
 
-/// Returns true if the event target is inside any UI overlay (modal, drawer,
-/// help/archive overlay, filter bar) — i.e. a layer that should swallow global
+/// Returns true if the event target is inside any UI overlay (modal, Notes
+/// detail pane, drawer, help/archive overlay, filter bar, due-date picker) — i.e. a layer that should swallow global
 /// page shortcuts even when the user isn't actively typing.
 export function isInUiOverlay(target: EventTarget | null): boolean {
   if (!target) return false;
   const el = target as HTMLElement;
   return (
     !!el.closest(".modal-overlay") ||
+    !!el.closest(".notes-detail") ||
     !!el.closest(".label-drawer") ||
     !!el.closest(".shortcut-help-overlay") ||
     !!el.closest(".archive-overlay") ||
     !!el.closest(".settings-overlay") ||
+    !!el.closest(".due-picker") ||
     !!el.closest(".filter-bar")
   );
 }

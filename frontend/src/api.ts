@@ -1,4 +1,4 @@
-import type { Attachment, Board, BoardDetail, Card, CardHistory, ChecklistItem, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
+import type { Attachment, Board, BoardDetail, BoardMode, Card, CardHistory, ChecklistItem, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
 
 const BASE = "/api";
 
@@ -38,7 +38,7 @@ export const api = {
 
   getBoard: (id: string) => request<BoardDetail>(`/boards/${id}`),
 
-  updateBoard: (id: string, data: { title?: string; color?: string | null; archived?: boolean }) =>
+  updateBoard: (id: string, data: { title?: string; color?: string | null; archived?: boolean; mode?: BoardMode }) =>
     request<Board>(`/boards/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),

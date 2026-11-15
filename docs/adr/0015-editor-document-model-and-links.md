@@ -11,7 +11,7 @@ A tight schema keeps the stored format, the server-side text extraction (`descri
 - `list_item` is `paragraph block*` (arbitrary nesting); table cells are `paragraph+`.
 - New node types are a data-format change: update backend text extraction, `pdf.rs` (+ corner cases), `diff.ts`, and the compatibility note in ADR-0017.
 - The sticky-note tint (`#fffbe6`, dark variant in ADR-0013) distinguishes the description from the rest of the modal.
-- `Tab`/`Shift+Tab` indent/outdent list items (`Mod-]`/`Mod-[` also work); Ctrl/Cmd+B/I toggle marks.
+- `Tab`/`Shift+Tab` indent/outdent list items (`Mod-]`/`Mod-[` also work). Inside a list they always belong to the editor: an item that can't move (the first has nothing to nest under) is a no-op, never a focus jump out of the description; outside lists and tables `Tab` moves focus on. Ctrl/Cmd+B/I toggle marks.
 
 ## Links
 

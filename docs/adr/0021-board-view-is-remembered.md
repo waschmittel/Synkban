@@ -14,6 +14,7 @@ Cycling boards (dock, `,` / `.`) otherwise dropped you at the top-left with noth
 - Deleted cards/lists are skipped; restore never steals focus from a text field.
 - **Filter is per board** (it used to leak from one board to the next). Remembered label ids that no longer exist are dropped; the restored bar doesn't autofocus, so the active card keeps focus.
 - **Resilient:** views of deleted/archived boards are forgotten (`forgetBoardViews`), stale cards/lists/labels are ignored, and an unvisited board starts clean.
+- **Notes mode** (ADR-0022) adds the last shown card per list (`rememberNotesCard`/`notesCardFor`); the focused card (`lastFocusedCard`, tracked in both modes) decides which card Notes opens on.
 - Not remembered: open dialogs/drawers.
 - **Considered and rejected:** in-memory only (lost on reload); `localStorage` (shared across tabs, lives forever, and per-origin so lost per Electron launch); server settings (ADR-0002; would rewrite the file on every scroll).
 - Covered by `boardView.test.ts`, `e2e/board.spec.ts` (incl. narrow viewport).

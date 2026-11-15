@@ -61,6 +61,7 @@ pub async fn update_board(
                 body.title.as_deref(),
                 body.color.as_deref(),
                 body.archived,
+                body.mode,
             )
         },
         |b| format!("UPDATE board \"{}\" (id: {})", b.title, b.id),

@@ -33,6 +33,15 @@ pub struct Attachment {
     pub created_at: String,
 }
 
+/// How a board is laid out (ADR-0022). Stored per board, synced with it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardMode {
+    #[default]
+    Kanban,
+    Notes,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Board {
     pub id: String,
@@ -46,6 +55,8 @@ pub struct Board {
     pub archived_at: Option<String>,
     #[serde(default)]
     pub position: f64,
+    #[serde(default)]
+    pub mode: BoardMode,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -129,6 +140,7 @@ pub struct BoardDetail {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     pub labels: Vec<Label>,
+    pub mode: BoardMode,
     pub lists: Vec<ListWithCards>,
 }
 
@@ -168,6 +180,7 @@ pub struct UpdateBoard {
     pub title: Option<String>,
     pub color: Option<String>,
     pub archived: Option<bool>,
+    pub mode: Option<BoardMode>,
 }
 
 #[derive(Debug, Deserialize)]

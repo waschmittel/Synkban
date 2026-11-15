@@ -549,3 +549,51 @@ async fn export_card_pdf_unknown_card_is_404() {
         StatusCode::NOT_FOUND
     );
 }
+
+// -- board mode (ADR-0022) --
+
+#[actix_web::test]
+async fn board_mode_round_trips_and_defaults_to_kanban() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, _, _) = seed_board_list_card!(app);
+
+    let get = |app_uri: String| test::TestRequest::get().uri(&app_uri).to_request();
+    let resp = test::call_service(&app, get(format!("/api/boards/{bid}"))).await;
+    assert_eq!(
+        read_json_body(test::read_body(resp).await)["mode"],
+        "kanban"
+    );
+
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/boards/{bid}"))
+        .set_json(json!({ "mode": "notes" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(read_json_body(test::read_body(resp).await)["mode"], "notes");
+
+    let resp = test::call_service(&app, get(format!("/api/boards/{bid}"))).await;
+    assert_eq!(read_json_body(test::read_body(resp).await)["mode"], "notes");
+    let resp = test::call_service(&app, get("/api/boards".into())).await;
+    assert_eq!(
+        read_json_body(test::read_body(resp).await)[0]["mode"],
+        "notes"
+    );
+}
+
+#[actix_web::test]
+async fn board_mode_rejects_unknown_value() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, _, _) = seed_board_list_card!(app);
+
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/boards/{bid}"))
+        .set_json(json!({ "mode": "grid" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
