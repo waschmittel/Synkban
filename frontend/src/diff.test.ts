@@ -128,3 +128,16 @@ describe("descriptionLines tables", () => {
   });
 });
 
+
+describe("descriptionLines images", () => {
+  it("shows inline images by file name", () => {
+    const doc = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [
+        { type: "text", text: "see " },
+        { type: "image", attrs: { att: "a1", alt: "shot.png" } },
+      ] }],
+    };
+    expect(descriptionLines(JSON.stringify(doc))).toEqual(["see [image: shot.png]"]);
+  });
+});

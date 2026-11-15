@@ -18,8 +18,11 @@ interface Props {
   attachments: Attachment[];
   uploading: boolean;
   onUpload: (file: File) => void;
-  onDelete: (attId: string) => void;
+  /// Ids of attachments the description shows inline.
+  referenced: Set<string>;
+  onDelete: (att: Attachment) => void;
   onPreview: (att: Attachment) => void;
+  onInsert: (att: Attachment) => void;
   fileInputRef?: (el: HTMLInputElement) => void;
 }
 
@@ -55,7 +58,7 @@ export default function AttachmentsSection(props: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Delete" || e.key === "Backspace") {
                   e.preventDefault();
-                  props.onDelete(att.id);
+                  props.onDelete(att);
                 } else if (e.key === "Enter") {
                   e.preventDefault();
                   if (isImageType(att.content_type)) {
@@ -102,12 +105,30 @@ export default function AttachmentsSection(props: Props) {
                     {att.filename}
                   </span>
                 </Show>
-                <span class="attachment-size">{formatSize(att.size)}</span>
+                <span class="attachment-size">
+                  {formatSize(att.size)}
+                  <Show when={props.referenced.has(att.id)}>
+                    <span class="attachment-ref" title="Shown in the description"> · in description</span>
+                  </Show>
+                </span>
               </div>
+              <Show when={isImageType(att.content_type)}>
+                <button
+                  class="attachment-insert"
+                  title="Insert into description"
+                  onClick={() => props.onInsert(att)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <polyline points="21 15 16 10 5 21" />
+                  </svg>
+                </button>
+              </Show>
               <button
                 class="attachment-delete"
                 title={tip("Remove attachment", "Del")}
-                onClick={() => props.onDelete(att.id)}
+                onClick={() => props.onDelete(att)}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <line x1="18" y1="6" x2="6" y2="18" />

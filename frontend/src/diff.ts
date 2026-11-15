@@ -83,6 +83,7 @@ export function descriptionLines(description: string): string[] {
   const inline = (node: any): string => {
     if (typeof node?.text === "string") return node.text;
     if (node?.type === "hard_break") return " ";
+    if (node?.type === "image") return `[image: ${node.attrs?.alt ?? ""}]`;
     return (node?.content ?? []).map(inline).join("");
   };
 

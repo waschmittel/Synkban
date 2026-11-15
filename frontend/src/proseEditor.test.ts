@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { DOMParser } from "prosemirror-model";
 import { describe, it, expect } from "vitest";
-import { sanitizeLinkHref } from "./proseEditor";
+import { docFromDescription, schema, sanitizeLinkHref } from "./proseEditor";
 
 describe("sanitizeLinkHref", () => {
   it("allows http, https and mailto", () => {
@@ -29,5 +30,31 @@ describe("sanitizeLinkHref", () => {
     expect(sanitizeLinkHref("example.com")).toBeNull();
     expect(sanitizeLinkHref("file:///etc/passwd")).toBeNull();
     expect(sanitizeLinkHref("vbscript:msgbox(1)")).toBeNull();
+  });
+});
+
+describe("image nodes", () => {
+  const json = {
+    type: "doc",
+    content: [{ type: "paragraph", content: [
+      { type: "text", text: "a" },
+      { type: "image", attrs: { att: "att-1", alt: "x.png" } },
+    ] }],
+  };
+
+  it("round-trips through JSON", () => {
+    const doc = docFromDescription(JSON.stringify(json));
+    expect(doc.toJSON()).toEqual(json);
+  });
+
+  it("only parses attachment references from HTML, never foreign images", () => {
+    const parse = (html: string) => {
+      const el = document.createElement("div");
+      el.innerHTML = html;
+      return DOMParser.fromSchema(schema).parse(el).textContent + "|" + JSON.stringify(
+        DOMParser.fromSchema(schema).parse(el).toJSON()).includes('"image"');
+    };
+    expect(parse('<p><img src="https://evil/x.png"></p>')).toBe("|false");
+    expect(parse('<p><img data-att="a1" alt="n"></p>')).toBe("|true");
   });
 });

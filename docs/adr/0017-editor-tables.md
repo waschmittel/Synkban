@@ -17,3 +17,5 @@ Simple tables keep the format, the PDF layout (ADR-0012), the diff and the text 
 ## Caveat
 
 An app version without table support shows a table description as raw JSON (`docFromDescription` treats a node-parse failure as plain text). **All clients sharing a data dir must be upgraded together.**
+
+- Menu keys for moving rows/columns are `W`/`S`/`A`/`D` (arrows navigate the menu, ADR-0016).

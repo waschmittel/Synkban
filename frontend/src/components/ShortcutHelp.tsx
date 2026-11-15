@@ -164,14 +164,15 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Del"]} desc="Delete item" />
           </Section>
           <Section title="Description editor">
-            <Row keys={[accelLabel, "K"]} desc="Editor menu: link, code, text style, table" />
-            <Row keys={["L", "U", "I"]} desc="In menu: add/edit link, remove link, inline code" />
+            <Row keys={[accelLabel, "K"]} desc="Editor menu: link, code, image, text style, table" />
+            <Row keys={["↑", "↓"]} alt={["Enter"]} desc="In menus: highlight an item, run it" />
+            <Row keys={["L", "U", "I", "M"]} desc="In menu: add/edit link, remove link, inline code, insert image" />
             <Row keys={["0", "B", "1", "2", "3"]} desc="In menu (outside tables): plain, code block, heading 1–3" />
             <Row keys={["Right-click"]} desc="Same editor menu, at the pointer" />
             <Row keys={["Tab"]} alt={["Shift", "Tab"]} desc="Next / previous cell (Tab on last cell adds a row)" />
             <Row keys={["Enter"]} desc="Next row, same column (last row: leave table)" />
             <Row keys={["Shift", "Enter"]} desc="Line break inside the cell" />
-            <Row keys={["↑", "↓", "←", "→"]} desc="In menu (tables): move row / column" />
+            <Row keys={["W", "S", "A", "D"]} desc="In menu (tables): move row up / down, column left / right" />
             <Row keys={["Shift", "↑↓←→"]} desc="In menu: insert row / column" />
             <Row keys={["1", "2", "3"]} desc="In menu: align column left / center / right" />
             <Row keys={["R", "C", "T"]} desc="In menu: delete row / column / table" />

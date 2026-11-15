@@ -105,6 +105,18 @@ pub fn create_attachment(
     Ok(att)
 }
 
+/// Copies attachment `att_id` of card `from_card` onto card `to_card` (a new
+/// attachment with its own id), e.g. when an inline image is pasted across cards.
+pub fn copy_attachment(
+    data_dir: &Path,
+    from_card: &str,
+    att_id: &str,
+    to_card: &str,
+) -> Result<Attachment, AppError> {
+    let (att, data) = get_attachment_data(data_dir, from_card, att_id)?;
+    create_attachment(data_dir, to_card, &att.filename, &att.content_type, &data)
+}
+
 pub fn get_attachment_data(
     data_dir: &Path,
     card_id: &str,
@@ -145,6 +157,8 @@ pub fn delete_attachment(data_dir: &Path, card_id: &str, att_id: &str) -> Result
     if let Some(parent) = att_dir.parent() {
         remove_dir_if_empty(parent);
     }
+    // No reference may outlive its attachment (ADR-0020).
+    crate::store::cards::drop_dangling_image_refs(data_dir, card_id)?;
     crate::store::cards::record_attachment_change(data_dir, card_id, before)
 }
 
@@ -360,5 +374,117 @@ mod tests {
         assert!(attachments_parent.exists());
         assert!(!attachment_dir(d.path(), &b.id, &c1.id).exists());
         assert!(attachment_dir(d.path(), &b.id, &c2.id).exists());
+    }
+
+    fn desc_with(att: &str) -> String {
+        format!(
+            r#"{{"type":"doc","content":[{{"type":"paragraph","content":[{{"type":"image","attrs":{{"att":"{att}","alt":"i.png"}}}}]}}]}}"#
+        )
+    }
+
+    fn png() -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(2, 2, image::Rgb([255, 0, 0]));
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        buf.into_inner()
+    }
+
+    #[test]
+    fn delete_attachment_removes_its_references_from_the_description() {
+        use crate::models::CardPatch;
+        use crate::store::cards::update_card;
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let att = create_attachment(d.path(), &c.id, "i.png", "image/png", &png()).unwrap();
+        let desc = desc_with(&att.id);
+        let c1 = update_card(
+            d.path(),
+            &c.id,
+            CardPatch {
+                description: Some(&desc),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(c1.description.contains(&att.id), "valid reference is kept");
+
+        delete_attachment(d.path(), &c.id, &att.id).unwrap();
+        let after = crate::store::cards::read_card(
+            &crate::store::paths::cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id)),
+        )
+        .unwrap();
+        assert!(!after.description.contains("image"));
+        assert!(!after.description_text.contains("image"));
+    }
+
+    #[test]
+    fn saving_drops_references_to_unknown_attachments() {
+        use crate::models::CardPatch;
+        use crate::store::cards::update_card;
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let desc = desc_with("nope");
+        let out = update_card(
+            d.path(),
+            &c.id,
+            CardPatch {
+                description: Some(&desc),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(!out.description.contains("image"));
+    }
+
+    #[test]
+    fn copy_attachment_creates_an_independent_copy_on_the_target_card() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c1 = create_card(d.path(), &l.id, "One").unwrap();
+        let c2 = create_card(d.path(), &l.id, "Two").unwrap();
+        let att = create_attachment(d.path(), &c1.id, "i.png", "image/png", &png()).unwrap();
+
+        let copy = copy_attachment(d.path(), &c1.id, &att.id, &c2.id).unwrap();
+        assert_ne!(copy.id, att.id);
+        assert_eq!(
+            (copy.filename.as_str(), copy.content_type.as_str()),
+            ("i.png", "image/png")
+        );
+        assert!(get_thumbnail_data(d.path(), &c2.id, &copy.id).is_ok());
+
+        delete_attachment(d.path(), &c1.id, &att.id).unwrap();
+        assert!(get_attachment_data(d.path(), &c2.id, &copy.id).is_ok());
+        assert!(copy_attachment(d.path(), &c1.id, "missing", &c2.id).is_err());
+    }
+
+    #[test]
+    fn export_embeds_originals_of_inline_images_only() {
+        use crate::models::CardPatch;
+        use crate::store::cards::{export_card, update_card};
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let shown = create_attachment(d.path(), &c.id, "a.png", "image/png", &png()).unwrap();
+        let other = create_attachment(d.path(), &c.id, "b.png", "image/png", &png()).unwrap();
+        let desc = desc_with(&shown.id);
+        update_card(
+            d.path(),
+            &c.id,
+            CardPatch {
+                description: Some(&desc),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let e = export_card(d.path(), &c.id).unwrap();
+        assert_eq!(e.originals.keys().collect::<Vec<_>>(), [&shown.id]);
+        assert!(!e.originals.contains_key(&other.id));
+        assert_eq!(e.attachments.len(), 2);
     }
 }

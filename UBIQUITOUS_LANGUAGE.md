@@ -13,6 +13,7 @@
 | **Description** | A **Card**'s rich text: ProseMirror doc JSON stored as a string (ADR-0015) | Body, notes |
 | **Checklist** | The single flat list of **Checklist Items** (`id`, `text`, `done`) on a **Card**; card content (ADR-0007) | Subtasks, todo list |
 | **Attachment** | A file on a **Card**, stored as binary + optional thumbnail + sidecar, never in card JSON (ADR-0004) | Upload, file |
+| **Inline Image** | A reference in the description to an image **Attachment** of the same card; always valid (ADR-0020) | Embedded image, image URL |
 | **Due Date** | Optional `YYYY-MM-DD` on a **Card**, shown as a colour-coded badge | Deadline |
 | **History** | Last 100 content snapshots of a **Card**, newest first via `/history` (ADR-0005) | Audit log, changelog |
 | **Position** | `f64` fractional index ordering boards, lists, cards (midpoint insertion; gaps are fine) | Index, rank |

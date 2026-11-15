@@ -7,6 +7,7 @@ pub mod boards;
 pub mod card_index;
 pub mod cards;
 pub mod gc;
+pub(crate) mod image_refs;
 pub mod io;
 pub mod labels;
 pub mod lists;
@@ -14,7 +15,7 @@ pub mod paths;
 pub(crate) mod walk;
 
 pub use attachments::{
-    create_attachment, delete_attachment, get_attachment_data, get_thumbnail_data,
+    copy_attachment, create_attachment, delete_attachment, get_attachment_data, get_thumbnail_data,
 };
 pub use boards::{
     create_board, delete_board, get_board, list_archived_boards, list_boards, reorder_boards,

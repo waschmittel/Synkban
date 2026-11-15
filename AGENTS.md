@@ -33,6 +33,7 @@ After any change:
 ## Working rules
 
 - **Never commit or push on your own.** Leave changes in the working tree; commit only when the user explicitly asks.
+- **Example PDFs must stay current.** Anything that can change PDF output (`backend/src/pdf*`, fonts, description schema) needs its corner cases in `backend/src/pdf/tests/examples.rs::corner_cases()`, then `UPDATE_EXAMPLES=1 cargo test --lib examples` to regenerate `docs/export-examples/` (and look at them); `example_pdfs_are_up_to_date` fails when they are stale.
 - **Keep docs in step.** When a change touches documented behaviour or a design decision, update the ADRs (`docs/adr/`), `UBIQUITOUS_LANGUAGE.md` for new/changed terms, `ShortcutHelp.tsx` + tooltips for shortcuts, and this file if architecture or workflow changes. A new design decision gets a new ADR (short: decision, **Why**, rules/consequences, considered and rejected); don't duplicate ADR content here.
 - Use current versions of everything and pin them (dependencies, Docker images, GitHub Actions SHAs).
 - Be brief in code and comments.
@@ -79,6 +80,7 @@ After any change:
 | 0017 | Editor tables |
 | 0018 | Testing conventions |
 | 0019 | Window geometry restore |
+| 0020 | Inline image attachments in the description |
 
 ## Data model (summary)
 
@@ -132,7 +134,8 @@ GET    /api/cards/:id/pdf                     → application/pdf (PDF/A-2u, Con
 POST   /api/cards/:cid/attachments?filename=… → Attachment (201) — raw body bytes, Content-Type header
 GET    /api/cards/:cid/attachments/:att_id    → binary (Content-Disposition: attachment)
 GET    /api/cards/:cid/attachments/:att_id/thumb → JPEG thumbnail (404 if not image)
-DELETE /api/cards/:cid/attachments/:att_id    → 204
+POST   /api/cards/:cid/attachments/copy {from_card, att_id} → Attachment (201) — copies an attachment of another card
+DELETE /api/cards/:cid/attachments/:att_id    → 204 (also strips inline references from the description)
 ```
 
 ## Adding things

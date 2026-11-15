@@ -220,6 +220,12 @@ pub struct AttachmentQuery {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct CopyAttachment {
+    pub from_card: String,
+    pub att_id: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ReorderBoards {
     pub ids: Vec<String>,
 }

@@ -1,5 +1,5 @@
 /// ProseMirror editor setup for card descriptions. Custom schema (basic
-/// nodes + lists, no images or horizontal rules) with JSON serialization,
+/// nodes + lists + inline attachment images, no horizontal rules) with JSON serialization,
 /// and a Trello-style menu (text-style dropdown + inline marks + custom link
 /// dialog).
 
@@ -7,6 +7,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import {
   DOMParser as PmDOMParser,
+  DOMSerializer,
   Node as PmNode,
 } from "prosemirror-model";
 import { sinkListItem, liftListItem } from "prosemirror-schema-list";
@@ -15,7 +16,20 @@ import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
 import { tablePlugins } from "./tables";
 import { schema, TEXT_STYLES } from "./schema";
-export { schema };
+import { api } from "./api";
+import { pastedImageFiles } from "./pasteImages";
+import { resolvePastedImages } from "./pastedRefs";
+import {
+  canInsertImage,
+  hooksOf,
+  insertImage,
+  openImagePicker,
+  registerHooks,
+  removeImages,
+  type EditorHooks,
+} from "./imagePicker";
+export { schema, insertImage, removeImages };
+export type { EditorHooks };
 import { openEditorMenu } from "./editorMenu";
 import {
   linkRangeAt,
@@ -24,7 +38,7 @@ import {
   openLinkEditor,
   sanitizeLinkHref,
 } from "./links";
-import { TABLE_ICON, svg } from "./tableIcons";
+import { ICONS, TABLE_ICON, svg } from "./tableIcons";
 import { accel, isMac, tip } from "./platform";
 import {
   MenuItem,
@@ -74,6 +88,23 @@ function tableIconDom(): HTMLElement {
   return span;
 }
 
+function imageIconDom(): HTMLElement {
+  const span = document.createElement("span");
+  span.innerHTML = svg(ICONS.image, 16); // static markup from tableIcons.ts
+  return span;
+}
+
+/// Copies carry the source card (`data-att="<card>/<attachment>"`) so a paste
+/// into another card can copy the attachment too (`resolvePastedImages`).
+const clipboardSerializer = (cardId: string) =>
+  new DOMSerializer(
+    {
+      ...DOMSerializer.nodesFromSchema(schema),
+      image: (node) => ["img", { "data-att": `${cardId}/${node.attrs.att}`, alt: node.attrs.alt }],
+    },
+    DOMSerializer.marksFromSchema(schema),
+  );
+
 /// Dropdown whose button shows the current text style and which disables
 /// itself entirely when the style can't be changed (e.g. in a table cell).
 class TypeDropdown extends Dropdown {
@@ -98,10 +129,18 @@ class TypeDropdown extends Dropdown {
 
 /// Creates an `EditorView` bound to `target`. Transactions go through
 /// `onChange` (called with the new doc — used to mark the form dirty).
+/// Stands in for an image whose attachment is gone (broken data, manual edit).
+const MISSING_IMAGE =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="40"><rect x=".5" y=".5" width="95" height="39" rx="4" fill="#f3f4f6" stroke="#9ca3af" stroke-dasharray="4"/><text x="48" y="24" font-family="sans-serif" font-size="11" fill="#6b7280" text-anchor="middle">image missing</text></svg>',
+  );
+
 export function createCardEditor(
   target: HTMLElement,
   initialDoc: PmNode,
   onChange: (doc: PmNode) => void,
+  hooks: EditorHooks,
 ): EditorView {
   const items = buildMenuItems(schema);
   const linkType = schema.marks.link;
@@ -113,11 +152,23 @@ export function createCardEditor(
     run(_state, _dispatch, view) { return openLinkEditor(view, linkType); },
   });
 
+  const imageItem = new MenuItem({
+    title: "Insert image",
+    icon: { dom: imageIconDom() },
+    class: "image-menu-trigger",
+    enable: (state) => canInsertImage(state),
+    run(_state, _dispatch, view) {
+      openImagePicker(view);
+      return true;
+    },
+  });
+
   const inlineMenu = [[
     items.toggleStrong,
     items.toggleEm,
     items.toggleCode,
     customLinkItem,
+    imageItem,
   ].filter(Boolean) as any[]];
 
   const typeDropdown = new TypeDropdown(TEXT_STYLES.map((t) => t.item()));
@@ -152,6 +203,7 @@ export function createCardEditor(
     },
   });
 
+  const autolinkPaste = handleAutolinkPaste(schema);
   const state = EditorState.create({
     doc: initialDoc,
     plugins: [
@@ -170,7 +222,61 @@ export function createCardEditor(
       view.updateState(newState);
       if (tr.docChanged) onChange(newState.doc);
     },
-    handlePaste: handleAutolinkPaste(schema),
+    clipboardSerializer: clipboardSerializer(hooks.cardId),
+    handlePaste(view, event, slice) {
+      // Image without text (screenshot, "copy image"): attach + reference here.
+      const files = pastedImageFiles(event.clipboardData);
+      if (files.length) {
+        hooks.onPasteImages(files);
+        return true;
+      }
+      // Pasted references must point at this card's attachments: copy the
+      // attachments of other cards over, drop the ones that don't exist.
+      let hasImage = false;
+      slice.content.descendants((n) => void (hasImage ||= n.type === schema.nodes.image));
+      if (hasImage) {
+        resolvePastedImages(slice, hooks.cardId, new Set(hooks.attachments().map((a) => a.id)), async (from, id) =>
+          (await hooks.copyAttachment(from, id))?.id,
+        ).then((resolved) => view.dispatch(view.state.tr.replaceSelection(resolved).scrollIntoView()));
+        return true;
+      }
+      return autolinkPaste(view, event);
+    },
+    nodeViews: {
+      image(node) {
+        const img = document.createElement("img");
+        img.className = "editor-image";
+        img.alt = node.attrs.alt;
+        img.title = node.attrs.alt;
+        img.src = api.getAttachmentThumbUrl(hooks.cardId, node.attrs.att);
+        // No thumbnail (GIF…): try the original once; then show that it is gone.
+        img.addEventListener(
+          "error",
+          () => {
+            img.addEventListener(
+              "error",
+              () => {
+                img.classList.add("editor-image--missing");
+                img.title = `${node.attrs.alt} (attachment missing)`;
+                img.src = MISSING_IMAGE;
+              },
+              { once: true },
+            );
+            img.src = api.getAttachmentUrl(hooks.cardId, node.attrs.att);
+          },
+          { once: true },
+        );
+        return { dom: img };
+      },
+    },
+    handleClickOn(_view, _pos, node, _nodePos, event, direct) {
+      if (direct && node.type === schema.nodes.image && event.button === 0) {
+        if (!(event.target as HTMLElement).classList.contains("editor-image--missing")) {
+          hooks.onImageClick(node.attrs.att);
+        }
+      }
+      return false; // still selects the node
+    },
     // Plain click on a link opens it (the common case). Cmd/Ctrl+click instead
     // opens an edit dialog (change the URL or remove the link) — placing the
     // cursor for text editing also works by clicking just outside the link or
@@ -220,5 +326,6 @@ export function createCardEditor(
     },
     attributes: { class: "prosemirror-editor" },
   });
+  registerHooks(view, hooks);
   return view;
 }

@@ -173,6 +173,13 @@ export const api = {
     return res.json();
   },
 
+  /// Copies attachment `attId` of card `fromCard` onto `cardId` (pasting an inline image across cards).
+  copyAttachment: (cardId: string, fromCard: string, attId: string) =>
+    request<Attachment>(`/cards/${cardId}/attachments/copy`, {
+      method: "POST",
+      body: JSON.stringify({ from_card: fromCard, att_id: attId }),
+    }),
+
   getAttachmentUrl: (cardId: string, attId: string) =>
     `${BASE}/cards/${cardId}/attachments/${attId}`,
 

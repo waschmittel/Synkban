@@ -16,9 +16,10 @@
 /// block type is fixed) · then either "insert table" or the table actions.
 /// Keys:
 ///
-///   always            l link (add/edit) · u remove link · i inline code
+///   always            l link (add/edit) · u remove link · i inline code · m image
+///                     ↑ ↓ Home End move a highlight, Enter runs it
 ///   outside a table   0 plain · b code block · 1/2/3 heading · t insert table
-///   inside a table    ↑ ↓ ← →  … move the row / column
+///   inside a table    w s / a d … move the row up, down / column left, right
 ///                     Shift+arrow … insert a row / column in that direction
 ///                     1 / 2 / 3 … align column left / center / right
 ///                     r / c / t … delete row / column / table
@@ -32,6 +33,8 @@ import { TEXT_STYLES, schema } from "./schema";
 import { dialogKeys } from "./dialogKeys";
 import { accel, hasAccel, isMac, tip } from "./platform";
 import { ICONS, TABLE_ICON, svg } from "./tableIcons";
+import { menuNav, navKey } from "./menuNav";
+import { canInsertImage, hooksOf, openImagePicker } from "./imagePicker";
 
 import {
   cellContext,
@@ -117,6 +120,20 @@ const CODE_ITEM: Item = {
   command: toggleMark(codeMark),
 };
 
+const IMAGE_ITEM: Item = {
+  label: "Insert image…",
+  icon: ICONS.image,
+  group: 1,
+  hint: "M",
+  match: letter("m"),
+  command: (s, d, v) => {
+    if (!v || !hooksOf(v) || !canInsertImage(s)) return false;
+    // After this menu has closed (it re-focuses the editor on close).
+    if (d) setTimeout(() => openImagePicker(v), 0);
+    return true;
+  },
+};
+
 const STYLE_ICONS = [ICONS.paragraph, ICONS.codeBlock, ICONS.heading1, ICONS.heading2, ICONS.heading3];
 const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
   label: t.label,
@@ -131,10 +148,10 @@ const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
 
 const TABLE_ITEMS: Item[] = [
   // Move
-  { label: "Move row up", icon: ICONS.moveUp, group: 3, hint: "↑", match: arrow("ArrowUp", false), command: moveRowUp },
-  { label: "Move row down", icon: ICONS.moveDown, group: 3, hint: "↓", match: arrow("ArrowDown", false), command: moveRowDown },
-  { label: "Move column left", icon: ICONS.moveLeft, group: 3, hint: "←", match: arrow("ArrowLeft", false), command: moveColumnLeft },
-  { label: "Move column right", icon: ICONS.moveRight, group: 3, hint: "→", match: arrow("ArrowRight", false), command: moveColumnRight },
+  { label: "Move row up", icon: ICONS.moveUp, group: 3, hint: "W", match: letter("w"), command: moveRowUp },
+  { label: "Move row down", icon: ICONS.moveDown, group: 3, hint: "S", match: letter("s"), command: moveRowDown },
+  { label: "Move column left", icon: ICONS.moveLeft, group: 3, hint: "A", match: letter("a"), command: moveColumnLeft },
+  { label: "Move column right", icon: ICONS.moveRight, group: 3, hint: "D", match: letter("d"), command: moveColumnRight },
   // Insert
   { label: "Insert row above", icon: ICONS.rowAbove, group: 4, hint: `${SHIFT}↑`, match: arrow("ArrowUp", true), command: insertRowAbove },
   { label: "Insert row below", icon: ICONS.rowBelow, group: 4, hint: `${SHIFT}↓`, match: arrow("ArrowDown", true), command: insertRowBelow },
@@ -176,8 +193,10 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
 
   const items = (): Item[] =>
     cellContext(view.state)
-      ? [...LINK_ITEMS, CODE_ITEM, ...TABLE_ITEMS]
-      : [...LINK_ITEMS, CODE_ITEM, ...STYLE_ITEMS, ...INSERT_ITEMS];
+      ? [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...TABLE_ITEMS]
+      : [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...STYLE_ITEMS, ...INSERT_ITEMS];
+
+  const nav = menuNav(menu);
 
   const run = (item: Item) => {
     // Not possible right now (the item is shown disabled): ignore, stay open.
@@ -231,9 +250,10 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
 
     const foot = document.createElement("div");
     foot.className = "table-menu-foot";
-    foot.textContent = `Esc / ${accel("K")} to close`;
+    foot.textContent = `↑↓ Enter · Esc / ${accel("K")} to close`;
     menu.appendChild(foot);
     position();
+    nav.apply();
   };
 
   // Below the caret, kept inside the viewport.
@@ -268,10 +288,16 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
     // Everything else is ours: it must not reach the document.
     e.preventDefault();
     e.stopPropagation();
-    if (e.key === "Escape" || e.key === "Enter") {
+    if (e.key === "Escape") {
       dispose();
       return;
     }
+    // Enter runs the highlighted item (↑↓ Home End move it), else closes.
+    if (e.key === "Enter") {
+      if (!nav.activate()) dispose();
+      return;
+    }
+    if (navKey(nav, e) || (!e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight"))) return;
     const item = items().find((i) => i.match(e) && i.command(view.state, undefined, view));
     if (item) run(item);
   };

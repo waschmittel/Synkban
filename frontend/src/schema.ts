@@ -1,7 +1,7 @@
 /// The ProseMirror schema of card descriptions, and the text styles (block
 /// types) shared by the toolbar dropdown and the Accel+K menu.
 
-import { Schema, Mark as PmMark, type Attrs } from "prosemirror-model";
+import { Schema, Mark as PmMark, type Attrs, type NodeSpec } from "prosemirror-model";
 import type { EditorState } from "prosemirror-state";
 import { setBlockType } from "prosemirror-commands";
 import { schema as basicSchema } from "prosemirror-schema-basic";
@@ -10,6 +10,26 @@ import { blockTypeItem } from "prosemirror-menu";
 import { tableNodeSpecs } from "./tables";
 
 const filteredNodes = basicSchema.spec.nodes.remove("image").remove("horizontal_rule");
+
+/// Inline reference to an *image attachment* of the card (`att` = attachment
+/// id), not a URL — the editor renders it from the attachment endpoints
+/// (ADR-0020). Only `img[data-att]` parses, so foreign images never get in.
+const imageSpec: NodeSpec = {
+  inline: true,
+  group: "inline",
+  draggable: true,
+  attrs: { att: {}, alt: { default: "" } },
+  parseDOM: [
+    {
+      tag: "img[data-att]",
+      getAttrs: (dom) => ({
+        att: (dom as HTMLElement).getAttribute("data-att"),
+        alt: (dom as HTMLElement).getAttribute("alt") ?? "",
+      }),
+    },
+  ],
+  toDOM: (node) => ["img", { "data-att": node.attrs.att, alt: node.attrs.alt }],
+};
 
 // Override the link mark's toDOM so rendered anchors carry target="_blank" and
 // a safe rel. The editor opens links via handleClick (below), but the
@@ -24,7 +44,7 @@ const marks = basicSchema.spec.marks.update("link", {
 });
 
 export const schema = new Schema({
-  nodes: addListNodes(filteredNodes, "paragraph block*", "block").append(tableNodeSpecs),
+  nodes: addListNodes(filteredNodes, "paragraph block*", "block").append(tableNodeSpecs).addToEnd("image", imageSpec),
   marks,
 });
 

@@ -125,12 +125,12 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
   // Link / code / move / insert / align / delete: six groups, five dividers,
   // an icon each, no group headings. No text styles: cell blocks are fixed.
   const items = page.locator(".table-menu-item");
-  await expect(items).toHaveCount(17);
+  await expect(items).toHaveCount(18);
   await expect(page.locator(".table-menu-sep")).toHaveCount(5);
-  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(17);
+  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(18);
   await expect(page.locator(".table-menu-title")).toHaveCount(0);
   await expect(items.locator(".table-menu-label")).toHaveText([
-    "Add link…", "Remove link", "Inline code",
+    "Add link…", "Remove link", "Inline code", "Insert image…",
     "Move row up", "Move row down", "Move column left", "Move column right",
     "Insert row above", "Insert row below", "Insert column left", "Insert column right",
     "Align column left", "Align column center", "Align column right",
@@ -156,8 +156,8 @@ test("table menu: move, insert, delete with keys; each action closes the menu", 
   await insertTable(page);
   await fill(page, ["A", "B", "C", "1", "2", "3", "4", "5", "6"]);
 
-  // Cursor is in row 2, column 2 ("6"). ↑ swaps the row with row 1 and the caret follows.
-  await menuKey(page, "ArrowUp");
+  // Cursor is in row 2, column 2 ("6"). W swaps the row with row 1 and the caret follows.
+  await menuKey(page, "w");
   await expect(page.locator(".table-menu")).toHaveCount(0);
   expect(await rowsOf(page)).toEqual([
     ["A", "B", "C"],
@@ -166,14 +166,14 @@ test("table menu: move, insert, delete with keys; each action closes the menu", 
   ]);
 
   // Row 1 can't move further up (row 0 is the header): refused, menu stays open.
-  await menuKey(page, "ArrowUp");
+  await menuKey(page, "w");
   await expect(page.locator(".table-menu")).toBeVisible();
   expect((await rowsOf(page))[1]).toEqual(["4", "5", "6"]);
   await page.keyboard.press("Escape");
   await expect(page.locator(".editor-wrapper .ProseMirror th")).toHaveCount(3);
 
-  // Column: ← moves the caret's column (the last one, "6") to the left.
-  await menuKey(page, "ArrowLeft");
+  // Column: A moves the caret's column (the last one, "6") to the left.
+  await menuKey(page, "a");
   expect(await rowsOf(page)).toEqual([
     ["A", "C", "B"],
     ["4", "6", "5"],

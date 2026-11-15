@@ -1689,6 +1689,22 @@ html.theme-dark .modal-history-btn:hover {
   color: var(--color-text);
 }
 
+.editor-wrapper .ProseMirror img.editor-image {
+  max-height: 120px;
+  max-width: 100%;
+  vertical-align: bottom;
+  border-radius: 4px;
+  cursor: zoom-in;
+}
+
+.editor-wrapper .ProseMirror img.editor-image--missing {
+  cursor: default;
+}
+
+.editor-wrapper .ProseMirror img.editor-image.ProseMirror-selectednode {
+  outline: 2px solid var(--color-primary);
+}
+
 .editor-wrapper .ProseMirror p.is-editor-empty:first-child::before {
   content: "Add a more detailed description…";
   color: var(--color-text-subtle);
@@ -1877,6 +1893,26 @@ html.theme-dark .modal-history-btn:hover {
 
 .table-menu-item:hover:not(:disabled) {
   background: var(--color-surface-3);
+}
+
+.table-menu-item--hi:not(:disabled) {
+  background: var(--color-surface-3);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.image-menu {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.image-menu-thumb {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
 }
 
 .table-menu-item:disabled {
@@ -2727,6 +2763,10 @@ html.theme-dark .history-line--added .history-line-sign {
   flex-shrink: 0;
 }
 
+.attachment-ref {
+  color: var(--color-primary);
+}
+
 .attachment-delete {
   background: none;
   border: none;
@@ -2742,6 +2782,23 @@ html.theme-dark .history-line--added .history-line-sign {
 .attachment-delete:hover {
   color: var(--color-danger);
   background: #fce4e4;
+}
+
+.attachment-insert {
+  background: none;
+  border: none;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.attachment-insert:hover,
+.attachment-insert:focus {
+  color: var(--color-primary);
+  background: var(--color-surface-2);
 }
 
 .attachment-upload {

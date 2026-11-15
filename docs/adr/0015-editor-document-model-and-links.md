@@ -1,6 +1,6 @@
 # Descriptions are ProseMirror JSON with a restricted schema; links are allow-listed and edited whole
 
-The card description is rich text in ProseMirror (`schema.ts`): basic nodes, nested lists and tables; **no `image`, no `horizontal_rule`**; marks bold, italic, inline code, link. It is stored as `JSON.stringify(doc)` in `description` (empty string = empty); never HTML. A description that fails to parse as a node is shown as plain text.
+The card description is rich text in ProseMirror (`schema.ts`): basic nodes, nested lists and tables, and an inline `image` that references an *attachment* (ADR-0020, never a URL); **no `horizontal_rule`**; marks bold, italic, inline code, link. It is stored as `JSON.stringify(doc)` in `description` (empty string = empty); never HTML. A description that fails to parse as a node is shown as plain text.
 
 ## Why
 

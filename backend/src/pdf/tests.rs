@@ -49,6 +49,7 @@ fn export(description: &str) -> CardExport {
             },
             None,
         )],
+        originals: HashMap::new(),
         exported_at: "2026-11-03 12:00:00".into(),
     }
 }
@@ -1634,3 +1635,366 @@ fn everything_at_once_still_valid() {
     assert_in_bounds(&l, true);
     assert_eq!(page_count(&pdf), l.pages.len());
 }
+
+fn img_node(att: &str, alt: &str) -> Value {
+    json!({"type": "image", "attrs": {"att": att, "alt": alt}})
+}
+
+fn with_thumbs(nodes: Vec<Value>, thumbs: &[(&str, Vec<u8>)]) -> CardExport {
+    let mut e = with_description(nodes);
+    e.card.checklist.clear();
+    e.attachments = thumbs
+        .iter()
+        .map(|(id, bytes)| (attachment(id, bytes.len() as u64), Some(bytes.clone())))
+        .collect();
+    e
+}
+
+/// Inline pictures (the ones before the attachments section), as (x, y, w, h).
+fn inline_pictures(l: &Layout, n: usize) -> Vec<(f32, f32, f32, f32)> {
+    l.pages
+        .iter()
+        .flatten()
+        .filter_map(|op| match op {
+            Op::Image { x, y, w, h, .. } => Some((*x, *y, *w, *h)),
+            _ => None,
+        })
+        .take(n)
+        .collect()
+}
+
+#[test]
+fn inline_images_are_embedded_and_never_exceed_the_line_width() {
+    let e = with_thumbs(
+        vec![
+            json!({"type": "paragraph", "content": [text_node("before "), img_node("wide", "w.png"), text_node(" after")]}),
+            json!({"type": "paragraph", "content": [img_node("tall", "t.png")]}),
+            json!({"type": "paragraph", "content": [img_node("small", "s.png")]}),
+            json!({"type": "bullet_list", "content": [{"type": "list_item", "content": [
+                {"type": "paragraph", "content": [img_node("wide", "w.png")]}]}]}),
+        ],
+        &[
+            ("wide", jpeg(1200, 300)),
+            ("tall", jpeg(100, 900)),
+            ("small", jpeg(40, 20)),
+        ],
+    );
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    let pics = inline_pictures(&l, 4);
+    assert_eq!(pics.len(), 4);
+    // Wide: scaled to the full line, aspect kept.
+    assert!((pics[0].2 - CONTENT_W).abs() < 0.01 && (pics[0].3 - CONTENT_W / 4.0).abs() < 0.01);
+    // Tall: limited to half the text area of a page.
+    assert!((pics[1].3 - MAX_IMAGE_H).abs() < 0.01 && pics[1].2 < CONTENT_W);
+    // Small: never upscaled.
+    assert_eq!((pics[2].2, pics[2].3), (40.0, 20.0));
+    // Nested in a list: the narrower line width is the limit.
+    let indent = indent_for(CONTENT_W, 20.0);
+    assert!((pics[3].2 - (CONTENT_W - indent)).abs() < 0.01);
+    assert!(pics[3].0 >= MARGIN + indent - 0.01);
+    // Text around the image is still there, in order; no placeholder.
+    let text = pdf_text(&pdf);
+    assert_in_order(&text, &["before", "after"]);
+    assert!(!text.contains("[image:"));
+    assert_in_bounds(&l, true);
+}
+
+#[test]
+fn inline_images_move_to_the_next_page_instead_of_overflowing() {
+    let mut nodes: Vec<Value> = (0..3)
+        .map(|_| json!({"type": "paragraph", "content": [img_node("a", "a.png")]}))
+        .collect();
+    nodes.push(para("done"));
+    let e = with_thumbs(nodes, &[("a", jpeg(500, 400))]);
+    let (l, _) = build(&e);
+    assert!(l.pages.len() >= 2);
+    assert_in_bounds(&l, true);
+}
+
+fn png(w: u32, h: u32, alpha: u8) -> Vec<u8> {
+    let img = image::RgbaImage::from_pixel(w, h, image::Rgba([200, 30, 30, alpha]));
+    let mut buf = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+    buf.into_inner()
+}
+
+#[test]
+fn inline_images_use_the_original_not_the_thumbnail() {
+    // Thumbnail 400px, original 1500px: the page must carry the sharper one.
+    let mut e = with_thumbs(
+        vec![json!({"type": "paragraph", "content": [img_node("a", "a.png")]})],
+        &[("a", jpeg(400, 267))],
+    );
+    e.originals.insert("a".into(), png(1500, 1000, 255));
+    let l = layout_card(&e).unwrap();
+    assert_eq!(l.images[0].size(), (1500, 1000));
+    // Large originals are scaled down; transparent ones flatten onto white.
+    e.originals.insert("a".into(), png(5000, 2500, 0));
+    let l = layout_card(&e).unwrap();
+    assert_eq!(l.images[0].size(), (PICTURE_MAX_PX, PICTURE_MAX_PX / 2));
+    assert!(replay(&l, &e).is_ok());
+    let flat = image::load_from_memory(&prepare_picture(&png(8, 8, 0)).unwrap()).unwrap();
+    assert!(flat
+        .to_rgb8()
+        .pixels()
+        .all(|p| p[0] > 245 && p[1] > 245 && p[2] > 245));
+    // An undecodable original falls back to the thumbnail.
+    e.originals.insert("a".into(), b"garbage".to_vec());
+    assert_eq!(layout_card(&e).unwrap().images[0].size(), (400, 267));
+}
+
+#[test]
+fn a_paragraph_with_an_image_moves_to_the_next_page_as_a_whole() {
+    // Filler leaves too little room for the image: the text before it must not
+    // stay behind alone (same keep-together rule as a text paragraph).
+    let e = with_thumbs(
+        vec![
+            para(&"Filler text. ".repeat(190)),
+            json!({"type": "paragraph", "content": [text_node("Caption before the picture"), img_node("a", "a.png")]}),
+        ],
+        &[("a", jpeg(300, 300))],
+    );
+    let l = layout_card(&e).unwrap();
+    let page_of = |needle: &str| {
+        (0..l.pages.len())
+            .find(|&p| texts(&l, p).iter().any(|t| t.contains(needle)))
+            .unwrap()
+    };
+    let pic_page = l
+        .pages
+        .iter()
+        .position(|ops| ops.iter().any(|o| matches!(o, Op::Image { .. })))
+        .unwrap();
+    assert_eq!(page_of("Caption"), pic_page);
+    assert!(pic_page >= 1);
+    assert_in_bounds(&l, true);
+}
+
+#[test]
+fn a_description_of_two_big_images_starts_on_the_first_page() {
+    // Both pictures fit a page together, but not what is left of page 1: the
+    // title and the first picture stay, only the second moves on.
+    for height in [320, 360] {
+        for nodes in [
+            vec![
+                json!({"type": "paragraph", "content": [img_node("a", "a.png")]}),
+                json!({"type": "paragraph", "content": [img_node("a", "a.png")]}),
+            ],
+            vec![
+                json!({"type": "paragraph", "content": [img_node("a", "a.png"), img_node("a", "a.png")]}),
+            ],
+        ] {
+            let mut e = with_thumbs(nodes, &[("a", jpeg(480, height))]);
+            e.card.due_date = None;
+            let l = layout_card(&e).unwrap();
+            let pics: Vec<usize> = (0..l.pages.len())
+                .flat_map(|p| {
+                    l.pages[p]
+                        .iter()
+                        .filter(|o| matches!(o, Op::Image { .. }))
+                        .map(move |_| p)
+                })
+                .take(2)
+                .collect();
+            assert_eq!(pics, [0, 1], "height {height}");
+            assert_eq!(page_with(&l, "Description"), 0, "height {height}");
+        }
+    }
+}
+
+#[test]
+fn dangling_or_undecodable_image_references_fall_back_to_text() {
+    let e = with_thumbs(
+        vec![json!({"type": "paragraph", "content": [
+            img_node("gone", "gone.png"), text_node(" "), img_node("bad", "bad.png"), text_node(" "),
+            json!({"type": "image", "attrs": {}})]})],
+        &[("bad", b"not a jpeg".to_vec())],
+    );
+    let (l, pdf) = build(&e);
+    assert_in_order(
+        &pdf_text(&pdf),
+        &["[image: gone.png]", "[image: bad.png]", "[image: ]"],
+    );
+    assert!(inline_pictures(&l, 1).is_empty());
+}
+
+#[test]
+fn inline_image_reference_prints_its_file_name() {
+    let img = json!({"type": "image", "attrs": {"att": "a1", "alt": "shot ü.png"}});
+    let bare = json!({"type": "image", "attrs": {"att": "a2"}});
+    let e = with_description(vec![
+        json!({"type": "paragraph", "content": [text_node("before "), img, text_node(" after")]}),
+        json!({"type": "paragraph", "content": [bare]}),
+    ]);
+    let text = pdf_text(&render(&e));
+    assert_in_order(
+        &text,
+        &["before", "[image: shot ü.png]", "after", "[image: ]"],
+    );
+    assert_in_bounds(&layout_card(&e).unwrap(), true);
+}
+
+// ── page-break rules (as in the terminal app's export) ───────────────────
+
+/// `n` one-line paragraphs, to push what follows to every possible page offset.
+fn filler(n: usize) -> Vec<Value> {
+    (0..n).map(|_| para("filler")).collect()
+}
+
+/// How many text items containing `pat` each page holds.
+fn per_page(l: &Layout, pat: &str) -> Vec<usize> {
+    (0..l.pages.len())
+        .map(|p| texts(l, p).iter().filter(|t| t.contains(pat)).count())
+        .collect()
+}
+
+fn page_with(l: &Layout, pat: &str) -> usize {
+    per_page(l, pat)
+        .iter()
+        .position(|&c| c > 0)
+        .unwrap_or(usize::MAX)
+}
+
+#[test]
+fn a_section_that_fits_a_page_is_never_split_and_subsections_follow_suit() {
+    for n in 0..45 {
+        let mut nodes = filler(n);
+        nodes.push(json!({"type": "heading", "attrs": {"level": 2}, "content": [text_node("Section head")]}));
+        nodes.extend((0..7).map(|i| para(&format!("section body {i}"))));
+        nodes.push(
+            json!({"type": "heading", "attrs": {"level": 3}, "content": [text_node("Sub head")]}),
+        );
+        nodes.extend((0..5).map(|i| para(&format!("sub body {i}"))));
+        let l = layout_card(&with_description(nodes)).unwrap();
+        assert_eq!(
+            page_with(&l, "Section head"),
+            page_with(&l, "sub body 4"),
+            "filler {n}"
+        );
+    }
+}
+
+#[test]
+fn a_section_longer_than_a_page_flows_but_its_subsections_are_kept() {
+    for n in 0..45 {
+        let mut nodes = filler(n);
+        nodes.push(
+            json!({"type": "heading", "attrs": {"level": 1}, "content": [text_node("Big head")]}),
+        );
+        nodes.extend((0..70).map(|i| para(&format!("big body {i}"))));
+        nodes.push(
+            json!({"type": "heading", "attrs": {"level": 2}, "content": [text_node("Sub head")]}),
+        );
+        nodes.extend((0..6).map(|i| para(&format!("sub body {i}"))));
+        let l = layout_card(&with_description(nodes)).unwrap();
+        assert!(l.pages.len() >= 2);
+        assert_eq!(
+            page_with(&l, "Sub head"),
+            page_with(&l, "sub body 5"),
+            "filler {n}"
+        );
+    }
+}
+
+#[test]
+fn the_description_title_stays_with_its_first_section() {
+    for n in 0..30 {
+        let mut e = with_description(vec![
+            json!({"type": "heading", "attrs": {"level": 2}, "content": [text_node("First head")]}),
+            para("first body 1"),
+            para("first body 2"),
+        ]);
+        e.labels = labels(n);
+        e.card.checklist.clear();
+        let l = layout_card(&e).unwrap();
+        assert_eq!(
+            page_with(&l, "Description"),
+            page_with(&l, "first body 2"),
+            "labels {n}"
+        );
+    }
+}
+
+#[test]
+fn blocks_up_to_half_a_page_are_kept_whole_bigger_ones_split() {
+    let lines = |k: usize| {
+        (0..k)
+            .map(|i| format!("w{i}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let mut saw_split = false;
+    for n in 0..45 {
+        let code = |k: usize| {
+            let mut nodes = filler(n);
+            nodes.push(code_node(&lines(k)));
+            layout_card(&with_description(nodes)).unwrap()
+        };
+        // ~15 lines of 12.6pt: well under half a page.
+        let small = code(15);
+        assert_eq!(
+            page_with(&small, "w0"),
+            page_with(&small, "w14"),
+            "filler {n}"
+        );
+        // ~45 lines: more than half a page, so it may start early and split.
+        let big = code(45);
+        saw_split |= page_with(&big, "w0") != page_with(&big, "w44");
+    }
+    assert!(saw_split, "big blocks must flow instead of leaving gaps");
+}
+
+#[test]
+fn no_single_line_or_row_is_left_alone_on_a_page() {
+    let words = |tag: &str| format!("{tag} ").repeat(1);
+    for n in 0..45 {
+        // A long paragraph (more than half a page: it splits).
+        let mut nodes = filler(n);
+        nodes.push(para(&(0..400).map(|_| words("zeta")).collect::<String>()));
+        let l = layout_card(&with_description(nodes)).unwrap();
+        for c in per_page(&l, "zeta") {
+            assert_ne!(c, 1, "paragraph, filler {n}");
+        }
+        // Code.
+        let mut nodes = filler(n);
+        nodes.push(code_node(
+            &(0..60)
+                .map(|i| format!("cc{i}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ));
+        let l = layout_card(&with_description(nodes)).unwrap();
+        for c in per_page(&l, "cc") {
+            assert_ne!(c, 1, "code, filler {n}");
+        }
+        // Table body rows.
+        let rows: Vec<Vec<String>> = (0..60)
+            .map(|i| vec![format!("rw{i}"), "x".into()])
+            .collect();
+        let mut all: Vec<Vec<&str>> = vec![vec!["H1", "H2"]];
+        all.extend(rows.iter().map(|r| r.iter().map(String::as_str).collect()));
+        let mut nodes = filler(n);
+        nodes.push(table_node(&all));
+        let l = layout_card(&with_description(nodes)).unwrap();
+        for c in per_page(&l, "rw") {
+            assert_ne!(c, 1, "table, filler {n}");
+        }
+    }
+}
+
+fn code_node(t: &str) -> Value {
+    json!({"type": "code_block", "content": [text_node(t)]})
+}
+
+fn labels(n: usize) -> Vec<Label> {
+    (0..n)
+        .map(|i| Label {
+            id: i.to_string(),
+            name: format!("Label number {i} with some more words"),
+            color: "#c6e0f5".into(),
+        })
+        .collect()
+}
+
+mod examples;

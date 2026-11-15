@@ -18,3 +18,15 @@ Archivable output without a headless browser or system libraries. **Conformance 
 ## Tests (backend only)
 
 Golden layouts in `tests/golden/*.txt` (`UPDATE_GOLDEN=1 cargo test --lib pdf` after an intended change; review the diff); content parsed back with `lopdf`; PDF/A structure checks (`assert_pdfa`); corner cases with `assert_in_bounds` (empty/RTL/control titles, 600-char words, malformed ProseMirror JSON, 40-level nesting, degenerate tables, every keep-together rule at every offset, 400-item checklists, 150 attachments, bad thumbnails, unsafe link schemes). Any schema or content change adds corner cases here.
+
+- Inline description images (ADR-0020) are embedded at their position, scaled to fit the line width in both directions; table cells print `[image: name]`.
+
+- **Examples:** `docs/export-examples/` (index in its README) are rendered from the corner cases in `pdf/tests/examples.rs` and compared byte for byte; regenerate with `UPDATE_EXAMPLES=1 cargo test --lib examples`. New PDF-affecting features add a case there.
+
+## Page breaks (same rules as the terminal app's export, `tct`)
+
+- **Sections:** a heading's section (up to the next heading of the same or a higher level) moves to a fresh page when it would be split but fits one page; longer sections flow, and their sub-sections get the same rule one level down. The "Description" title is kept with the first heading's section, or with the first block only when the description starts with other content (so a big first block, e.g. an image, can't drag the title to the next page).
+- **Blocks:** paragraphs, lists, quotes, code blocks and tables up to **half a page** (`KEEP_MAX`) are kept whole; bigger ones split. Paragraphs with inline images follow the same rule (images are at most `KEEP_MAX` high, ADR-0020).
+- **No orphans/widows:** when splitting, no single line (paragraph, code) or row (table) is left alone at a page's top or bottom; a table header keeps two rows company and is repeated on each page.
+- **Checklist** (title and items) moves as a unit when it fits a page.
+- Implemented by `Layout::keep_together_up_to`: build, and if the output was split but fits a fresh page, roll back and rebuild on a new page. Tests sweep the offset on the page (`tests.rs`, "page-break rules"); examples 14 and 15.

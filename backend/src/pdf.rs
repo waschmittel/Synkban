@@ -23,6 +23,8 @@ use krilla::page::PageSettings;
 use krilla::paint::Fill;
 use krilla::text::{Font, Tag, TextDirection};
 use krilla::{Document, SerializeSettings};
+use std::collections::HashMap;
+
 use serde_json::Value;
 
 use crate::errors::AppError;
@@ -36,6 +38,9 @@ pub struct CardExport {
     pub labels: Vec<Label>,
     /// Attachment record plus its JPEG thumbnail (images only).
     pub attachments: Vec<(Attachment, Option<Vec<u8>>)>,
+    /// Original files of the images the description shows inline, by
+    /// attachment id (embedded instead of the thumbnail).
+    pub originals: HashMap<String, Vec<u8>>,
     /// `YYYY-MM-DD HH:MM:SS` UTC, stamped into the PDF metadata.
     pub exported_at: String,
 }
@@ -46,6 +51,41 @@ const MARGIN: f32 = 50.0;
 const TOP: f32 = 50.0;
 const BOTTOM: f32 = PAGE_H - 62.0;
 const CONTENT_W: f32 = PAGE_W - 2.0 * MARGIN;
+/// Longest side of an embedded picture: ~300 dpi on a full-width line, which
+/// keeps the PDF small while staying sharp in print.
+const PICTURE_MAX_PX: u32 = 2000;
+
+/// A picture file (PNG, JPEG, GIF, WebP…) as JPEG bytes for the PDF: scaled
+/// down to `PICTURE_MAX_PX`, transparency flattened onto white. `None` when it
+/// cannot be decoded.
+fn prepare_picture(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut img = image::load_from_memory(bytes).ok()?;
+    if img.width().max(img.height()) > PICTURE_MAX_PX {
+        img = img.resize(
+            PICTURE_MAX_PX,
+            PICTURE_MAX_PX,
+            image::imageops::FilterType::Lanczos3,
+        );
+    }
+    let mut rgba = img.to_rgba8();
+    for px in rgba.pixels_mut() {
+        let a = u16::from(px[3]);
+        for c in &mut px.0[..3] {
+            *c = ((u16::from(*c) * a + 255 * (255 - a)) / 255) as u8;
+        }
+    }
+    let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+        .encode_image(&rgb)
+        .ok()?;
+    Some(out)
+}
+
+/// Blocks up to this tall (half the text area of a page) are kept whole on one
+/// page; bigger ones split. Inline pictures are at most this high.
+const KEEP_MAX: f32 = (BOTTOM - TOP) / 2.0;
+const MAX_IMAGE_H: f32 = KEEP_MAX;
 /// Space a section heading takes: gap, 12pt line, rule, gap.
 const HEADING_H: f32 = 36.0;
 
@@ -402,10 +442,23 @@ enum Align {
 
 // ── layout ───────────────────────────────────────────────────────────────
 
+/// A point in the layout to roll back to (see `Layout::keep_together_up_to`).
+struct Mark {
+    pages: usize,
+    page_len: usize,
+    images: usize,
+    y: f32,
+    marker: Option<(String, f32)>,
+}
+
 struct Layout {
     fonts: Fonts,
     pages: Vec<Vec<Op>>,
     images: Vec<Image>,
+    /// JPEG thumbnails by attachment id, for inline image references.
+    thumbs: HashMap<String, Vec<u8>>,
+    /// Index into `images` per attachment id (an image used twice is stored once).
+    thumb_idx: HashMap<String, usize>,
     y: f32,
     /// List marker waiting for the next line emitted: (text, x).
     marker: Option<(String, f32)>,
@@ -417,6 +470,8 @@ impl Layout {
             fonts,
             pages: vec![Vec::new()],
             images: Vec::new(),
+            thumbs: HashMap::new(),
+            thumb_idx: HashMap::new(),
             y: TOP,
             marker: None,
         }
@@ -435,6 +490,48 @@ impl Layout {
         if self.y + h > BOTTOM && self.y > TOP {
             self.new_page();
         }
+    }
+
+    fn mark(&self) -> Mark {
+        Mark {
+            pages: self.pages.len(),
+            page_len: self.pages.last().map_or(0, Vec::len),
+            images: self.images.len(),
+            y: self.y,
+            marker: self.marker.clone(),
+        }
+    }
+
+    fn rollback(&mut self, m: &Mark) {
+        self.pages.truncate(m.pages);
+        self.page().truncate(m.page_len);
+        self.images.truncate(m.images);
+        self.thumb_idx.retain(|_, i| *i < m.images);
+        self.y = m.y;
+        self.marker = m.marker.clone();
+    }
+
+    /// Runs `build` so that its output starts on a fresh page if it would
+    /// otherwise be split but fits one page (and is at most `max` tall);
+    /// anything bigger just flows. Output that fits the rest of the page
+    /// stays put. (Same rule as the terminal app's export.)
+    fn keep_together_up_to(&mut self, max: f32, build: &dyn Fn(&mut Layout)) {
+        let m = self.mark();
+        build(self);
+        if self.pages.len() == m.pages {
+            return;
+        }
+        self.rollback(&m);
+        if self.y > TOP {
+            self.new_page();
+            let fresh = self.mark();
+            build(self);
+            if self.pages.len() == fresh.pages && self.y - TOP <= max {
+                return;
+            }
+            self.rollback(&m);
+        }
+        build(self);
     }
 
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: Rgb) {
@@ -611,7 +708,7 @@ impl Layout {
         let lines = self.wrap(spans, size, width, color);
         let line_h = size * 1.4;
         let total = lines.len() as f32 * line_h;
-        if keep && total <= BOTTOM - TOP {
+        if keep && total <= KEEP_MAX {
             self.ensure(total);
         }
         // A paragraph that starts in a right-to-left script is right-aligned.
@@ -624,8 +721,8 @@ impl Layout {
         } else {
             align
         };
-        for line in &lines {
-            self.ensure(line_h);
+        for (i, line) in lines.iter().enumerate() {
+            self.ensure(lines_to_keep(i, lines.len()) as f32 * line_h);
             let y = self.y;
             self.emit_line_at(line, x, y, width, size, align);
             self.y += line_h;
@@ -692,8 +789,42 @@ impl Layout {
     // ── ProseMirror ──────────────────────────────────────────────────────
 
     fn blocks(&mut self, nodes: &[Value], x: f32, w: f32, size: f32, color: Rgb) {
-        for n in nodes {
-            self.block(n, x, w, size, color);
+        self.blocks_inner(nodes, x, w, size, color, false);
+    }
+
+    /// Page breaks are planned hierarchically: a heading's whole section
+    /// starts on a fresh page if it would otherwise be split and fits one
+    /// page; longer sections flow, but their sub-sections get the same
+    /// treatment. Every other block (paragraph, list, quote, code, table) is
+    /// kept whole up to half a page. With `title_above` the first heading's
+    /// section is already positioned by the caller.
+    fn blocks_inner(
+        &mut self,
+        nodes: &[Value],
+        x: f32,
+        w: f32,
+        size: f32,
+        color: Rgb,
+        title_above: bool,
+    ) {
+        let mut i = 0;
+        while i < nodes.len() {
+            if heading_level(&nodes[i]).is_some() {
+                if title_above && i == 0 {
+                    self.block(&nodes[i], x, w, size, color);
+                    i += 1;
+                } else {
+                    let section = &nodes[i..section_end(nodes, i)];
+                    self.keep_together_up_to(f32::MAX, &|l| {
+                        l.blocks_inner(section, x, w, size, color, true)
+                    });
+                    i += section.len();
+                }
+            } else {
+                let n = &nodes[i];
+                self.keep_together_up_to(KEEP_MAX, &|l| l.block(n, x, w, size, color));
+                i += 1;
+            }
         }
     }
 
@@ -705,13 +836,23 @@ impl Layout {
             .map_or(&[], Vec::as_slice);
         match kind {
             "paragraph" => {
-                let mut spans = Vec::new();
-                inline(content, &mut spans, false);
-                if spans.iter().all(|s| s.text.trim().is_empty()) {
-                    self.gap(size * 0.7);
-                } else {
-                    self.flow(&spans, x, w, TextStyle { size, color }, Align::Left, true);
-                    self.gap(5.0);
+                // Images split the paragraph: text before, the image on its
+                // own line(s), text after.
+                let mut parts: Vec<(&[Value], Option<usize>)> = Vec::new();
+                let mut start = 0;
+                for (i, n) in content.iter().enumerate() {
+                    if let Some(idx) = self.inline_image(n) {
+                        parts.push((&content[start..i], Some(idx)));
+                        start = i + 1;
+                    }
+                }
+                parts.push((&content[start..], None));
+                let had_image = parts.len() > 1;
+                for (nodes, img) in parts {
+                    self.paragraph_text(nodes, x, w, size, color, had_image);
+                    if let Some(idx) = img {
+                        self.place_inline_image(idx, x, w, size);
+                    }
                 }
             }
             "heading" => {
@@ -794,6 +935,86 @@ impl Layout {
         }
     }
 
+    /// A run of inline nodes as wrapped text; a blank one is a gap, unless it
+    /// only sits next to an image (`skip_blank`).
+    fn paragraph_text(
+        &mut self,
+        nodes: &[Value],
+        x: f32,
+        w: f32,
+        size: f32,
+        color: Rgb,
+        skip_blank: bool,
+    ) {
+        let mut spans = Vec::new();
+        inline(nodes, &mut spans, false);
+        if spans.iter().all(|s| s.text.trim().is_empty()) {
+            if !skip_blank {
+                self.gap(size * 0.7);
+            }
+        } else {
+            self.flow(&spans, x, w, TextStyle { size, color }, Align::Left, true);
+            self.gap(5.0);
+        }
+    }
+
+    /// Index of the embedded picture for an `image` node whose attachment has
+    /// a decodable thumbnail; other nodes (and dangling references) fall back
+    /// to their text placeholder.
+    fn inline_image(&mut self, node: &Value) -> Option<usize> {
+        if node.get("type").and_then(Value::as_str) != Some("image") {
+            return None;
+        }
+        let att = node.pointer("/attrs/att").and_then(Value::as_str)?;
+        if let Some(&idx) = self.thumb_idx.get(att) {
+            return Some(idx);
+        }
+        let img = Image::from_jpeg(self.thumbs.get(att)?.clone().into(), false).ok()?;
+        let (iw, ih) = img.size();
+        if iw == 0 || ih == 0 {
+            return None;
+        }
+        self.images.push(img);
+        self.thumb_idx
+            .insert(att.to_string(), self.images.len() - 1);
+        Some(self.images.len() - 1)
+    }
+
+    /// Size of picture `idx` on a line `w` wide: natural size (1px = 1pt),
+    /// scaled down so it is neither wider than `w` nor higher than half the
+    /// text area of a page.
+    fn inline_image_size(&self, idx: usize, w: f32) -> (f32, f32) {
+        let (iw, ih) = self.images[idx].size();
+        let scale = (w / iw as f32).min(MAX_IMAGE_H / ih as f32).min(1.0);
+        (iw as f32 * scale, ih as f32 * scale)
+    }
+
+    /// Draws a picture at its natural size (1px = 1pt), scaled down to fit
+    /// within a full text line's width in both directions.
+    fn place_inline_image(&mut self, idx: usize, x: f32, w: f32, size: f32) {
+        let (iw, ih) = self.inline_image_size(idx, w);
+        self.ensure(ih);
+        let y = self.y;
+        if let Some((m, mx)) = self.marker.take() {
+            self.page().push(Op::Text {
+                x: mx,
+                y: y + size * 1.05,
+                face: Face::Regular,
+                size,
+                color: INK,
+                text: m,
+            });
+        }
+        self.page().push(Op::Image {
+            idx,
+            x,
+            y,
+            w: iw,
+            h: ih,
+        });
+        self.y += ih + 5.0;
+    }
+
     fn code_block(&mut self, content: &[Value], x: f32, w: f32) {
         let size = 9.0;
         let line_h = size * 1.4;
@@ -809,11 +1030,8 @@ impl Layout {
         }];
         let lines = self.wrap_code(&span, size, w - 10.0);
         self.gap(2.0);
-        if lines.len() as f32 * line_h <= BOTTOM - TOP {
-            self.ensure(lines.len() as f32 * line_h);
-        }
-        for line in &lines {
-            self.ensure(line_h);
+        for (i, line) in lines.iter().enumerate() {
+            self.ensure(lines_to_keep(i, lines.len()) as f32 * line_h);
             let y = self.y;
             self.rect(x, y, w, line_h, CODE_BG);
             self.emit_line_at(line, x + 5.0, y, w - 10.0, size, Align::Left);
@@ -912,18 +1130,15 @@ impl Layout {
             pad,
         };
         self.gap(3.0);
-        let total: f32 = heights.iter().sum();
-        if total <= BOTTOM - TOP {
-            self.ensure(total);
-        }
         for ri in 0..grid.len() {
-            // Keep the header company: never leave it alone at a page end.
-            let need = heights[ri]
-                + if ri == 0 {
-                    heights.get(1).copied().unwrap_or(0.0)
-                } else {
-                    0.0
-                };
+            // No single row alone at a page's top or bottom; the header
+            // keeps two rows company.
+            let keep = if ri == 0 {
+                3
+            } else {
+                lines_to_keep(ri, grid.len())
+            };
+            let need: f32 = heights[ri..(ri + keep).min(grid.len())].iter().sum();
             if self.y + need > BOTTOM && self.y > TOP {
                 self.new_page();
                 if ri > 0 && heights[0] + heights[ri] <= BOTTOM - TOP {
@@ -970,6 +1185,33 @@ impl Layout {
         self.rect(x0, top + h, total_w, 0.6, RULE);
         self.y = top + h;
     }
+}
+
+/// Lines that must fit before line `i` of `n` may be drawn: no single line is
+/// left alone at the top or bottom of a page.
+fn lines_to_keep(i: usize, n: usize) -> usize {
+    if i == 0 || (n >= 4 && i + 2 == n) {
+        n.min(2)
+    } else {
+        1
+    }
+}
+
+fn heading_level(node: &Value) -> Option<u64> {
+    (node.get("type").and_then(Value::as_str) == Some("heading")).then(|| {
+        node.pointer("/attrs/level")
+            .and_then(Value::as_u64)
+            .unwrap_or(1)
+    })
+}
+
+/// End of the section starting at `nodes[i]`: a heading's section runs to the
+/// next heading of the same or a higher level, other content to the next heading.
+fn section_end(nodes: &[Value], i: usize) -> usize {
+    let level = heading_level(&nodes[i]);
+    (i + 1..nodes.len())
+        .find(|&j| heading_level(&nodes[j]).is_some_and(|l| level.is_none_or(|k| l <= k)))
+        .unwrap_or(nodes.len())
 }
 
 #[derive(Clone, Copy)]
@@ -1127,6 +1369,18 @@ fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool) {
                 text: "\n".into(),
                 ..Span::default()
             }),
+            // Image attachments aren't embedded; their file name stands in.
+            Some("image") => out.push(Span {
+                text: format!(
+                    "[image: {}]",
+                    n.pointer("/attrs/alt")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                ),
+                bold,
+                italic: true,
+                ..Span::default()
+            }),
             _ => {
                 let Some(text) = n.get("text").and_then(Value::as_str) else {
                     continue;
@@ -1204,6 +1458,16 @@ pub fn render_card(export: &CardExport) -> Result<Vec<u8>, AppError> {
 fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
     let card = &export.card;
     let mut l = Layout::new(Fonts::load()?);
+    l.thumbs = export
+        .attachments
+        .iter()
+        .filter_map(|(a, t)| Some((a.id.clone(), t.clone()?)))
+        .collect();
+    for (id, bytes) in &export.originals {
+        if let Some(jpeg) = prepare_picture(bytes) {
+            l.thumbs.insert(id.clone(), jpeg);
+        }
+    }
 
     // Title.
     let mut title = Vec::new();
@@ -1309,15 +1573,30 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
     });
     let plain_desc = doc.is_none() && !card.description.trim().is_empty();
     if has_doc || plain_desc {
-        l.heading_rule("Description", 0.0);
         if let Some(d) = doc.filter(|_| has_doc) {
             let content = d
                 .get("content")
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default();
-            l.blocks(&content, MARGIN, CONTENT_W, 10.5, INK);
+            // The title is kept with the first heading's section, or else with
+            // the first block only (a big first block must not drag it away).
+            let by_heading = heading_level(&content[0]).is_some();
+            let first = &content[..if by_heading {
+                section_end(&content, 0)
+            } else {
+                1
+            }];
+            // A first block over half a page (e.g. a paragraph of big images)
+            // flows from where the title is instead of moving as a whole.
+            let max = if by_heading { f32::MAX } else { KEEP_MAX };
+            l.keep_together_up_to(max, &|l| {
+                l.heading_rule("Description", 0.0);
+                l.blocks_inner(first, MARGIN, CONTENT_W, 10.5, INK, true);
+            });
+            l.blocks(&content[first.len()..], MARGIN, CONTENT_W, 10.5, INK);
         } else {
+            l.heading_rule("Description", 0.0);
             for para in card.description.split("\n\n") {
                 let spans = [Span {
                     text: para.to_string(),
@@ -1339,37 +1618,25 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         }
     }
 
-    // Checklist: header and items stay together when they fit on a page.
+    // Checklist: header and items move to a fresh page as a unit when they fit one.
     if !card.checklist.is_empty() {
         let (size, x, w) = (10.5, MARGIN + 20.0, CONTENT_W - 20.0);
-        let items_h: f32 = card
-            .checklist
-            .iter()
-            .map(|i| {
+        let done = card.checklist.iter().filter(|i| i.done).count();
+        l.keep_together_up_to(f32::MAX, &|l| {
+            l.heading_rule(&format!("Checklist ({done}/{})", card.checklist.len()), 0.0);
+            for item in &card.checklist {
+                let mark = if item.done { "\u{2611}" } else { "\u{2610}" };
+                l.marker = Some((mark.to_string(), MARGIN));
                 let spans = [Span {
-                    text: i.text.clone(),
+                    text: item.text.clone(),
                     ..Span::default()
                 }];
-                l.wrap(&spans, size, w, INK).len() as f32 * size * 1.4 + 2.0
-            })
-            .sum();
-        let done = card.checklist.iter().filter(|i| i.done).count();
-        l.heading_rule(
-            &format!("Checklist ({done}/{})", card.checklist.len()),
-            items_h,
-        );
-        for item in &card.checklist {
-            let mark = if item.done { "\u{2611}" } else { "\u{2610}" };
-            l.marker = Some((mark.to_string(), MARGIN));
-            let spans = [Span {
-                text: item.text.clone(),
-                ..Span::default()
-            }];
-            let color = if item.done { MUTED } else { INK };
-            l.flow(&spans, x, w, TextStyle { size, color }, Align::Left, false);
-            l.marker = None;
-            l.gap(2.0);
-        }
+                let color = if item.done { MUTED } else { INK };
+                l.flow(&spans, x, w, TextStyle { size, color }, Align::Left, false);
+                l.marker = None;
+                l.gap(2.0);
+            }
+        });
     }
 
     // Attachments: header and file list stay together; images follow.

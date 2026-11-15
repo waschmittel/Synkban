@@ -14,7 +14,7 @@
 | Code | Inline code (`I`) | always |
 | Text style | Plain (`0`), Code block (`B`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
 | Insert | Insert table 3×3 (`T`) | outside tables |
-| Table | move row/column (arrows), insert row/column (Shift+arrows), align column (`1`/`2`/`3`), delete row/column/table (`R`/`C`/`T`; tinted danger) | inside tables |
+| Table | move row/column (`W`/`S` up/down, `A`/`D` left/right), insert row/column (Shift+arrows), align column (`1`/`2`/`3`), delete row/column/table (`R`/`C`/`T`; tinted danger) | inside tables |
 
 ## Why
 
@@ -29,3 +29,8 @@ A modifier chord per operation doesn't scale and collides across OSes (ADR-0008)
 - **Right-click does exactly what Accel+K does**, anchored at the pointer: same menu, same items. The caret moves to the click first (like a native right-click) unless the click lands inside the current selection, which is kept. The native context menu is not offered inside the editor.
 - Icons are static inline SVG (`tableIcons.ts`) — the only `innerHTML` source; nothing user-controlled reaches it.
 - Discoverability per ADR-0008 (toolbar tooltip `Table (⌘K)`, `ShortcutHelp.tsx`, `tooltips.spec.ts`).
+
+## Menu navigation and image items
+
+- All popup menus (editor menu, image picker; `menuNav.ts`): `↑`/`↓` (wrapping) and `Home`/`End` move a highlight over the enabled items, `Enter` runs the highlighted item (without a highlight it closes the menu), `Esc` closes. Letter/digit shortcuts keep working. Arrow keys therefore no longer move table rows/columns (`W`/`S`/`A`/`D`); `Shift`+arrows still insert.
+- `M` / the toolbar image button open the image picker (ADR-0020); both are greyed out where an inline image cannot go (code blocks).

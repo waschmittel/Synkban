@@ -215,6 +215,25 @@ pub async fn upload_attachment(
     Ok(HttpResponse::Created().json(att))
 }
 
+pub async fn copy_attachment(
+    data_dir: web::Data<PathBuf>,
+    path: web::Path<String>,
+    body: web::Json<CopyAttachment>,
+) -> Result<HttpResponse, AppError> {
+    let card_id = path.into_inner();
+    let att = store::audit_op(
+        &data_dir,
+        |dd| store::copy_attachment(dd, &body.from_card, &body.att_id, &card_id),
+        |a| {
+            format!(
+                "COPY attachment \"{}\" ({} → {}) from card {} to card {}",
+                a.filename, body.att_id, a.id, body.from_card, card_id
+            )
+        },
+    )?;
+    Ok(HttpResponse::Created().json(att))
+}
+
 pub async fn download_attachment(
     data_dir: web::Data<PathBuf>,
     path: web::Path<(String, String)>,

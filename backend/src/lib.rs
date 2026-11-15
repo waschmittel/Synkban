@@ -143,6 +143,10 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         web::post().to(handlers::cards::upload_attachment),
     )
     .route(
+        "/api/cards/{card_id}/attachments/copy",
+        web::post().to(handlers::cards::copy_attachment),
+    )
+    .route(
         "/api/cards/{card_id}/attachments/{att_id}",
         web::get().to(handlers::cards::download_attachment),
     )

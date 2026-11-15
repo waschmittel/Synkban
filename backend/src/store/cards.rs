@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::errors::AppError;
 use crate::models::{Card, CardContent, CardHistory, CardPatch, HistoryEntry};
 use crate::store::card_index::{self, CardLocation};
+use crate::store::image_refs;
 use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
 use crate::store::lists::find_board_for_list;
 use crate::store::paths::*;
@@ -97,6 +98,33 @@ fn card_path(data_dir: &Path, card_id: &str, loc: &CardLocation) -> PathBuf {
             archived_cards_dir(data_dir, board_id).join(format!("{card_id}.json"))
         }
     }
+}
+
+fn attachment_ids(
+    data_dir: &Path,
+    board_id: &str,
+    card_id: &str,
+) -> std::collections::HashSet<String> {
+    crate::store::attachments::load_attachments(data_dir, board_id, card_id)
+        .into_iter()
+        .map(|a| a.id)
+        .collect()
+}
+
+/// Removes inline image references to attachments that no longer exist
+/// (ADR-0020). Writes the card only when something changed.
+pub(crate) fn drop_dangling_image_refs(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
+    let loc = card_index::locate(data_dir, card_id)?;
+    let path = card_path(data_dir, card_id, &loc);
+    let mut card = read_card(&path)?;
+    let (CardLocation::InList { board_id, .. } | CardLocation::Orphaned { board_id }) = &loc;
+    let ids = attachment_ids(data_dir, board_id, card_id);
+    if let Some(pruned) = image_refs::prune_image_refs(&card.description, &ids) {
+        card.description = pruned;
+        refresh_description_text(&mut card);
+        write_card(&path, &mut card)?;
+    }
+    Ok(())
 }
 
 fn attachment_names(data_dir: &Path, board_id: &str, card_id: &str) -> Vec<String> {
@@ -190,8 +218,18 @@ pub fn export_card(data_dir: &Path, card_id: &str) -> Result<crate::pdf::CardExp
             (att, thumb)
         })
         .collect();
+    // Pictures shown inline are embedded from the original, not the thumbnail.
+    let originals = image_refs::referenced_ids(&card.description)
+        .into_iter()
+        .filter_map(|id| {
+            let bytes =
+                std::fs::read(attachment_dir(data_dir, board_id, card_id).join(&id)).ok()?;
+            Some((id, bytes))
+        })
+        .collect();
     card.history.clear();
     Ok(crate::pdf::CardExport {
+        originals,
         labels: board
             .labels
             .into_iter()
@@ -301,6 +339,12 @@ fn update_card_with_history(
     }
     if let Some(d) = description {
         card.description = d.to_string();
+        if let Some(pruned) = image_refs::prune_image_refs(
+            &card.description,
+            &attachment_ids(data_dir, &source_board_id, card_id),
+        ) {
+            card.description = pruned;
+        }
         refresh_description_text(&mut card);
     }
     if let Some(p) = position {
