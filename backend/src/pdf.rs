@@ -473,14 +473,11 @@ impl Layout {
             }
         }
 
-        let mut lines: Vec<Vec<Seg>> = Vec::new();
-        let mut cur: Vec<Seg> = Vec::new();
-        let mut cur_w = 0.0f32;
+        let mut buf = LineBuf::default();
         for tok in toks {
             let w = match tok {
                 Tok::Break => {
-                    lines.push(std::mem::take(&mut cur));
-                    cur_w = 0.0;
+                    buf.break_line();
                     continue;
                 }
                 Tok::Word(w) => w,
@@ -490,46 +487,36 @@ impl Layout {
             // from that run's face in between (copy/paste, correct shaping).
             let merge = w.space
                 && self.fonts.has(w.face, ' ')
-                && cur
+                && buf
+                    .cur
                     .last()
                     .is_some_and(|l| l.face == w.face && l.link == w.link);
-            let mut lead = match (w.space && !cur.is_empty(), merge) {
+            let mut lead = match (w.space && !buf.cur.is_empty(), merge) {
                 (false, _) => 0.0,
                 (true, true) => self.fonts.width(w.face, " ", size),
                 (true, false) => self.fonts.width(w.lead_face, " ", size),
             };
             let mut merge = merge;
-            if cur_w + lead + ww > width && !cur.is_empty() {
-                lines.push(std::mem::take(&mut cur));
-                cur_w = 0.0;
+            if buf.cur_w + lead + ww > width && !buf.cur.is_empty() {
+                buf.break_line();
                 lead = 0.0;
                 merge = false;
             }
             if ww > width {
-                self.split_long(&w, size, width, color, &mut lines, &mut cur, &mut cur_w);
+                self.split_long(&w, size, width, color, &mut buf);
             } else {
-                add_word(&mut cur, &mut cur_w, w, lead, ww, color, merge);
+                buf.push_word(w, lead, ww, color, merge);
             }
         }
-        if !cur.is_empty() || lines.is_empty() {
-            lines.push(cur);
+        if !buf.cur.is_empty() || buf.lines.is_empty() {
+            buf.lines.push(buf.cur);
         }
-        lines
+        buf.lines
     }
 
     /// A single word wider than the line: hard-wrap it by characters. The
     /// last chunk stays open as the current line.
-    #[allow(clippy::too_many_arguments)]
-    fn split_long(
-        &self,
-        word: &Word,
-        size: f32,
-        width: f32,
-        color: Rgb,
-        lines: &mut Vec<Vec<Seg>>,
-        cur: &mut Vec<Seg>,
-        cur_w: &mut f32,
-    ) {
+    fn split_long(&self, word: &Word, size: f32, width: f32, color: Rgb, buf: &mut LineBuf) {
         let color = if word.link.is_some() { LINK } else { color };
         let seg = |text: String, w: f32| Seg {
             text,
@@ -539,26 +526,25 @@ impl Layout {
             link: word.link.clone(),
             color,
         };
-        if !cur.is_empty() {
-            lines.push(std::mem::take(cur));
+        if !buf.cur.is_empty() {
+            buf.lines.push(std::mem::take(&mut buf.cur));
         }
         let mut chunk = String::new();
         let mut cw = 0.0;
         for c in word.text.chars() {
             let w1 = self.fonts.width(word.face, &c.to_string(), size);
             if cw + w1 > width && !chunk.is_empty() && w1 > 0.0 {
-                lines.push(vec![seg(std::mem::take(&mut chunk), cw)]);
+                buf.lines.push(vec![seg(std::mem::take(&mut chunk), cw)]);
                 cw = 0.0;
             }
             chunk.push(c);
             cw += w1;
         }
-        *cur = vec![seg(chunk, cw)];
-        *cur_w = cw;
+        buf.cur = vec![seg(chunk, cw)];
+        buf.cur_w = cw;
     }
 
     /// Draws one wrapped line with its top at `top`.
-    #[allow(clippy::too_many_arguments)]
     fn emit_line_at(
         &mut self,
         line: &[Seg],
@@ -613,14 +599,12 @@ impl Layout {
     /// Flows wrapped lines down the page, breaking pages as needed.
     /// With `keep`, the block moves to the next page as a whole when it
     /// would otherwise be split — unless it is taller than a page.
-    #[allow(clippy::too_many_arguments)]
     fn flow(
         &mut self,
         spans: &[Span],
         x: f32,
         width: f32,
-        size: f32,
-        color: Rgb,
+        TextStyle { size, color }: TextStyle,
         align: Align,
         keep: bool,
     ) {
@@ -690,7 +674,17 @@ impl Layout {
             bold: true,
             ..Span::default()
         }];
-        self.flow(&spans, MARGIN, CONTENT_W, 12.0, MUTED, Align::Left, false);
+        self.flow(
+            &spans,
+            MARGIN,
+            CONTENT_W,
+            TextStyle {
+                size: 12.0,
+                color: MUTED,
+            },
+            Align::Left,
+            false,
+        );
         self.rect(MARGIN, self.y, CONTENT_W, 0.6, RULE);
         self.gap(8.0);
     }
@@ -716,7 +710,7 @@ impl Layout {
                 if spans.iter().all(|s| s.text.trim().is_empty()) {
                     self.gap(size * 0.7);
                 } else {
-                    self.flow(&spans, x, w, size, color, Align::Left, true);
+                    self.flow(&spans, x, w, TextStyle { size, color }, Align::Left, true);
                     self.gap(5.0);
                 }
             }
@@ -734,7 +728,14 @@ impl Layout {
                 inline(content, &mut spans, true);
                 self.ensure(hs * 1.4 + 9.0 + 2.0 * size * 1.4);
                 self.gap(4.0);
-                self.flow(&spans, x, w, hs, color, Align::Left, true);
+                self.flow(
+                    &spans,
+                    x,
+                    w,
+                    TextStyle { size: hs, color },
+                    Align::Left,
+                    true,
+                );
                 self.gap(5.0);
             }
             "code_block" => self.code_block(content, x, w),
@@ -787,7 +788,7 @@ impl Layout {
                 } else if node.get("text").is_some() {
                     let mut spans = Vec::new();
                     inline(std::slice::from_ref(node), &mut spans, false);
-                    self.flow(&spans, x, w, size, color, Align::Left, true);
+                    self.flow(&spans, x, w, TextStyle { size, color }, Align::Left, true);
                 }
             }
         }
@@ -905,6 +906,11 @@ impl Layout {
             })
             .collect();
 
+        let geom = Grid {
+            cols: &cols,
+            x0,
+            pad,
+        };
         self.gap(3.0);
         let total: f32 = heights.iter().sum();
         if total <= BOTTOM - TOP {
@@ -921,25 +927,23 @@ impl Layout {
             if self.y + need > BOTTOM && self.y > TOP {
                 self.new_page();
                 if ri > 0 && heights[0] + heights[ri] <= BOTTOM - TOP {
-                    self.table_row(&grid[0], &wrapped[0], &cols, x0, heights[0], size, pad);
+                    self.table_row(&grid[0], &wrapped[0], &geom, heights[0], size);
                 }
             }
-            self.table_row(&grid[ri], &wrapped[ri], &cols, x0, heights[ri], size, pad);
+            self.table_row(&grid[ri], &wrapped[ri], &geom, heights[ri], size);
         }
         self.gap(8.0);
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn table_row(
         &mut self,
         cells: &[Cell],
         wrapped: &[Vec<Vec<Seg>>],
-        cols: &[f32],
-        x0: f32,
+        grid: &Grid,
         h: f32,
         size: f32,
-        pad: f32,
     ) {
+        let Grid { cols, x0, pad } = *grid;
         let top = self.y;
         let total_w: f32 = cols.iter().sum();
         let mut cx = x0;
@@ -966,6 +970,20 @@ impl Layout {
         self.rect(x0, top + h, total_w, 0.6, RULE);
         self.y = top + h;
     }
+}
+
+#[derive(Clone, Copy)]
+struct TextStyle {
+    size: f32,
+    color: Rgb,
+}
+
+/// Column layout of a table: widths, left edge, cell padding.
+#[derive(Clone, Copy)]
+struct Grid<'a> {
+    cols: &'a [f32],
+    x0: f32,
+    pad: f32,
 }
 
 struct Cell {
@@ -1065,34 +1083,41 @@ enum Tok {
     Break,
 }
 
-/// Appends a word to the line, merging it into the previous run when the
-/// style matches so the real space ends up in the text (copy/paste).
-fn add_word(
-    cur: &mut Vec<Seg>,
-    cur_w: &mut f32,
-    w: Word,
-    lead: f32,
-    ww: f32,
-    color: Rgb,
-    merge: bool,
-) {
-    let color = if w.link.is_some() { LINK } else { color };
-    match cur.last_mut() {
-        Some(last) if merge => {
-            last.text.push(' ');
-            last.text.push_str(&w.text);
-            last.w += lead + ww;
-        }
-        _ => cur.push(Seg {
-            text: w.text,
-            face: w.face,
-            w: ww,
-            lead,
-            link: w.link,
-            color,
-        }),
+/// Wrapped lines so far plus the line being built and its width.
+#[derive(Default)]
+struct LineBuf {
+    lines: Vec<Vec<Seg>>,
+    cur: Vec<Seg>,
+    cur_w: f32,
+}
+
+impl LineBuf {
+    fn break_line(&mut self) {
+        self.lines.push(std::mem::take(&mut self.cur));
+        self.cur_w = 0.0;
     }
-    *cur_w += lead + ww;
+
+    /// Appends a word to the line, merging it into the previous run when the
+    /// style matches so the real space ends up in the text (copy/paste).
+    fn push_word(&mut self, w: Word, lead: f32, ww: f32, color: Rgb, merge: bool) {
+        let color = if w.link.is_some() { LINK } else { color };
+        match self.cur.last_mut() {
+            Some(last) if merge => {
+                last.text.push(' ');
+                last.text.push_str(&w.text);
+                last.w += lead + ww;
+            }
+            _ => self.cur.push(Seg {
+                text: w.text,
+                face: w.face,
+                w: ww,
+                lead,
+                link: w.link,
+                color,
+            }),
+        }
+        self.cur_w += lead + ww;
+    }
 }
 
 fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool) {
@@ -1183,7 +1208,17 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
     // Title.
     let mut title = Vec::new();
     parse_md(&card.title, true, false, &mut title);
-    l.flow(&title, MARGIN, CONTENT_W, 20.0, INK, Align::Left, false);
+    l.flow(
+        &title,
+        MARGIN,
+        CONTENT_W,
+        TextStyle {
+            size: 20.0,
+            color: INK,
+        },
+        Align::Left,
+        false,
+    );
     l.gap(4.0);
     let status = export.exported_at.get(..16).unwrap_or(&export.exported_at);
     let board = [Span {
@@ -1193,7 +1228,17 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         ),
         ..Span::default()
     }];
-    l.flow(&board, MARGIN, CONTENT_W, 9.0, MUTED, Align::Left, false);
+    l.flow(
+        &board,
+        MARGIN,
+        CONTENT_W,
+        TextStyle {
+            size: 9.0,
+            color: MUTED,
+        },
+        Align::Left,
+        false,
+    );
     l.gap(8.0);
 
     // Label chips.
@@ -1241,7 +1286,17 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
                 ..Span::default()
             },
         ];
-        l.flow(&spans, MARGIN, CONTENT_W, 10.5, INK, Align::Left, false);
+        l.flow(
+            &spans,
+            MARGIN,
+            CONTENT_W,
+            TextStyle {
+                size: 10.5,
+                color: INK,
+            },
+            Align::Left,
+            false,
+        );
         l.gap(4.0);
     }
 
@@ -1268,7 +1323,17 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
                     text: para.to_string(),
                     ..Span::default()
                 }];
-                l.flow(&spans, MARGIN, CONTENT_W, 10.5, INK, Align::Left, true);
+                l.flow(
+                    &spans,
+                    MARGIN,
+                    CONTENT_W,
+                    TextStyle {
+                        size: 10.5,
+                        color: INK,
+                    },
+                    Align::Left,
+                    true,
+                );
                 l.gap(5.0);
             }
         }
@@ -1301,7 +1366,7 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
                 ..Span::default()
             }];
             let color = if item.done { MUTED } else { INK };
-            l.flow(&spans, x, w, size, color, Align::Left, false);
+            l.flow(&spans, x, w, TextStyle { size, color }, Align::Left, false);
             l.marker = None;
             l.gap(2.0);
         }
@@ -1335,7 +1400,14 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         );
         for (att, _) in &export.attachments {
             l.marker = Some(("\u{2022}".to_string(), MARGIN + 2.0));
-            l.flow(&attachment_spans(att), x, w, size, INK, Align::Left, false);
+            l.flow(
+                &attachment_spans(att),
+                x,
+                w,
+                TextStyle { size, color: INK },
+                Align::Left,
+                false,
+            );
             l.marker = None;
             l.gap(2.0);
         }
