@@ -8,8 +8,8 @@ use crate::errors::AppError;
 use crate::store::paths::boards_dir;
 
 thread_local! {
-    static FILE_OPS: RefCell<Vec<(&'static str, PathBuf)>> = RefCell::new(Vec::new());
-    static WARNINGS: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    static FILE_OPS: RefCell<Vec<(&'static str, PathBuf)>> = const { RefCell::new(Vec::new()) };
+    static WARNINGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn track(op: &'static str, path: &Path) {
@@ -160,7 +160,9 @@ pub fn get_latest_mtime(data_dir: &Path) -> Result<u64, AppError> {
 /// Per-board mtime map: `board_id → max(mtime of any file under that board's dir)`.
 /// Lets clients refetch only the board they're looking at when other boards change.
 /// Total work is the same as `get_latest_mtime` — just bucketed by board.
-pub fn get_per_board_mtimes(data_dir: &Path) -> Result<std::collections::HashMap<String, u64>, AppError> {
+pub fn get_per_board_mtimes(
+    data_dir: &Path,
+) -> Result<std::collections::HashMap<String, u64>, AppError> {
     let mut out = std::collections::HashMap::new();
     let dir = boards_dir(data_dir);
     if !dir.exists() {

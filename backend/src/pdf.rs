@@ -12,10 +12,10 @@
 //! what's installed. Characters without a glyph are replaced by `?` before
 //! drawing, because PDF/A forbids `.notdef` glyphs.
 
-use krilla::annotation::{Annotation, LinkAnnotation, Target};
-use krilla::configure::{Archival, ConfigurationBuilder};
 use krilla::action::LinkAction;
+use krilla::annotation::{Annotation, LinkAnnotation, Target};
 use krilla::color::rgb;
+use krilla::configure::{Archival, ConfigurationBuilder};
 use krilla::geom::{PathBuilder, Point, Rect};
 use krilla::image::Image;
 use krilla::metadata::{DateTime, Metadata};
@@ -87,8 +87,14 @@ static FONT_DATA: [&[u8]; 10] = [
 ];
 
 /// Tried in this order for a character the style's own face lacks.
-const FALLBACKS: [Face; 6] =
-    [Face::Regular, Face::Emoji, Face::Arabic, Face::Hebrew, Face::Devanagari, Face::Thai];
+const FALLBACKS: [Face; 6] = [
+    Face::Regular,
+    Face::Emoji,
+    Face::Arabic,
+    Face::Hebrew,
+    Face::Devanagari,
+    Face::Thai,
+];
 
 impl Face {
     fn rtl(self) -> bool {
@@ -96,16 +102,21 @@ impl Face {
     }
 
     fn is_script(self) -> bool {
-        matches!(self, Face::Arabic | Face::Hebrew | Face::Devanagari | Face::Thai)
+        matches!(
+            self,
+            Face::Arabic | Face::Hebrew | Face::Devanagari | Face::Thai
+        )
     }
 
     /// The face a character belongs to by script, regardless of style.
     fn of_script(c: char) -> Option<Face> {
         match c as u32 {
             0x0590..=0x05FF | 0xFB1D..=0xFB4F => Some(Face::Hebrew),
-            0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF => {
-                Some(Face::Arabic)
-            }
+            0x0600..=0x06FF
+            | 0x0750..=0x077F
+            | 0x08A0..=0x08FF
+            | 0xFB50..=0xFDFF
+            | 0xFE70..=0xFEFF => Some(Face::Arabic),
             0x0900..=0x097F | 0xA8E0..=0xA8FF => Some(Face::Devanagari),
             0x0E00..=0x0E7F => Some(Face::Thai),
             0x1F000..=0x1FAFF => Some(Face::Emoji),
@@ -130,12 +141,19 @@ impl Fonts {
             // The Noto fonts are variable and some default to Thin: pin the
             // regular instance, for drawing and for measuring alike.
             let coords: Vec<(Tag, f32)> = if variable {
-                REGULAR_INSTANCE.iter().map(|(t, v)| (Tag::new(t), *v)).collect()
+                REGULAR_INSTANCE
+                    .iter()
+                    .map(|(t, v)| (Tag::new(t), *v))
+                    .collect()
             } else {
                 Vec::new()
             };
-            kr.push(Font::new_variable(data.into(), 0, &coords).ok_or_else(|| internal("font load failed"))?);
-            let mut face = rustybuzz::Face::from_slice(data, 0).ok_or_else(|| internal("font parse failed"))?;
+            kr.push(
+                Font::new_variable(data.into(), 0, &coords)
+                    .ok_or_else(|| internal("font load failed"))?,
+            );
+            let mut face = rustybuzz::Face::from_slice(data, 0)
+                .ok_or_else(|| internal("font parse failed"))?;
             if variable {
                 let vars: Vec<rustybuzz::Variation> = REGULAR_INSTANCE
                     .iter()
@@ -205,9 +223,20 @@ impl Fonts {
     /// column alignment): characters the face lacks become `?`.
     fn sanitize(&self, face: Face, s: &str) -> String {
         s.chars()
-            .filter(|c| !matches!(c, '\u{200B}'..='\u{200F}' | '\u{2060}' | '\u{FEFF}' | '\u{00AD}'))
+            .filter(|c| {
+                !matches!(
+                    c,
+                    '\u{200B}'..='\u{200F}' | '\u{2060}' | '\u{FEFF}' | '\u{00AD}'
+                )
+            })
             .filter(|c| *c == '\n' || !c.is_control())
-            .map(|c| if c == '\n' || self.has(face, c) { c } else { '?' })
+            .map(|c| {
+                if c == '\n' || self.has(face, c) {
+                    c
+                } else {
+                    '?'
+                }
+            })
             .collect()
     }
 
@@ -218,7 +247,11 @@ impl Fonts {
         buf.push_str(text);
         buf.guess_segment_properties();
         let shaped = rustybuzz::shape(f, &[], buf);
-        let units: f32 = shaped.glyph_positions().iter().map(|p| p.x_advance as f32).sum();
+        let units: f32 = shaped
+            .glyph_positions()
+            .iter()
+            .map(|p| p.x_advance as f32)
+            .sum();
         units / f.units_per_em() as f32 * size
     }
 
@@ -240,7 +273,10 @@ impl Fonts {
     }
 
     fn runs_width(&self, primary: Face, text: &str, size: f32) -> f32 {
-        self.runs(primary, text).iter().map(|(f, t)| self.width(*f, t, size)).sum()
+        self.runs(primary, text)
+            .iter()
+            .map(|(f, t)| self.width(*f, t, size))
+            .sum()
     }
 }
 
@@ -251,10 +287,35 @@ fn internal(msg: &str) -> AppError {
 // ── ops ──────────────────────────────────────────────────────────────────
 
 enum Op {
-    Text { x: f32, y: f32, face: Face, size: f32, color: Rgb, text: String },
-    Rect { x: f32, y: f32, w: f32, h: f32, color: Rgb },
-    Image { idx: usize, x: f32, y: f32, w: f32, h: f32 },
-    Link { x: f32, y: f32, w: f32, h: f32, url: String },
+    Text {
+        x: f32,
+        y: f32,
+        face: Face,
+        size: f32,
+        color: Rgb,
+        text: String,
+    },
+    Rect {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        color: Rgb,
+    },
+    Image {
+        idx: usize,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    },
+    Link {
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        url: String,
+    },
 }
 
 // ── inline text ──────────────────────────────────────────────────────────
@@ -287,8 +348,12 @@ fn parse_md(s: &str, bold: bool, italic: bool, out: &mut Vec<Span>) {
     let mut rest = s;
     'scan: while let Some(c) = rest.chars().next() {
         for (marker, b, i) in [("***", true, true), ("**", true, false), ("*", false, true)] {
-            let Some(after) = rest.strip_prefix(marker) else { continue };
-            let Some(end) = after.find(marker).filter(|&e| e > 0) else { continue };
+            let Some(after) = rest.strip_prefix(marker) else {
+                continue;
+            };
+            let Some(end) = after.find(marker).filter(|&e| e > 0) else {
+                continue;
+            };
             push_plain(&mut plain, bold, italic, out);
             parse_md(&after[..end], bold || b, italic || i, out);
             rest = &after[end + marker.len()..];
@@ -302,7 +367,12 @@ fn parse_md(s: &str, bold: bool, italic: bool, out: &mut Vec<Span>) {
 
 fn push_plain(plain: &mut String, bold: bool, italic: bool, out: &mut Vec<Span>) {
     if !plain.is_empty() {
-        out.push(Span { text: std::mem::take(plain), bold, italic, ..Span::default() });
+        out.push(Span {
+            text: std::mem::take(plain),
+            bold,
+            italic,
+            ..Span::default()
+        });
     }
 }
 
@@ -343,7 +413,13 @@ struct Layout {
 
 impl Layout {
     fn new(fonts: Fonts) -> Self {
-        Layout { fonts, pages: vec![Vec::new()], images: Vec::new(), y: TOP, marker: None }
+        Layout {
+            fonts,
+            pages: vec![Vec::new()],
+            images: Vec::new(),
+            y: TOP,
+            marker: None,
+        }
     }
 
     fn page(&mut self) -> &mut Vec<Op> {
@@ -380,7 +456,8 @@ impl Layout {
                     if i > 0 {
                         space = true;
                     }
-                    for (ri, (face, text)) in self.fonts.runs(primary, word).into_iter().enumerate() {
+                    for (ri, (face, text)) in self.fonts.runs(primary, word).into_iter().enumerate()
+                    {
                         toks.push(Tok::Word(Word {
                             text,
                             face,
@@ -413,7 +490,9 @@ impl Layout {
             // from that run's face in between (copy/paste, correct shaping).
             let merge = w.space
                 && self.fonts.has(w.face, ' ')
-                && cur.last().is_some_and(|l| l.face == w.face && l.link == w.link);
+                && cur
+                    .last()
+                    .is_some_and(|l| l.face == w.face && l.link == w.link);
             let mut lead = match (w.space && !cur.is_empty(), merge) {
                 (false, _) => 0.0,
                 (true, true) => self.fonts.width(w.face, " ", size),
@@ -452,7 +531,14 @@ impl Layout {
         cur_w: &mut f32,
     ) {
         let color = if word.link.is_some() { LINK } else { color };
-        let seg = |text: String, w: f32| Seg { text, face: word.face, w, lead: 0.0, link: word.link.clone(), color };
+        let seg = |text: String, w: f32| Seg {
+            text,
+            face: word.face,
+            w,
+            lead: 0.0,
+            link: word.link.clone(),
+            color,
+        };
         if !cur.is_empty() {
             lines.push(std::mem::take(cur));
         }
@@ -491,7 +577,14 @@ impl Layout {
         let base = top + size * 1.05;
         let line_h = size * 1.4;
         if let Some((m, mx)) = self.marker.take() {
-            self.page().push(Op::Text { x: mx, y: base, face: Face::Regular, size, color: INK, text: m });
+            self.page().push(Op::Text {
+                x: mx,
+                y: base,
+                face: Face::Regular,
+                size,
+                color: INK,
+                text: m,
+            });
         }
         for seg in line {
             cx += seg.lead;
@@ -505,7 +598,13 @@ impl Layout {
             });
             if let Some(url) = &seg.link {
                 self.rect(cx, base + 1.6, seg.w, 0.6, LINK);
-                self.page().push(Op::Link { x: cx, y: top, w: seg.w, h: line_h, url: url.clone() });
+                self.page().push(Op::Link {
+                    x: cx,
+                    y: top,
+                    w: seg.w,
+                    h: line_h,
+                    url: url.clone(),
+                });
             }
             cx += seg.w;
         }
@@ -515,7 +614,16 @@ impl Layout {
     /// With `keep`, the block moves to the next page as a whole when it
     /// would otherwise be split — unless it is taller than a page.
     #[allow(clippy::too_many_arguments)]
-    fn flow(&mut self, spans: &[Span], x: f32, width: f32, size: f32, color: Rgb, align: Align, keep: bool) {
+    fn flow(
+        &mut self,
+        spans: &[Span],
+        x: f32,
+        width: f32,
+        size: f32,
+        color: Rgb,
+        align: Align,
+        keep: bool,
+    ) {
         let lines = self.wrap(spans, size, width, color);
         let line_h = size * 1.4;
         let total = lines.len() as f32 * line_h;
@@ -523,8 +631,15 @@ impl Layout {
             self.ensure(total);
         }
         // A paragraph that starts in a right-to-left script is right-aligned.
-        let rtl = lines.first().and_then(|l| l.first()).is_some_and(|s| s.face.rtl());
-        let align = if rtl && align == Align::Left { Align::Right } else { align };
+        let rtl = lines
+            .first()
+            .and_then(|l| l.first())
+            .is_some_and(|s| s.face.rtl());
+        let align = if rtl && align == Align::Left {
+            Align::Right
+        } else {
+            align
+        };
         for line in &lines {
             self.ensure(line_h);
             let y = self.y;
@@ -535,11 +650,26 @@ impl Layout {
 
     /// Draws single-line text at a baseline, switching faces per run;
     /// returns its width.
-    fn text_runs(&mut self, x: f32, y: f32, primary: Face, size: f32, color: Rgb, text: &str) -> f32 {
+    fn text_runs(
+        &mut self,
+        x: f32,
+        y: f32,
+        primary: Face,
+        size: f32,
+        color: Rgb,
+        text: &str,
+    ) -> f32 {
         let mut cx = x;
         for (face, t) in self.fonts.runs(primary, text) {
             let w = self.fonts.width(face, &t, size);
-            self.page().push(Op::Text { x: cx, y, face, size, color, text: t });
+            self.page().push(Op::Text {
+                x: cx,
+                y,
+                face,
+                size,
+                color,
+                text: t,
+            });
             cx += w;
         }
         cx - x
@@ -555,7 +685,11 @@ impl Layout {
         let room = BOTTOM - TOP - HEADING_H;
         self.ensure(HEADING_H + keep_h.clamp(30.0, room));
         self.gap(10.0);
-        let spans = [Span { text: title.to_string(), bold: true, ..Span::default() }];
+        let spans = [Span {
+            text: title.to_string(),
+            bold: true,
+            ..Span::default()
+        }];
         self.flow(&spans, MARGIN, CONTENT_W, 12.0, MUTED, Align::Left, false);
         self.rect(MARGIN, self.y, CONTENT_W, 0.6, RULE);
         self.gap(8.0);
@@ -571,7 +705,10 @@ impl Layout {
 
     fn block(&mut self, node: &Value, x: f32, w: f32, size: f32, color: Rgb) {
         let kind = node.get("type").and_then(Value::as_str).unwrap_or("");
-        let content: &[Value] = node.get("content").and_then(Value::as_array).map_or(&[], Vec::as_slice);
+        let content: &[Value] = node
+            .get("content")
+            .and_then(Value::as_array)
+            .map_or(&[], Vec::as_slice);
         match kind {
             "paragraph" => {
                 let mut spans = Vec::new();
@@ -584,7 +721,10 @@ impl Layout {
                 }
             }
             "heading" => {
-                let level = node.pointer("/attrs/level").and_then(Value::as_u64).unwrap_or(1);
+                let level = node
+                    .pointer("/attrs/level")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1);
                 let hs = match level {
                     1 => 18.0,
                     2 => 15.0,
@@ -600,12 +740,22 @@ impl Layout {
             "code_block" => self.code_block(content, x, w),
             "bullet_list" | "ordered_list" => {
                 let ordered = kind == "ordered_list";
-                let start = node.pointer("/attrs/order").and_then(Value::as_u64).unwrap_or(1);
+                let start = node
+                    .pointer("/attrs/order")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(1);
                 let indent = indent_for(w, 20.0);
                 for (i, item) in content.iter().enumerate() {
-                    let marker = if ordered { format!("{}.", start + i as u64) } else { "\u{2022}".to_string() };
+                    let marker = if ordered {
+                        format!("{}.", start + i as u64)
+                    } else {
+                        "\u{2022}".to_string()
+                    };
                     self.marker = Some((marker, x + 2.0));
-                    let children = item.get("content").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+                    let children = item
+                        .get("content")
+                        .and_then(Value::as_array)
+                        .map_or(&[][..], Vec::as_slice);
                     self.blocks(children, x + indent, w - indent, size, color);
                     self.marker = None;
                 }
@@ -620,7 +770,13 @@ impl Layout {
                     let y0 = if p == start.0 { start.1 } else { TOP };
                     let y1 = if p == end.0 { end.1 } else { BOTTOM };
                     if y1 > y0 {
-                        self.pages[p].push(Op::Rect { x: x + 2.0, y: y0, w: 2.5, h: y1 - y0 - 3.0, color: RULE });
+                        self.pages[p].push(Op::Rect {
+                            x: x + 2.0,
+                            y: y0,
+                            w: 2.5,
+                            h: y1 - y0 - 3.0,
+                            color: RULE,
+                        });
                     }
                 }
             }
@@ -640,9 +796,16 @@ impl Layout {
     fn code_block(&mut self, content: &[Value], x: f32, w: f32) {
         let size = 9.0;
         let line_h = size * 1.4;
-        let text: String = content.iter().filter_map(|c| c.get("text").and_then(Value::as_str)).collect();
+        let text: String = content
+            .iter()
+            .filter_map(|c| c.get("text").and_then(Value::as_str))
+            .collect();
         let text = self.fonts.sanitize(Face::Mono, &text);
-        let span = [Span { text, code: true, ..Span::default() }];
+        let span = [Span {
+            text,
+            code: true,
+            ..Span::default()
+        }];
         let lines = self.wrap_code(&span, size, w - 10.0);
         self.gap(2.0);
         if lines.len() as f32 * line_h <= BOTTOM - TOP {
@@ -668,7 +831,14 @@ impl Layout {
             for c in raw.chars() {
                 let w1 = self.fonts.width(Face::Mono, &c.to_string(), size);
                 if cw + w1 > width && !chunk.is_empty() && w1 > 0.0 {
-                    lines.push(vec![Seg { text: std::mem::take(&mut chunk), face: Face::Mono, w: cw, lead: 0.0, link: None, color: INK }]);
+                    lines.push(vec![Seg {
+                        text: std::mem::take(&mut chunk),
+                        face: Face::Mono,
+                        w: cw,
+                        lead: 0.0,
+                        link: None,
+                        color: INK,
+                    }]);
                     cw = 0.0;
                 }
                 chunk.push(c);
@@ -677,7 +847,14 @@ impl Layout {
             lines.push(if chunk.is_empty() {
                 Vec::new()
             } else {
-                vec![Seg { text: chunk, face: Face::Mono, w: cw, lead: 0.0, link: None, color: INK }]
+                vec![Seg {
+                    text: chunk,
+                    face: Face::Mono,
+                    w: cw,
+                    lead: 0.0,
+                    link: None,
+                    color: INK,
+                }]
             });
         }
         lines
@@ -690,7 +867,11 @@ impl Layout {
         let size = size - 1.0;
         let line_h = size * 1.4;
         let pad = 4.0;
-        let grid: Vec<Vec<Cell>> = rows.iter().enumerate().map(|(ri, r)| table_cells(r, ri == 0)).collect();
+        let grid: Vec<Vec<Cell>> = rows
+            .iter()
+            .enumerate()
+            .map(|(ri, r)| table_cells(r, ri == 0))
+            .collect();
         let ncols = grid.iter().map(Vec::len).max().unwrap_or(0);
         if ncols == 0 {
             return;
@@ -719,7 +900,9 @@ impl Layout {
             .collect();
         let heights: Vec<f32> = wrapped
             .iter()
-            .map(|row| row.iter().map(Vec::len).max().unwrap_or(1).max(1) as f32 * line_h + 2.0 * pad)
+            .map(|row| {
+                row.iter().map(Vec::len).max().unwrap_or(1).max(1) as f32 * line_h + 2.0 * pad
+            })
             .collect();
 
         self.gap(3.0);
@@ -729,7 +912,12 @@ impl Layout {
         }
         for ri in 0..grid.len() {
             // Keep the header company: never leave it alone at a page end.
-            let need = heights[ri] + if ri == 0 { heights.get(1).copied().unwrap_or(0.0) } else { 0.0 };
+            let need = heights[ri]
+                + if ri == 0 {
+                    heights.get(1).copied().unwrap_or(0.0)
+                } else {
+                    0.0
+                };
             if self.y + need > BOTTOM && self.y > TOP {
                 self.new_page();
                 if ri > 0 && heights[0] + heights[ri] <= BOTTOM - TOP {
@@ -761,7 +949,14 @@ impl Layout {
                 self.rect(cx, top, cols[ci], h, HEAD_BG);
             }
             for (li, line) in lines.iter().enumerate() {
-                self.emit_line_at(line, cx + pad, top + pad + li as f32 * size * 1.4, cols[ci] - 2.0 * pad, size, cell.align);
+                self.emit_line_at(
+                    line,
+                    cx + pad,
+                    top + pad + li as f32 * size * 1.4,
+                    cols[ci] - 2.0 * pad,
+                    size,
+                    cell.align,
+                );
             }
             self.rect(cx, top, 0.6, h, RULE);
             cx += cols[ci];
@@ -784,23 +979,42 @@ const MIN_COL_W: f32 = 30.0;
 /// Nesting indent that never squeezes the text below a readable width, so a
 /// pathologically deep list or quote stops indenting instead of leaving the page.
 fn indent_for(width: f32, indent: f32) -> f32 {
-    if width - indent >= MIN_TEXT_W { indent } else { 0.0 }
+    if width - indent >= MIN_TEXT_W {
+        indent
+    } else {
+        0.0
+    }
 }
 
 const MIN_TEXT_W: f32 = 120.0;
 
 fn table_cells(row: &Value, header: bool) -> Vec<Cell> {
-    let cells = row.get("content").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    let cells = row
+        .get("content")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
     cells
         .iter()
         .map(|cell| {
-            let paras = cell.get("content").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+            let paras = cell
+                .get("content")
+                .and_then(Value::as_array)
+                .map_or(&[][..], Vec::as_slice);
             let mut spans = Vec::new();
             for (pi, p) in paras.iter().enumerate() {
                 if pi > 0 {
-                    spans.push(Span { text: "\n".into(), ..Span::default() });
+                    spans.push(Span {
+                        text: "\n".into(),
+                        ..Span::default()
+                    });
                 }
-                inline(p.get("content").and_then(Value::as_array).map_or(&[][..], Vec::as_slice), &mut spans, header);
+                inline(
+                    p.get("content")
+                        .and_then(Value::as_array)
+                        .map_or(&[][..], Vec::as_slice),
+                    &mut spans,
+                    header,
+                );
             }
             let align = match cell.pointer("/attrs/align").and_then(Value::as_str) {
                 _ if header => Align::Center,
@@ -808,7 +1022,11 @@ fn table_cells(row: &Value, header: bool) -> Vec<Cell> {
                 Some("right") => Align::Right,
                 _ => Align::Left,
             };
-            Cell { spans, align, header }
+            Cell {
+                spans,
+                align,
+                header,
+            }
         })
         .collect()
 }
@@ -849,7 +1067,15 @@ enum Tok {
 
 /// Appends a word to the line, merging it into the previous run when the
 /// style matches so the real space ends up in the text (copy/paste).
-fn add_word(cur: &mut Vec<Seg>, cur_w: &mut f32, w: Word, lead: f32, ww: f32, color: Rgb, merge: bool) {
+fn add_word(
+    cur: &mut Vec<Seg>,
+    cur_w: &mut f32,
+    w: Word,
+    lead: f32,
+    ww: f32,
+    color: Rgb,
+    merge: bool,
+) {
     let color = if w.link.is_some() { LINK } else { color };
     match cur.last_mut() {
         Some(last) if merge => {
@@ -857,7 +1083,14 @@ fn add_word(cur: &mut Vec<Seg>, cur_w: &mut f32, w: Word, lead: f32, ww: f32, co
             last.text.push_str(&w.text);
             last.w += lead + ww;
         }
-        _ => cur.push(Seg { text: w.text, face: w.face, w: ww, lead, link: w.link, color }),
+        _ => cur.push(Seg {
+            text: w.text,
+            face: w.face,
+            w: ww,
+            lead,
+            link: w.link,
+            color,
+        }),
     }
     *cur_w += lead + ww;
 }
@@ -865,11 +1098,25 @@ fn add_word(cur: &mut Vec<Seg>, cur_w: &mut f32, w: Word, lead: f32, ww: f32, co
 fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool) {
     for n in nodes {
         match n.get("type").and_then(Value::as_str) {
-            Some("hard_break") => out.push(Span { text: "\n".into(), ..Span::default() }),
+            Some("hard_break") => out.push(Span {
+                text: "\n".into(),
+                ..Span::default()
+            }),
             _ => {
-                let Some(text) = n.get("text").and_then(Value::as_str) else { continue };
-                let mut span = Span { text: text.to_string(), bold, ..Span::default() };
-                for m in n.get("marks").and_then(Value::as_array).into_iter().flatten() {
+                let Some(text) = n.get("text").and_then(Value::as_str) else {
+                    continue;
+                };
+                let mut span = Span {
+                    text: text.to_string(),
+                    bold,
+                    ..Span::default()
+                };
+                for m in n
+                    .get("marks")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
                     match m.get("type").and_then(Value::as_str) {
                         Some("strong") => span.bold = true,
                         Some("em") => span.italic = true,
@@ -893,7 +1140,9 @@ fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool) {
 /// Only links a PDF viewer may open without surprises stay links; the rest
 /// (`javascript:`, `file:`, relative paths…) print as plain text.
 fn is_safe_url(u: &str) -> bool {
-    ["http://", "https://", "mailto:"].iter().any(|p| u.len() > p.len() && u[..p.len()].eq_ignore_ascii_case(p))
+    ["http://", "https://", "mailto:"]
+        .iter()
+        .any(|p| u.len() > p.len() && u[..p.len()].eq_ignore_ascii_case(p))
 }
 
 fn hex_color(s: &str) -> Rgb {
@@ -914,7 +1163,11 @@ fn human_size(n: u64) -> String {
         v /= 1024.0;
         u += 1;
     }
-    if u == 0 { format!("{n} B") } else { format!("{v:.1} {}", UNITS[u]) }
+    if u == 0 {
+        format!("{n} B")
+    } else {
+        format!("{v:.1} {}", UNITS[u])
+    }
 }
 
 // ── entry point ──────────────────────────────────────────────────────────
@@ -934,7 +1187,10 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
     l.gap(4.0);
     let status = export.exported_at.get(..16).unwrap_or(&export.exported_at);
     let board = [Span {
-        text: format!("Board: {}   \u{b7}   Status: {status} UTC", plain_md(&export.board_title)),
+        text: format!(
+            "Board: {}   \u{b7}   Status: {status} UTC",
+            plain_md(&export.board_title)
+        ),
         ..Span::default()
     }];
     l.flow(&board, MARGIN, CONTENT_W, 9.0, MUTED, Align::Left, false);
@@ -946,7 +1202,12 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         let mut cx = 0.0;
         l.ensure(chip_h);
         for label in &export.labels {
-            let name = l.fonts.truncate(Face::Regular, &plain_md(&label.name), size, CONTENT_W - 2.0 * pad_x);
+            let name = l.fonts.truncate(
+                Face::Regular,
+                &plain_md(&label.name),
+                size,
+                CONTENT_W - 2.0 * pad_x,
+            );
             let cw = l.fonts.runs_width(Face::Regular, &name, size) + 2.0 * pad_x;
             if cx > 0.0 && cx + cw > CONTENT_W {
                 cx = 0.0;
@@ -955,7 +1216,14 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
             }
             let y = l.y;
             l.rect(MARGIN + cx, y, cw, chip_h, hex_color(&label.color));
-            l.text_runs(MARGIN + cx + pad_x, y + 10.5, Face::Regular, size, INK, &name);
+            l.text_runs(
+                MARGIN + cx + pad_x,
+                y + 10.5,
+                Face::Regular,
+                size,
+                INK,
+                &name,
+            );
             cx += cw + 5.0;
         }
         l.gap(chip_h + 8.0);
@@ -963,8 +1231,15 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
 
     if let Some(due) = &card.due_date {
         let spans = [
-            Span { text: "Due: ".into(), bold: true, ..Span::default() },
-            Span { text: due.clone(), ..Span::default() },
+            Span {
+                text: "Due: ".into(),
+                bold: true,
+                ..Span::default()
+            },
+            Span {
+                text: due.clone(),
+                ..Span::default()
+            },
         ];
         l.flow(&spans, MARGIN, CONTENT_W, 10.5, INK, Align::Left, false);
         l.gap(4.0);
@@ -972,18 +1247,27 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
 
     // Description.
     let doc: Option<Value> = serde_json::from_str(&card.description).ok();
-    let has_doc = doc
-        .as_ref()
-        .is_some_and(|d| d.get("content").and_then(Value::as_array).is_some_and(|c| !c.is_empty()));
+    let has_doc = doc.as_ref().is_some_and(|d| {
+        d.get("content")
+            .and_then(Value::as_array)
+            .is_some_and(|c| !c.is_empty())
+    });
     let plain_desc = doc.is_none() && !card.description.trim().is_empty();
     if has_doc || plain_desc {
         l.heading_rule("Description", 0.0);
         if let Some(d) = doc.filter(|_| has_doc) {
-            let content = d.get("content").and_then(Value::as_array).cloned().unwrap_or_default();
+            let content = d
+                .get("content")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             l.blocks(&content, MARGIN, CONTENT_W, 10.5, INK);
         } else {
             for para in card.description.split("\n\n") {
-                let spans = [Span { text: para.to_string(), ..Span::default() }];
+                let spans = [Span {
+                    text: para.to_string(),
+                    ..Span::default()
+                }];
                 l.flow(&spans, MARGIN, CONTENT_W, 10.5, INK, Align::Left, true);
                 l.gap(5.0);
             }
@@ -997,16 +1281,25 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
             .checklist
             .iter()
             .map(|i| {
-                let spans = [Span { text: i.text.clone(), ..Span::default() }];
+                let spans = [Span {
+                    text: i.text.clone(),
+                    ..Span::default()
+                }];
                 l.wrap(&spans, size, w, INK).len() as f32 * size * 1.4 + 2.0
             })
             .sum();
         let done = card.checklist.iter().filter(|i| i.done).count();
-        l.heading_rule(&format!("Checklist ({done}/{})", card.checklist.len()), items_h);
+        l.heading_rule(
+            &format!("Checklist ({done}/{})", card.checklist.len()),
+            items_h,
+        );
         for item in &card.checklist {
             let mark = if item.done { "\u{2611}" } else { "\u{2610}" };
             l.marker = Some((mark.to_string(), MARGIN));
-            let spans = [Span { text: item.text.clone(), ..Span::default() }];
+            let spans = [Span {
+                text: item.text.clone(),
+                ..Span::default()
+            }];
             let color = if item.done { MUTED } else { INK };
             l.flow(&spans, x, w, size, color, Align::Left, false);
             l.marker = None;
@@ -1019,16 +1312,27 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         let (size, x, w) = (10.0, MARGIN + 20.0, CONTENT_W - 20.0);
         let attachment_spans = |att: &Attachment| {
             vec![
-                Span { text: att.filename.clone(), ..Span::default() },
-                Span { text: format!("  {} \u{b7} {}", human_size(att.size), att.content_type), ..Span::default() },
+                Span {
+                    text: att.filename.clone(),
+                    ..Span::default()
+                },
+                Span {
+                    text: format!("  {} \u{b7} {}", human_size(att.size), att.content_type),
+                    ..Span::default()
+                },
             ]
         };
         let list_h: f32 = export
             .attachments
             .iter()
-            .map(|(att, _)| l.wrap(&attachment_spans(att), size, w, INK).len() as f32 * size * 1.4 + 2.0)
+            .map(|(att, _)| {
+                l.wrap(&attachment_spans(att), size, w, INK).len() as f32 * size * 1.4 + 2.0
+            })
             .sum();
-        l.heading_rule(&format!("Attachments ({})", export.attachments.len()), list_h);
+        l.heading_rule(
+            &format!("Attachments ({})", export.attachments.len()),
+            list_h,
+        );
         for (att, _) in &export.attachments {
             l.marker = Some(("\u{2022}".to_string(), MARGIN + 2.0));
             l.flow(&attachment_spans(att), x, w, size, INK, Align::Left, false);
@@ -1041,7 +1345,9 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
 
     // Footer on every page.
     let total = l.pages.len();
-    let footer_title = l.fonts.truncate(Face::Regular, &plain_md(&card.title), 8.0, CONTENT_W - 90.0);
+    let footer_title =
+        l.fonts
+            .truncate(Face::Regular, &plain_md(&card.title), 8.0, CONTENT_W - 90.0);
     let mut footer_runs = Vec::new();
     let mut fx = MARGIN;
     for (face, text) in l.fonts.runs(Face::Regular, &footer_title) {
@@ -1053,11 +1359,31 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         let n = format!("Page {} / {total}", i + 1);
         let nw = l.fonts.width(Face::Regular, &n, 8.0);
         let y = PAGE_H - 36.0;
-        ops.push(Op::Rect { x: MARGIN, y: y - 12.0, w: CONTENT_W, h: 0.6, color: RULE });
+        ops.push(Op::Rect {
+            x: MARGIN,
+            y: y - 12.0,
+            w: CONTENT_W,
+            h: 0.6,
+            color: RULE,
+        });
         for (face, text, x) in &footer_runs {
-            ops.push(Op::Text { x: *x, y, face: *face, size: 8.0, color: MUTED, text: text.clone() });
+            ops.push(Op::Text {
+                x: *x,
+                y,
+                face: *face,
+                size: 8.0,
+                color: MUTED,
+                text: text.clone(),
+            });
         }
-        ops.push(Op::Text { x: PAGE_W - MARGIN - nw, y, face: Face::Regular, size: 8.0, color: MUTED, text: n });
+        ops.push(Op::Text {
+            x: PAGE_W - MARGIN - nw,
+            y,
+            face: Face::Regular,
+            size: 8.0,
+            color: MUTED,
+            text: n,
+        });
     }
 
     Ok(l)
@@ -1069,7 +1395,9 @@ fn place_images(l: &mut Layout, atts: &[(Attachment, Option<Vec<u8>>)]) {
     let (mut cx, mut row_h) = (0.0f32, 0.0f32);
     for (_, thumb) in atts {
         let Some(bytes) = thumb else { continue };
-        let Ok(img) = Image::from_jpeg(bytes.clone().into(), false) else { continue };
+        let Ok(img) = Image::from_jpeg(bytes.clone().into(), false) else {
+            continue;
+        };
         let (iw, ih) = img.size();
         if iw == 0 || ih == 0 {
             continue;
@@ -1089,7 +1417,13 @@ fn place_images(l: &mut Layout, atts: &[(Attachment, Option<Vec<u8>>)]) {
         l.images.push(img);
         let idx = l.images.len() - 1;
         let y = l.y;
-        l.page().push(Op::Image { idx, x: MARGIN + cx, y, w, h });
+        l.page().push(Op::Image {
+            idx,
+            x: MARGIN + cx,
+            y,
+            w,
+            h,
+        });
         cx += w + 10.0;
         row_h = row_h.max(h);
     }
@@ -1101,11 +1435,18 @@ fn replay(l: &Layout, export: &CardExport) -> Result<Vec<u8>, AppError> {
         .with_archival_validator(Archival::A2_U)
         .finish()
         .map_err(|e| internal(&format!("{e:?}")))?;
-    let mut doc = Document::new_with(SerializeSettings { configuration, ..Default::default() });
+    let mut doc = Document::new_with(SerializeSettings {
+        configuration,
+        ..Default::default()
+    });
 
     let title = plain_md(&export.card.title);
     let mut meta = Metadata::new()
-        .title(if title.trim().is_empty() { "Untitled card".into() } else { title })
+        .title(if title.trim().is_empty() {
+            "Untitled card".into()
+        } else {
+            title
+        })
         .creator("Synkban".into())
         .producer("Synkban".into());
     if let Some(dt) = parse_timestamp(&export.exported_at) {
@@ -1114,13 +1455,22 @@ fn replay(l: &Layout, export: &CardExport) -> Result<Vec<u8>, AppError> {
     doc.set_metadata(meta);
 
     for ops in &l.pages {
-        let mut page = doc.start_page_with(PageSettings::from_wh(PAGE_W, PAGE_H).ok_or_else(|| internal("page size"))?);
+        let mut page = doc.start_page_with(
+            PageSettings::from_wh(PAGE_W, PAGE_H).ok_or_else(|| internal("page size"))?,
+        );
         let mut links: Vec<Annotation> = Vec::new();
         {
             let mut s = page.surface();
             for op in ops {
                 match op {
-                    Op::Text { x, y, face, size, color, text } => {
+                    Op::Text {
+                        x,
+                        y,
+                        face,
+                        size,
+                        color,
+                        text,
+                    } => {
                         s.set_fill(Some(fill(*color)));
                         s.draw_text(
                             Point::from_xy(*x, *y),
@@ -1128,7 +1478,11 @@ fn replay(l: &Layout, export: &CardExport) -> Result<Vec<u8>, AppError> {
                             *size,
                             text,
                             false,
-                            if face.rtl() { TextDirection::RightToLeft } else { TextDirection::Auto },
+                            if face.rtl() {
+                                TextDirection::RightToLeft
+                            } else {
+                                TextDirection::Auto
+                            },
                         );
                     }
                     Op::Rect { x, y, w, h, color } => {
@@ -1151,7 +1505,10 @@ fn replay(l: &Layout, export: &CardExport) -> Result<Vec<u8>, AppError> {
                     Op::Link { x, y, w, h, url } => {
                         if let Some(r) = Rect::from_xywh(*x, *y, *w, *h) {
                             links.push(Annotation::new_link(
-                                LinkAnnotation::new(r, Target::Action(LinkAction::new(url.clone()).into())),
+                                LinkAnnotation::new(
+                                    r,
+                                    Target::Action(LinkAction::new(url.clone()).into()),
+                                ),
                                 Some(url.clone()),
                             ));
                         }
@@ -1169,7 +1526,10 @@ fn replay(l: &Layout, export: &CardExport) -> Result<Vec<u8>, AppError> {
 }
 
 fn fill(c: Rgb) -> Fill {
-    Fill { paint: rgb::Color::new(c[0], c[1], c[2]).into(), ..Default::default() }
+    Fill {
+        paint: rgb::Color::new(c[0], c[1], c[2]).into(),
+        ..Default::default()
+    }
 }
 
 fn parse_timestamp(ts: &str) -> Option<DateTime> {

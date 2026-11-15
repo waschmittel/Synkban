@@ -259,8 +259,7 @@ mod tests {
 
         let att_dir = attachment_dir(d.path(), &b.id, &c.id);
         // Simulate the card being gone but its attachment dir left behind.
-        fs::remove_file(cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id)))
-            .unwrap();
+        fs::remove_file(cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id))).unwrap();
         age_all(&att_dir);
 
         let n = reconcile(d.path()).unwrap();
@@ -324,7 +323,11 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
         // A corrupt card sitting next to a real orphaned attachment dir.
-        fs::write(cards_dir(d.path(), &b.id, &l.id).join("broken.json"), b"{ nope").unwrap();
+        fs::write(
+            cards_dir(d.path(), &b.id, &l.id).join("broken.json"),
+            b"{ nope",
+        )
+        .unwrap();
         let att_dir = attachment_dir(d.path(), &b.id, &c.id);
         fs::create_dir_all(&att_dir).unwrap();
         let orphan = att_dir.join("44444444-4444-4444-4444-444444444444");

@@ -28,8 +28,16 @@ fn export(description: &str) -> CardExport {
         card: sample_card(description),
         board_title: "Roadmap".into(),
         labels: vec![
-            Label { id: "a".into(), name: "**Urgent**".into(), color: "#f5c6cb".into() },
-            Label { id: "b".into(), name: "Backend".into(), color: "#c6e0f5".into() },
+            Label {
+                id: "a".into(),
+                name: "**Urgent**".into(),
+                color: "#f5c6cb".into(),
+            },
+            Label {
+                id: "b".into(),
+                name: "Backend".into(),
+                color: "#c6e0f5".into(),
+            },
         ],
         attachments: vec![(
             Attachment {
@@ -92,7 +100,10 @@ fn wide_table(rows: usize) -> String {
     for i in 0..rows {
         all.push(row("table_cell", &["item", &i.to_string(), "short note"]));
     }
-    format!(r#"{{"type":"doc","content":[{{"type":"table","content":[{}]}}]}}"#, all.join(","))
+    format!(
+        r#"{{"type":"doc","content":[{{"type":"table","content":[{}]}}]}}"#,
+        all.join(",")
+    )
 }
 
 #[test]
@@ -108,16 +119,31 @@ fn status_line_carries_creation_date() {
     let l = layout_card(&export("")).unwrap();
     let first_page: String = l.pages[0]
         .iter()
-        .filter_map(|op| if let Op::Text { text, .. } = op { Some(text.as_str()) } else { None })
+        .filter_map(|op| {
+            if let Op::Text { text, .. } = op {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        })
         .collect::<Vec<_>>()
         .join(" ");
-    assert!(first_page.contains("Status: 2026-11-03 12:00 UTC"), "{first_page}");
+    assert!(
+        first_page.contains("Status: 2026-11-03 12:00 UTC"),
+        "{first_page}"
+    );
 }
 
 fn page_texts(l: &Layout, page: usize) -> Vec<&str> {
     l.pages[page]
         .iter()
-        .filter_map(|op| if let Op::Text { text, .. } = op { Some(text.as_str()) } else { None })
+        .filter_map(|op| {
+            if let Op::Text { text, .. } = op {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        })
         .collect()
 }
 
@@ -129,11 +155,19 @@ fn short_table_is_kept_whole_and_centered() {
         .collect();
     let table = wide_table(6);
     let table_node = &table[table.find(r#"{"type":"table""#).unwrap()..table.len() - 2];
-    let doc = format!(r#"{{"type":"doc","content":[{},{}]}}"#, filler.join(","), table_node);
+    let doc = format!(
+        r#"{{"type":"doc","content":[{},{}]}}"#,
+        filler.join(","),
+        table_node
+    );
     let l = layout_card(&export(&doc)).unwrap();
     let in_page = |p: usize| page_texts(&l, p).iter().filter(|t| **t == "item").count();
     assert_eq!(in_page(0) + in_page(1), 6);
-    assert!(in_page(0) == 0 || in_page(0) == 6, "table split: {} on page 1", in_page(0));
+    assert!(
+        in_page(0) == 0 || in_page(0) == 6,
+        "table split: {} on page 1",
+        in_page(0)
+    );
     let left = l.pages.iter().flatten().filter_map(|op| match op {
         Op::Rect { x, w, h, .. } if *h < 1.0 && *w > 100.0 && *w < CONTENT_W - 1.0 => Some(*x),
         _ => None,
@@ -159,7 +193,9 @@ fn long_table_splits_and_repeats_header() {
 fn checklist_stays_with_its_header() {
     let mut e = export("");
     let filler: Vec<String> = (0..47)
-        .map(|i| format!(r#"{{"type":"paragraph","content":[{{"type":"text","text":"Filler {i}"}}]}}"#))
+        .map(|i| {
+            format!(r#"{{"type":"paragraph","content":[{{"type":"text","text":"Filler {i}"}}]}}"#)
+        })
         .collect();
     e.card.description = format!(r#"{{"type":"doc","content":[{}]}}"#, filler.join(","));
     let l = layout_card(&e).unwrap();
@@ -167,7 +203,10 @@ fn checklist_stays_with_its_header() {
         let texts = page_texts(&l, p);
         let header = texts.iter().any(|t| t.starts_with("Checklist"));
         let items = texts.iter().any(|t| t.starts_with("write it"));
-        assert_eq!(header, items, "page {p}: checklist header and items must share a page");
+        assert_eq!(
+            header, items,
+            "page {p}: checklist header and items must share a page"
+        );
     }
 }
 
@@ -219,11 +258,19 @@ fn table_node(rows: &[Vec<&str>]) -> Value {
         .iter()
         .enumerate()
         .map(|(ri, cells)| {
-            let kind = if ri == 0 { "table_header" } else { "table_cell" };
+            let kind = if ri == 0 {
+                "table_header"
+            } else {
+                "table_cell"
+            };
             let cells: Vec<Value> = cells
                 .iter()
                 .map(|t| {
-                    let content = if t.is_empty() { json!([]) } else { json!([para(t)]) };
+                    let content = if t.is_empty() {
+                        json!([])
+                    } else {
+                        json!([para(t)])
+                    };
                     json!({"type": kind, "attrs": {"align": null}, "content": content})
                 })
                 .collect();
@@ -234,15 +281,22 @@ fn table_node(rows: &[Vec<&str>]) -> Value {
 }
 
 fn list_node(kind: &str, items: Vec<Vec<Value>>) -> Value {
-    let items: Vec<Value> = items.into_iter().map(|c| json!({"type": "list_item", "content": c})).collect();
+    let items: Vec<Value> = items
+        .into_iter()
+        .map(|c| json!({"type": "list_item", "content": c}))
+        .collect();
     json!({"type": kind, "content": items})
 }
 
 fn jpeg(w: u32, h: u32) -> Vec<u8> {
     let mut buf = std::io::Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(w, h, image::Rgb([30, 120, 200])))
-        .write_to(&mut buf, image::ImageFormat::Jpeg)
-        .unwrap();
+    image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+        w,
+        h,
+        image::Rgb([30, 120, 200]),
+    ))
+    .write_to(&mut buf, image::ImageFormat::Jpeg)
+    .unwrap();
     buf.into_inner()
 }
 
@@ -288,7 +342,10 @@ fn pdf_text(pdf: &[u8]) -> String {
 }
 
 fn page_count(pdf: &[u8]) -> usize {
-    lopdf::Document::load_mem(pdf).expect("parses").get_pages().len()
+    lopdf::Document::load_mem(pdf)
+        .expect("parses")
+        .get_pages()
+        .len()
 }
 
 fn assert_in_order(text: &str, needles: &[&str]) {
@@ -323,11 +380,22 @@ fn assert_pdfa(pdf: &[u8]) {
     }
     assert!(descriptors > 0, "no fonts at all");
     let catalog = doc.catalog().expect("catalog");
-    let meta = catalog.get(b"Metadata").and_then(Object::as_reference).expect("XMP metadata");
+    let meta = catalog
+        .get(b"Metadata")
+        .and_then(Object::as_reference)
+        .expect("XMP metadata");
     let stream = doc.get_object(meta).unwrap().as_stream().unwrap();
-    let xmp = String::from_utf8_lossy(&stream.decompressed_content().unwrap_or_else(|_| stream.content.clone())).to_string();
+    let xmp = String::from_utf8_lossy(
+        &stream
+            .decompressed_content()
+            .unwrap_or_else(|_| stream.content.clone()),
+    )
+    .to_string();
     assert!(xmp.contains("<pdfaid:part>2</pdfaid:part>"), "xmp: {xmp}");
-    assert!(xmp.contains("<pdfaid:conformance>U</pdfaid:conformance>"), "xmp: {xmp}");
+    assert!(
+        xmp.contains("<pdfaid:conformance>U</pdfaid:conformance>"),
+        "xmp: {xmp}"
+    );
 }
 
 /// Nothing may poke out of the margins (or off the page).
@@ -336,21 +404,45 @@ fn assert_in_bounds(l: &Layout, check_height: bool) {
     for (pi, ops) in l.pages.iter().enumerate() {
         for op in ops {
             match op {
-                Op::Text { x, y, face, size, text, .. } => {
+                Op::Text {
+                    x,
+                    y,
+                    face,
+                    size,
+                    text,
+                    ..
+                } => {
                     let w = l.fonts.width(*face, text, *size);
-                    assert!(*x >= left && x + w <= right, "page {pi}: text {text:?} spans {x}..{} outside margins", x + w);
+                    assert!(
+                        *x >= left && x + w <= right,
+                        "page {pi}: text {text:?} spans {x}..{} outside margins",
+                        x + w
+                    );
                     if check_height {
-                        assert!(*y >= TOP && *y <= PAGE_H - 30.0, "page {pi}: text {text:?} at y={y}");
+                        assert!(
+                            *y >= TOP && *y <= PAGE_H - 30.0,
+                            "page {pi}: text {text:?} at y={y}"
+                        );
                     }
                 }
                 Op::Rect { x, y, w, h, .. } => {
-                    assert!(*x >= left && x + w <= right, "page {pi}: rect {x}..{} outside margins", x + w);
+                    assert!(
+                        *x >= left && x + w <= right,
+                        "page {pi}: rect {x}..{} outside margins",
+                        x + w
+                    );
                     if check_height {
-                        assert!(*y >= TOP - 0.6 && y + h <= PAGE_H, "page {pi}: rect y {y}+{h}");
+                        assert!(
+                            *y >= TOP - 0.6 && y + h <= PAGE_H,
+                            "page {pi}: rect y {y}+{h}"
+                        );
                     }
                 }
                 Op::Image { x, y, w, h, .. } => {
-                    assert!(*x >= left && x + w <= right, "page {pi}: image outside margins");
+                    assert!(
+                        *x >= left && x + w <= right,
+                        "page {pi}: image outside margins"
+                    );
                     if check_height {
                         assert!(y + h <= BOTTOM + 0.6, "page {pi}: image bottom {}", y + h);
                     }
@@ -364,12 +456,21 @@ fn assert_in_bounds(l: &Layout, check_height: bool) {
 fn texts(l: &Layout, page: usize) -> Vec<&str> {
     l.pages[page]
         .iter()
-        .filter_map(|op| if let Op::Text { text, .. } = op { Some(text.as_str()) } else { None })
+        .filter_map(|op| {
+            if let Op::Text { text, .. } = op {
+                Some(text.as_str())
+            } else {
+                None
+            }
+        })
         .collect()
 }
 
 fn all_text(l: &Layout) -> String {
-    (0..l.pages.len()).flat_map(|p| texts(l, p)).collect::<Vec<_>>().join(" ")
+    (0..l.pages.len())
+        .flat_map(|p| texts(l, p))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 // ── golden layouts ───────────────────────────────────────────────────────
@@ -382,12 +483,29 @@ fn dump(l: &Layout) -> String {
         writeln!(out, "== page {} ==", i + 1).unwrap();
         for op in ops {
             match op {
-                Op::Text { x, y, face, size, color, text } => {
-                    writeln!(out, "T {x:.1} {y:.1} f{} {size} {} {text:?}", *face as u8, hex(color)).unwrap()
+                Op::Text {
+                    x,
+                    y,
+                    face,
+                    size,
+                    color,
+                    text,
+                } => writeln!(
+                    out,
+                    "T {x:.1} {y:.1} f{} {size} {} {text:?}",
+                    *face as u8,
+                    hex(color)
+                )
+                .unwrap(),
+                Op::Rect { x, y, w, h, color } => {
+                    writeln!(out, "R {x:.1} {y:.1} {w:.1} {h:.1} {}", hex(color)).unwrap()
                 }
-                Op::Rect { x, y, w, h, color } => writeln!(out, "R {x:.1} {y:.1} {w:.1} {h:.1} {}", hex(color)).unwrap(),
-                Op::Image { idx, x, y, w, h } => writeln!(out, "I {idx} {x:.1} {y:.1} {w:.1} {h:.1}").unwrap(),
-                Op::Link { x, y, w, h, url } => writeln!(out, "L {x:.1} {y:.1} {w:.1} {h:.1} {url}").unwrap(),
+                Op::Image { idx, x, y, w, h } => {
+                    writeln!(out, "I {idx} {x:.1} {y:.1} {w:.1} {h:.1}").unwrap()
+                }
+                Op::Link { x, y, w, h, url } => {
+                    writeln!(out, "L {x:.1} {y:.1} {w:.1} {h:.1} {url}").unwrap()
+                }
             }
         }
     }
@@ -397,7 +515,9 @@ fn dump(l: &Layout) -> String {
 /// Compares against `tests/golden/<name>.txt`. Regenerate after an intended
 /// layout change with `UPDATE_GOLDEN=1 cargo test --lib pdf`.
 fn assert_golden(name: &str, actual: &str) {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden").join(format!("{name}.txt"));
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden")
+        .join(format!("{name}.txt"));
     if std::env::var_os("UPDATE_GOLDEN").is_some() {
         std::fs::write(&path, actual).unwrap();
         return;
@@ -405,7 +525,11 @@ fn assert_golden(name: &str, actual: &str) {
     let expected = std::fs::read_to_string(&path)
         .unwrap_or_else(|_| panic!("missing golden {path:?}; run with UPDATE_GOLDEN=1"));
     if expected != actual {
-        let line = expected.lines().zip(actual.lines()).position(|(a, b)| a != b).unwrap_or(0);
+        let line = expected
+            .lines()
+            .zip(actual.lines())
+            .position(|(a, b)| a != b)
+            .unwrap_or(0);
         panic!(
             "layout differs from {path:?} at line {}:\n  expected: {}\n  actual:   {}\n(UPDATE_GOLDEN=1 to accept)",
             line + 1,
@@ -439,7 +563,9 @@ fn golden_table_shrinks_wide_columns() {
 
 #[test]
 fn golden_long_table_with_repeated_header() {
-    let rows: Vec<Vec<String>> = (0..46).map(|i| vec![format!("row {i}"), format!("{}", i * 7)]).collect();
+    let rows: Vec<Vec<String>> = (0..46)
+        .map(|i| vec![format!("row {i}"), format!("{}", i * 7)])
+        .collect();
     let mut all: Vec<Vec<&str>> = vec![vec!["Name", "Value"]];
     all.extend(rows.iter().map(|r| r.iter().map(String::as_str).collect()));
     let e = with_description(vec![table_node(&all)]);
@@ -450,20 +576,40 @@ fn golden_long_table_with_repeated_header() {
 fn golden_kitchen_sink() {
     let mut e = export_with(|e| {
         e.labels = (0..14)
-            .map(|i| Label { id: i.to_string(), name: format!("Label number {i}"), color: format!("#{:02x}c0d8", 0x60 + i * 8) })
+            .map(|i| Label {
+                id: i.to_string(),
+                name: format!("Label number {i}"),
+                color: format!("#{:02x}c0d8", 0x60 + i * 8),
+            })
             .collect();
         e.attachments = vec![
-            (attachment("report \u{00e4}\u{00f6}\u{00fc}.pdf", 1_500_000), None),
+            (
+                attachment("report \u{00e4}\u{00f6}\u{00fc}.pdf", 1_500_000),
+                None,
+            ),
             (attachment("pic.jpg", 4096), Some(jpeg(120, 80))),
             (attachment("tall.jpg", 4096), Some(jpeg(30, 500))),
         ];
         e.card.checklist = (0..6)
-            .map(|i| ChecklistItem { id: i.to_string(), text: format!("step {i}"), done: i % 2 == 0 })
+            .map(|i| ChecklistItem {
+                id: i.to_string(),
+                text: format!("step {i}"),
+                done: i % 2 == 0,
+            })
             .collect();
     });
     e.card.description = doc(vec![
         json!({"type": "heading", "attrs": {"level": 2}, "content": [text_node("Plan")]}),
-        list_node("ordered_list", vec![vec![para("first")], vec![para("second"), list_node("bullet_list", vec![vec![para("nested")]])]]),
+        list_node(
+            "ordered_list",
+            vec![
+                vec![para("first")],
+                vec![
+                    para("second"),
+                    list_node("bullet_list", vec![vec![para("nested")]]),
+                ],
+            ],
+        ),
         json!({"type": "blockquote", "content": [para("quote")]}),
         json!({"type": "code_block", "content": [text_node("let x = 1;\n\tlet y = 2;")]}),
     ]);
@@ -486,10 +632,30 @@ fn pdf_text_has_expected_content_in_order() {
     assert_in_order(
         &text,
         &[
-            "Ship PDF export", "Board: Roadmap", "Status: 2026-11-03 12:00 UTC", "Urgent", "Backend", "Due:",
-            "2026-12-24", "Description", "Heading", "bold", "italic", "a link", "one", "nested", "two",
-            "quoted text", "println!", "Checklist (1/2)", "write it", "test it", "Attachments (1)",
-            "notes.txt", "2.0 KB", "Page 1 / 1",
+            "Ship PDF export",
+            "Board: Roadmap",
+            "Status: 2026-11-03 12:00 UTC",
+            "Urgent",
+            "Backend",
+            "Due:",
+            "2026-12-24",
+            "Description",
+            "Heading",
+            "bold",
+            "italic",
+            "a link",
+            "one",
+            "nested",
+            "two",
+            "quoted text",
+            "println!",
+            "Checklist (1/2)",
+            "write it",
+            "test it",
+            "Attachments (1)",
+            "notes.txt",
+            "2.0 KB",
+            "Page 1 / 1",
         ],
     );
 }
@@ -499,19 +665,24 @@ fn pdf_metadata_and_structure() {
     let pdf = render(&export(RICH));
     let doc = lopdf::Document::load_mem(&pdf).unwrap();
     assert_eq!(doc.get_pages().len(), 1);
-    let info = doc.trailer.get(b"Info").and_then(lopdf::Object::as_reference).unwrap();
+    let info = doc
+        .trailer
+        .get(b"Info")
+        .and_then(lopdf::Object::as_reference)
+        .unwrap();
     let info = doc.get_object(info).unwrap().as_dict().unwrap();
     let title = info.get(b"Title").unwrap();
-    assert!(format!("{title:?}").contains("0053006800690070"), "title not UTF-16 'Ship': {title:?}");
+    assert!(
+        format!("{title:?}").contains("0053006800690070"),
+        "title not UTF-16 'Ship': {title:?}"
+    );
     let producer = format!("{:?}", info.get(b"Producer").unwrap());
     assert!(producer.contains("Synkban"));
 }
 
 #[test]
 fn only_http_https_and_mailto_links_are_clickable() {
-    let link = |href: &str, t: &str| {
-        json!({"type": "text", "text": t, "marks": [{"type": "link", "attrs": {"href": href}}]})
-    };
+    let link = |href: &str, t: &str| json!({"type": "text", "text": t, "marks": [{"type": "link", "attrs": {"href": href}}]});
     let e = with_description(vec![json!({"type": "paragraph", "content": [
         link("https://example.com/a?b=c", "web"), text_node(" "),
         link("mailto:me@example.com", "mail"), text_node(" "),
@@ -524,7 +695,13 @@ fn only_http_https_and_mailto_links_are_clickable() {
     assert_pdfa(&pdf);
     let urls: Vec<&str> = l.pages[0]
         .iter()
-        .filter_map(|op| if let Op::Link { url, .. } = op { Some(url.as_str()) } else { None })
+        .filter_map(|op| {
+            if let Op::Link { url, .. } = op {
+                Some(url.as_str())
+            } else {
+                None
+            }
+        })
         .collect();
     assert_eq!(urls, ["https://example.com/a?b=c", "mailto:me@example.com"]);
     // Refused links print as plain text: no link colour, no underline.
@@ -558,7 +735,13 @@ fn image_thumbnails_become_image_objects() {
     let images = doc
         .objects
         .values()
-        .filter(|o| o.as_stream().ok().and_then(|s| s.dict.get(b"Subtype").ok()).and_then(|t| t.as_name().ok()) == Some(b"Image"))
+        .filter(|o| {
+            o.as_stream()
+                .ok()
+                .and_then(|s| s.dict.get(b"Subtype").ok())
+                .and_then(|t| t.as_name().ok())
+                == Some(b"Image")
+        })
         .count();
     assert_eq!(images, 2);
     assert_in_bounds(&l, true);
@@ -582,8 +765,20 @@ fn empty_card_still_renders() {
     assert_pdfa(&pdf);
     assert_eq!(l.pages.len(), 1);
     let doc = lopdf::Document::load_mem(&pdf).unwrap();
-    let info = doc.trailer.get(b"Info").and_then(lopdf::Object::as_reference).unwrap();
-    let title = format!("{:?}", doc.get_object(info).unwrap().as_dict().unwrap().get(b"Title").unwrap());
+    let info = doc
+        .trailer
+        .get(b"Info")
+        .and_then(lopdf::Object::as_reference)
+        .unwrap();
+    let title = format!(
+        "{:?}",
+        doc.get_object(info)
+            .unwrap()
+            .as_dict()
+            .unwrap()
+            .get(b"Title")
+            .unwrap()
+    );
     assert!(title.contains("Untitled card"), "{title}");
     assert!(pdf_text(&pdf).contains("Status: 2026-11-03 12:00 UTC"));
 }
@@ -604,7 +799,10 @@ fn very_long_unbreakable_title_wraps_inside_margins() {
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
-    assert!(texts(&l, 0).iter().filter(|t| t.starts_with('W')).count() > 3, "must wrap over several lines");
+    assert!(
+        texts(&l, 0).iter().filter(|t| t.starts_with('W')).count() > 3,
+        "must wrap over several lines"
+    );
 }
 
 #[test]
@@ -613,7 +811,7 @@ fn long_title_with_spaces_pushes_content_down_not_off_page() {
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
-    assert!(l.pages.len() >= 1);
+    assert!(!l.pages.is_empty());
 }
 
 #[test]
@@ -639,7 +837,9 @@ fn markdown_edge_cases_in_titles() {
 #[test]
 fn right_to_left_title_and_board() {
     let e = export_with(|e| {
-        e.card.title = "\u{645}\u{631}\u{62d}\u{628}\u{627} \u{628}\u{627}\u{644}\u{639}\u{627}\u{644}\u{645}".into();
+        e.card.title =
+            "\u{645}\u{631}\u{62d}\u{628}\u{627} \u{628}\u{627}\u{644}\u{639}\u{627}\u{644}\u{645}"
+                .into();
         e.board_title = "\u{5e9}\u{5dc}\u{5d5}\u{5dd}".into();
     });
     let (l, pdf) = build(&e);
@@ -659,7 +859,11 @@ fn due_date_is_printed_verbatim_even_if_odd() {
 fn labels_wrap_into_rows_and_never_leave_the_page() {
     let e = export_with(|e| {
         e.labels = (0..70)
-            .map(|i| Label { id: i.to_string(), name: format!("label {i}"), color: "#c6e0f5".into() })
+            .map(|i| Label {
+                id: i.to_string(),
+                name: format!("label {i}"),
+                color: "#c6e0f5".into(),
+            })
             .collect();
     });
     let (l, pdf) = build(&e);
@@ -673,11 +877,31 @@ fn labels_wrap_into_rows_and_never_leave_the_page() {
 fn oversized_and_malformed_labels() {
     let e = export_with(|e| {
         e.labels = vec![
-            Label { id: "1".into(), name: "x".repeat(400), color: "#c6e0f5".into() },
-            Label { id: "2".into(), name: "bad colour".into(), color: "red".into() },
-            Label { id: "3".into(), name: "short hex".into(), color: "#12".into() },
-            Label { id: "4".into(), name: "".into(), color: "#ffffff".into() },
-            Label { id: "5".into(), name: "**bold** \u{1F525}".into(), color: "#ff0000".into() },
+            Label {
+                id: "1".into(),
+                name: "x".repeat(400),
+                color: "#c6e0f5".into(),
+            },
+            Label {
+                id: "2".into(),
+                name: "bad colour".into(),
+                color: "red".into(),
+            },
+            Label {
+                id: "3".into(),
+                name: "short hex".into(),
+                color: "#12".into(),
+            },
+            Label {
+                id: "4".into(),
+                name: "".into(),
+                color: "#ffffff".into(),
+            },
+            Label {
+                id: "5".into(),
+                name: "**bold** \u{1F525}".into(),
+                color: "#ff0000".into(),
+            },
         ];
     });
     let (l, pdf) = build(&e);
@@ -690,8 +914,17 @@ fn oversized_and_malformed_labels() {
 #[test]
 fn garbage_descriptions_do_not_fail() {
     for d in [
-        "", "null", "42", "\"just a string\"", "[]", "{}", "{\"type\":\"doc\"}", "{\"type\":\"doc\",\"content\":[]}",
-        "{\"type\":\"doc\",\"content\":[null,5,\"x\",{\"foo\":1},{\"type\":\"mystery\"}]}", "{broken json", "plain text\n\nsecond paragraph",
+        "",
+        "null",
+        "42",
+        "\"just a string\"",
+        "[]",
+        "{}",
+        "{\"type\":\"doc\"}",
+        "{\"type\":\"doc\",\"content\":[]}",
+        "{\"type\":\"doc\",\"content\":[null,5,\"x\",{\"foo\":1},{\"type\":\"mystery\"}]}",
+        "{broken json",
+        "plain text\n\nsecond paragraph",
     ] {
         let e = export_with(|e| e.card.description = d.into());
         let (l, pdf) = build(&e);
@@ -702,19 +935,29 @@ fn garbage_descriptions_do_not_fail() {
 
 #[test]
 fn unknown_wrapper_nodes_still_show_their_content() {
-    let e = with_description(vec![json!({"type": "mystery", "content": [para("inside mystery")]})]);
+    let e = with_description(vec![
+        json!({"type": "mystery", "content": [para("inside mystery")]}),
+    ]);
     assert!(pdf_text(&render(&e)).contains("inside mystery"));
 }
 
 #[test]
 fn plain_text_description_keeps_paragraphs() {
     let e = export_with(|e| e.card.description = "first para\n\nsecond para".into());
-    assert_in_order(&pdf_text(&render(&e)), &["Description", "first para", "second para"]);
+    assert_in_order(
+        &pdf_text(&render(&e)),
+        &["Description", "first para", "second para"],
+    );
 }
 
 #[test]
 fn empty_paragraphs_only_add_space() {
-    let e = with_description(vec![para(""), json!({"type": "paragraph"}), para("   "), para("after")]);
+    let e = with_description(vec![
+        para(""),
+        json!({"type": "paragraph"}),
+        para("   "),
+        para("after"),
+    ]);
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert!(all_text(&l).contains("after"));
@@ -729,13 +972,18 @@ fn hard_breaks_split_lines() {
     let ys: Vec<f32> = l.pages[0]
         .iter()
         .filter_map(|op| match op {
-            Op::Text { text, y, .. } if ["one", "two", "three"].contains(&text.as_str()) => Some(*y),
+            Op::Text { text, y, .. } if ["one", "two", "three"].contains(&text.as_str()) => {
+                Some(*y)
+            }
             _ => None,
         })
         .collect();
     assert_eq!(ys.len(), 3);
     assert!(ys[0] < ys[1] && ys[1] < ys[2]);
-    assert!(ys[2] - ys[1] > ys[1] - ys[0] + 5.0, "double break leaves a blank line");
+    assert!(
+        ys[2] - ys[1] > ys[1] - ys[0] + 5.0,
+        "double break leaves a blank line"
+    );
 }
 
 #[test]
@@ -765,11 +1013,13 @@ fn deeply_nested_quotes_stay_inside_the_page() {
 #[test]
 fn ordered_list_honours_start_number_and_long_items_wrap() {
     let long = "word ".repeat(120);
-    let e = with_description(vec![json!({"type": "ordered_list", "attrs": {"order": 7}, "content": [
-        {"type": "list_item", "content": [para(&long)]},
-        {"type": "list_item", "content": [para("second")]},
-        {"type": "list_item", "content": []},
-    ]})]);
+    let e = with_description(vec![
+        json!({"type": "ordered_list", "attrs": {"order": 7}, "content": [
+            {"type": "list_item", "content": [para(&long)]},
+            {"type": "list_item", "content": [para("second")]},
+            {"type": "list_item", "content": []},
+        ]}),
+    ]);
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
@@ -789,7 +1039,10 @@ fn code_blocks_preserve_indentation_and_wrap_long_lines() {
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
-    assert!(all_text(&l).contains("    indented"), "leading spaces survive");
+    assert!(
+        all_text(&l).contains("    indented"),
+        "leading spaces survive"
+    );
     assert!(pdf_text(&pdf).contains("end"));
 }
 
@@ -806,7 +1059,9 @@ fn heading_levels_and_empty_headings() {
     let sizes: Vec<f32> = l.pages[0]
         .iter()
         .filter_map(|op| match op {
-            Op::Text { text, size, .. } if ["H1", "H6", "no level"].contains(&text.as_str()) => Some(*size),
+            Op::Text { text, size, .. } if ["H1", "H6", "no level"].contains(&text.as_str()) => {
+                Some(*size)
+            }
             _ => None,
         })
         .collect();
@@ -817,15 +1072,23 @@ fn heading_levels_and_empty_headings() {
 
 #[test]
 fn unsupported_characters_become_question_marks_not_notdef() {
-    let e = with_description(vec![para("cjk \u{4f60}\u{597d} \u{3053}\u{3093}\u{306b}\u{3061}\u{306f} \u{c548}\u{b155} end")]);
+    let e = with_description(vec![para(
+        "cjk \u{4f60}\u{597d} \u{3053}\u{3093}\u{306b}\u{3061}\u{306f} \u{c548}\u{b155} end",
+    )]);
     let (_, pdf) = build(&e);
     assert_pdfa(&pdf);
-    assert!(pdf_text(&pdf).contains("cjk ?? ????? ?? end"), "{}", pdf_text(&pdf));
+    assert!(
+        pdf_text(&pdf).contains("cjk ?? ????? ?? end"),
+        "{}",
+        pdf_text(&pdf)
+    );
 }
 
 #[test]
 fn invisible_and_control_characters_are_dropped() {
-    let e = with_description(vec![para("a\u{200B}b\u{200D}c\u{FEFF}d\u{00AD}e\u{0}f\u{7}g\u{FE0F}h\u{1F3FD}i")]);
+    let e = with_description(vec![para(
+        "a\u{200B}b\u{200D}c\u{FEFF}d\u{00AD}e\u{0}f\u{7}g\u{FE0F}h\u{1F3FD}i",
+    )]);
     let (_, pdf) = build(&e);
     assert!(pdf_text(&pdf).contains("abcdefghi"), "{}", pdf_text(&pdf));
 }
@@ -850,7 +1113,10 @@ fn long_thai_and_arabic_runs_without_spaces_wrap() {
     let combining = |c: char| matches!(c as u32, 0xE31 | 0xE34..=0xE3A | 0xE47..=0xE4E);
     for page in 0..l.pages.len() {
         for t in texts(&l, page) {
-            assert!(!t.chars().next().is_some_and(combining), "line starts with a combining mark: {t:?}");
+            assert!(
+                !t.chars().next().is_some_and(combining),
+                "line starts with a combining mark: {t:?}"
+            );
         }
     }
 }
@@ -862,9 +1128,21 @@ fn mixed_script_line_uses_each_font() {
     assert_pdfa(&pdf);
     let faces: std::collections::BTreeSet<u8> = l.pages[0]
         .iter()
-        .filter_map(|op| if let Op::Text { face, text, .. } = op { (text.chars().any(|c| !c.is_ascii())).then_some(*face as u8) } else { None })
+        .filter_map(|op| {
+            if let Op::Text { face, text, .. } = op {
+                (!text.is_ascii()).then_some(*face as u8)
+            } else {
+                None
+            }
+        })
         .collect();
-    for f in [Face::Hebrew, Face::Arabic, Face::Devanagari, Face::Thai, Face::Emoji] {
+    for f in [
+        Face::Hebrew,
+        Face::Arabic,
+        Face::Devanagari,
+        Face::Thai,
+        Face::Emoji,
+    ] {
         assert!(faces.contains(&(f as u8)), "face {} unused", f as u8);
     }
 }
@@ -881,7 +1159,11 @@ fn degenerate_tables_do_not_fail() {
         table_node(&[vec![""]]),
         table_node(&[vec!["", "", ""], vec!["", "", ""]]),
         table_node(&[vec!["only header"]]),
-        table_node(&[vec!["a", "b", "c"], vec!["only one"], vec!["x", "y", "z", "extra", "cells"]]),
+        table_node(&[
+            vec!["a", "b", "c"],
+            vec!["only one"],
+            vec!["x", "y", "z", "extra", "cells"],
+        ]),
         json!({"type": "table", "content": [{"type": "table_row", "content": [{"type": "table_cell"}, {"type": "table_cell", "content": [{"type": "paragraph"}]}]}]}),
     ];
     for t in cases {
@@ -896,7 +1178,10 @@ fn degenerate_tables_do_not_fail() {
 fn many_columns_fit_the_page() {
     let header: Vec<String> = (0..30).map(|i| format!("c{i}")).collect();
     let row: Vec<String> = (0..30).map(|i| format!("v{i}")).collect();
-    let rows = vec![header.iter().map(String::as_str).collect::<Vec<_>>(), row.iter().map(String::as_str).collect()];
+    let rows = vec![
+        header.iter().map(String::as_str).collect::<Vec<_>>(),
+        row.iter().map(String::as_str).collect(),
+    ];
     let (l, pdf) = build(&with_description(vec![table_node(&rows)]));
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
@@ -905,18 +1190,26 @@ fn many_columns_fit_the_page() {
 #[test]
 fn unbreakable_cell_content_is_hard_wrapped() {
     let long = "A".repeat(300);
-    let (l, pdf) = build(&with_description(vec![table_node(&[vec!["h1", "h2"], vec![&long, "ok"]])]));
+    let (l, pdf) = build(&with_description(vec![table_node(&[
+        vec!["h1", "h2"],
+        vec![&long, "ok"],
+    ])]));
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
 }
 
 #[test]
 fn table_columns_are_centred_and_use_natural_width() {
-    let (l, _) = build(&with_description(vec![table_node(&[vec!["A", "B"], vec!["1", "2"]])]));
+    let (l, _) = build(&with_description(vec![table_node(&[
+        vec!["A", "B"],
+        vec!["1", "2"],
+    ])]));
     let rules: Vec<(f32, f32)> = l.pages[0]
         .iter()
         .filter_map(|op| match op {
-            Op::Rect { x, w, h, .. } if *h < 1.0 && *w > 20.0 && *w < CONTENT_W - 1.0 => Some((*x, *w)),
+            Op::Rect { x, w, h, .. } if *h < 1.0 && *w > 20.0 && *w < CONTENT_W - 1.0 => {
+                Some((*x, *w))
+            }
             _ => None,
         })
         .collect();
@@ -932,7 +1225,10 @@ fn table_columns_are_centred_and_use_natural_width() {
 #[test]
 fn full_width_table_is_not_centred_off_page() {
     let long = "lorem ipsum ".repeat(60);
-    let (l, _) = build(&with_description(vec![table_node(&[vec!["a", "b"], vec![&long, &long]])]));
+    let (l, _) = build(&with_description(vec![table_node(&[
+        vec!["a", "b"],
+        vec![&long, &long],
+    ])]));
     assert_in_bounds(&l, true);
 }
 
@@ -945,15 +1241,29 @@ fn table_alignment_is_honoured() {
         {"type": "table_row", "content": [cell("table_cell", Value::Null, "long left text"), cell("table_cell", Value::Null, "long centre text"), cell("table_cell", Value::Null, "long right text")]},
     ]});
     let (l, _) = build(&with_description(vec![t]));
-    let x = |s: &str| l.pages[0].iter().find_map(|op| match op { Op::Text { x, text, .. } if text == s => Some(*x), _ => None }).unwrap();
+    let x = |s: &str| {
+        l.pages[0]
+            .iter()
+            .find_map(|op| match op {
+                Op::Text { x, text, .. } if text == s => Some(*x),
+                _ => None,
+            })
+            .unwrap()
+    };
     // Within a column the single letters sit at the edge their alignment names.
     assert!(x("L") < x("C") && x("C") < x("R"));
     let w = |s: &str, size: f32| l.fonts.width(Face::Regular, s, size);
     let col2_left = x("long centre text");
     let col2_width = w("long centre text", 9.5) + 0.0;
-    assert!((x("C") - (col2_left + (col2_width - w("C", 9.5)) / 2.0)).abs() < 1.5, "centre cell off-centre");
+    assert!(
+        (x("C") - (col2_left + (col2_width - w("C", 9.5)) / 2.0)).abs() < 1.5,
+        "centre cell off-centre"
+    );
     let col3_right = x("long right text") + w("long right text", 9.5);
-    assert!((x("R") + w("R", 9.5) - col3_right).abs() < 1.5, "right cell not flush right");
+    assert!(
+        (x("R") + w("R", 9.5) - col3_right).abs() < 1.5,
+        "right cell not flush right"
+    );
 }
 
 #[test]
@@ -972,7 +1282,9 @@ fn tables_inside_lists_and_quotes_stay_in_bounds() {
 fn table_that_just_fits_stays_whole_and_one_row_over_moves_on() {
     // Rows are 9pt*1.4 + 8 = 20.6pt tall; find the largest table that fits a page
     // and check it is not split, then that one more row does not stay on the page.
-    let rows = |n: usize| -> Vec<Vec<String>> { (0..n).map(|i| vec![format!("r{i}"), "x".into()]).collect() };
+    let rows = |n: usize| -> Vec<Vec<String>> {
+        (0..n).map(|i| vec![format!("r{i}"), "x".into()]).collect()
+    };
     let build_rows = |n: usize| {
         let data = rows(n);
         let mut all: Vec<Vec<&str>> = vec![vec!["H", "V"]];
@@ -982,12 +1294,18 @@ fn table_that_just_fits_stays_whole_and_one_row_over_moves_on() {
         e.attachments.clear();
         build(&e).0
     };
-    let fits = (1..60).rev().find(|n| build_rows(*n).pages.len() == 1).expect("some table fits");
+    let fits = (1..60)
+        .rev()
+        .find(|n| build_rows(*n).pages.len() == 1)
+        .expect("some table fits");
     let l = build_rows(fits);
     assert_eq!(l.pages.len(), 1);
     let l2 = build_rows(fits + 1);
     assert_eq!(l2.pages.len(), 2);
-    assert!(texts(&l2, 1).contains(&"H"), "table moved whole, header included");
+    assert!(
+        texts(&l2, 1).contains(&"H"),
+        "table moved whole, header included"
+    );
 }
 
 #[test]
@@ -1002,7 +1320,12 @@ fn header_row_is_never_stranded_alone() {
         for p in 0..l.pages.len() {
             let t = texts(&l, p);
             if let Some(i) = t.iter().position(|x| *x == "HEAD") {
-                assert!(t[i..].iter().any(|x| x.starts_with('r') && x[1..].chars().all(|c| c.is_ascii_digit())), "filler {filler}: header alone on page {p}");
+                assert!(
+                    t[i..]
+                        .iter()
+                        .any(|x| x.starts_with('r') && x[1..].chars().all(|c| c.is_ascii_digit())),
+                    "filler {filler}: header alone on page {p}"
+                );
             }
         }
     }
@@ -1011,7 +1334,10 @@ fn header_row_is_never_stranded_alone() {
 #[test]
 fn a_row_taller_than_a_page_terminates() {
     let huge = "paragraph words ".repeat(1500);
-    let (l, pdf) = build(&with_description(vec![table_node(&[vec!["h"], vec![&huge]]), para("after")]));
+    let (l, pdf) = build(&with_description(vec![
+        table_node(&[vec!["h"], vec![&huge]]),
+        para("after"),
+    ]));
     assert_pdfa(&pdf);
     assert!(all_text(&l).contains("after"));
     // Known limitation: such a row is not split, so height is not asserted.
@@ -1022,14 +1348,23 @@ fn a_row_taller_than_a_page_terminates() {
 
 #[test]
 fn page_footers_number_every_page() {
-    let paras: Vec<Value> = (0..260).map(|i| para(&format!("Paragraph number {i} with a little bit of text to fill space."))).collect();
+    let paras: Vec<Value> = (0..260)
+        .map(|i| {
+            para(&format!(
+                "Paragraph number {i} with a little bit of text to fill space."
+            ))
+        })
+        .collect();
     let (l, pdf) = build(&with_description(paras));
     assert_pdfa(&pdf);
     let n = l.pages.len();
     assert!(n >= 4, "got {n} pages");
     assert_eq!(page_count(&pdf), n);
     for p in 0..n {
-        assert!(texts(&l, p).contains(&format!("Page {} / {n}", p + 1).as_str()), "page {p} footer");
+        assert!(
+            texts(&l, p).contains(&format!("Page {} / {n}", p + 1).as_str()),
+            "page {p} footer"
+        );
     }
     assert_in_bounds(&l, true);
 }
@@ -1037,7 +1372,12 @@ fn page_footers_number_every_page() {
 #[test]
 fn paragraphs_that_fit_are_never_split_across_pages() {
     let paras: Vec<Value> = (0..120)
-        .map(|i| para(&format!("P{i}: {}", "wrapping sentence for the paragraph. ".repeat(6))))
+        .map(|i| {
+            para(&format!(
+                "P{i}: {}",
+                "wrapping sentence for the paragraph. ".repeat(6)
+            ))
+        })
         .collect();
     let (l, _) = build(&with_description(paras));
     // Each paragraph starts with "P<i>:"; every page must contain whole paragraphs, so a
@@ -1052,11 +1392,17 @@ fn paragraphs_that_fit_are_never_split_across_pages() {
             .collect();
         if p + 1 < l.pages.len() {
             let last = body.last().copied().unwrap_or("");
-            assert!(last.trim_end().ends_with('.') || last.contains("paragraph."), "page {p} ends mid-paragraph: {last:?}");
+            assert!(
+                last.trim_end().ends_with('.') || last.contains("paragraph."),
+                "page {p} ends mid-paragraph: {last:?}"
+            );
         }
         if p > 0 {
             let first = body.first().copied().unwrap_or("");
-            assert!(first.starts_with('P'), "page {p} starts mid-paragraph: {first:?}");
+            assert!(
+                first.starts_with('P'),
+                "page {p} starts mid-paragraph: {first:?}"
+            );
         }
     }
 }
@@ -1076,13 +1422,18 @@ fn a_paragraph_longer_than_a_page_is_split_not_dropped() {
 fn heading_is_not_left_alone_at_page_bottom() {
     for filler in 40..52 {
         let mut nodes: Vec<Value> = (0..filler).map(|i| para(&format!("filler {i}"))).collect();
-        nodes.push(json!({"type": "heading", "attrs": {"level": 1}, "content": [text_node("KEEPHEAD")]}));
+        nodes.push(
+            json!({"type": "heading", "attrs": {"level": 1}, "content": [text_node("KEEPHEAD")]}),
+        );
         nodes.push(para("following text"));
         let (l, _) = build(&with_description(nodes));
         for p in 0..l.pages.len() {
             let t = texts(&l, p);
             if t.contains(&"KEEPHEAD") {
-                assert!(t.iter().any(|x| x.starts_with("following")), "filler {filler}: heading stranded on page {p}");
+                assert!(
+                    t.iter().any(|x| x.starts_with("following")),
+                    "filler {filler}: heading stranded on page {p}"
+                );
             }
         }
     }
@@ -1093,12 +1444,33 @@ fn checklist_header_stays_with_its_items_at_every_offset() {
     for filler in 36..54 {
         let e = export_with(|e| {
             e.card.description = doc((0..filler).map(|i| para(&format!("filler {i}"))).collect());
-            e.card.checklist = (0..8).map(|i| ChecklistItem { id: i.to_string(), text: format!("task {i}"), done: false }).collect();
+            e.card.checklist = (0..8)
+                .map(|i| ChecklistItem {
+                    id: i.to_string(),
+                    text: format!("task {i}"),
+                    done: false,
+                })
+                .collect();
         });
         let (l, _) = build(&e);
-        let page_of = |needle: &str| (0..l.pages.len()).find(|p| texts(&l, *p).iter().any(|t| t.starts_with(needle))).unwrap();
-        assert_eq!(page_of("Checklist ("), page_of("task"), "filler {filler}: header separated from first item");
-        assert_eq!(page_of("task"), (0..l.pages.len()).rev().find(|p| texts(&l, *p).iter().any(|t| t.starts_with("task"))).unwrap(), "filler {filler}: items split although they fit");
+        let page_of = |needle: &str| {
+            (0..l.pages.len())
+                .find(|p| texts(&l, *p).iter().any(|t| t.starts_with(needle)))
+                .unwrap()
+        };
+        assert_eq!(
+            page_of("Checklist ("),
+            page_of("task"),
+            "filler {filler}: header separated from first item"
+        );
+        assert_eq!(
+            page_of("task"),
+            (0..l.pages.len())
+                .rev()
+                .find(|p| texts(&l, *p).iter().any(|t| t.starts_with("task")))
+                .unwrap(),
+            "filler {filler}: items split although they fit"
+        );
     }
 }
 
@@ -1108,27 +1480,55 @@ fn attachment_header_stays_with_its_list_at_every_offset() {
         let e = export_with(|e| {
             e.card.description = doc((0..filler).map(|i| para(&format!("filler {i}"))).collect());
             e.card.checklist.clear();
-            e.attachments = (0..6).map(|i| (attachment(&format!("file{i}.bin"), 10), None)).collect();
+            e.attachments = (0..6)
+                .map(|i| (attachment(&format!("file{i}.bin"), 10), None))
+                .collect();
         });
         let (l, _) = build(&e);
-        let page_of = |needle: &str| (0..l.pages.len()).find(|p| texts(&l, *p).iter().any(|t| t.contains(needle))).unwrap();
-        assert_eq!(page_of("Attachments ("), page_of("file0.bin"), "filler {filler}");
-        assert_eq!(page_of("file0.bin"), page_of("file5.bin"), "filler {filler}: list split although it fits");
+        let page_of = |needle: &str| {
+            (0..l.pages.len())
+                .find(|p| texts(&l, *p).iter().any(|t| t.contains(needle)))
+                .unwrap()
+        };
+        assert_eq!(
+            page_of("Attachments ("),
+            page_of("file0.bin"),
+            "filler {filler}"
+        );
+        assert_eq!(
+            page_of("file0.bin"),
+            page_of("file5.bin"),
+            "filler {filler}: list split although it fits"
+        );
     }
 }
 
 #[test]
 fn huge_checklist_keeps_header_with_first_items_and_loses_nothing() {
     let e = export_with(|e| {
-        e.card.checklist = (0..400).map(|i| ChecklistItem { id: i.to_string(), text: format!("item {i}"), done: i % 3 == 0 }).collect();
+        e.card.checklist = (0..400)
+            .map(|i| ChecklistItem {
+                id: i.to_string(),
+                text: format!("item {i}"),
+                done: i % 3 == 0,
+            })
+            .collect();
     });
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);
-    let page_of = |needle: &str| (0..l.pages.len()).find(|p| texts(&l, *p).iter().any(|t| t.contains(needle))).unwrap();
+    let page_of = |needle: &str| {
+        (0..l.pages.len())
+            .find(|p| texts(&l, *p).iter().any(|t| t.contains(needle)))
+            .unwrap()
+    };
     assert_eq!(page_of("Checklist ("), page_of("item 0"));
     let text = pdf_text(&pdf);
-    assert!(text.contains("Checklist (134/400)"), "{}", &text[..200.min(text.len())]);
+    assert!(
+        text.contains("Checklist (134/400)"),
+        "{}",
+        &text[..200.min(text.len())]
+    );
     assert_in_order(&text, &["item 0", "item 200", "item 399"]);
 }
 
@@ -1136,9 +1536,21 @@ fn huge_checklist_keeps_header_with_first_items_and_loses_nothing() {
 fn empty_and_giant_checklist_items() {
     let e = export_with(|e| {
         e.card.checklist = vec![
-            ChecklistItem { id: "1".into(), text: String::new(), done: true },
-            ChecklistItem { id: "2".into(), text: "x".repeat(2000), done: false },
-            ChecklistItem { id: "3".into(), text: "word ".repeat(3000), done: false },
+            ChecklistItem {
+                id: "1".into(),
+                text: String::new(),
+                done: true,
+            },
+            ChecklistItem {
+                id: "2".into(),
+                text: "x".repeat(2000),
+                done: false,
+            },
+            ChecklistItem {
+                id: "3".into(),
+                text: "word ".repeat(3000),
+                done: false,
+            },
         ];
     });
     let (l, pdf) = build(&e);
@@ -1150,7 +1562,15 @@ fn empty_and_giant_checklist_items() {
 fn many_attachments_with_awkward_names() {
     let e = export_with(|e| {
         let mut v: Vec<(Attachment, Option<Vec<u8>>)> = (0..150)
-            .map(|i| (attachment(&format!("\u{00e4}\u{00f6}\u{00fc} file {i} \u{1F4CE}.bin"), i * 1000), None))
+            .map(|i| {
+                (
+                    attachment(
+                        &format!("\u{00e4}\u{00f6}\u{00fc} file {i} \u{1F4CE}.bin"),
+                        i * 1000,
+                    ),
+                    None,
+                )
+            })
             .collect();
         v.push((attachment(&"n".repeat(400), 0), None));
         v.push((attachment("", u64::MAX), None));
@@ -1186,13 +1606,29 @@ fn everything_at_once_still_valid() {
     let mut nodes: Vec<Value> = vec![
         json!({"type": "heading", "attrs": {"level": 1}, "content": [text_node("All of it")]}),
         table_node(&[vec!["a", "b"], vec!["1", "2"]]),
-        list_node("bullet_list", vec![vec![para("x"), list_node("ordered_list", vec![vec![para("y")]])]]),
+        list_node(
+            "bullet_list",
+            vec![vec![
+                para("x"),
+                list_node("ordered_list", vec![vec![para("y")]]),
+            ]],
+        ),
         json!({"type": "code_block", "content": [text_node("code")]}),
     ];
-    nodes.extend((0..80).map(|i| para(&format!("para {i} \u{1F680} \u{645}\u{631}\u{62d}\u{628}\u{627}"))));
+    nodes.extend((0..80).map(|i| {
+        para(&format!(
+            "para {i} \u{1F680} \u{645}\u{631}\u{62d}\u{628}\u{627}"
+        ))
+    }));
     let mut e = with_description(nodes);
     e.attachments = vec![(attachment("a.jpg", 1), Some(jpeg(200, 100)))];
-    e.card.checklist = (0..30).map(|i| ChecklistItem { id: i.to_string(), text: format!("t{i}"), done: false }).collect();
+    e.card.checklist = (0..30)
+        .map(|i| ChecklistItem {
+            id: i.to_string(),
+            text: format!("t{i}"),
+            done: false,
+        })
+        .collect();
     let (l, pdf) = build(&e);
     assert_pdfa(&pdf);
     assert_in_bounds(&l, true);

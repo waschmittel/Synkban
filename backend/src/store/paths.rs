@@ -23,7 +23,9 @@ pub(crate) fn cards_dir(data_dir: &Path, board_id: &str, list_id: &str) -> PathB
 }
 
 pub(crate) fn attachment_dir(data_dir: &Path, board_id: &str, card_id: &str) -> PathBuf {
-    board_dir(data_dir, board_id).join("attachments").join(card_id)
+    board_dir(data_dir, board_id)
+        .join("attachments")
+        .join(card_id)
 }
 
 pub(crate) fn archived_cards_dir(data_dir: &Path, board_id: &str) -> PathBuf {

@@ -2,14 +2,16 @@
 //! Covers error paths that store-level tests can't exercise (400/413 wiring,
 //! token middleware, header capture, query parsing).
 
-use actix_web::{cookie::Cookie, dev::Service, dev::ServiceResponse, http::StatusCode, test, web, App};
+use actix_web::{
+    cookie::Cookie, dev::Service, dev::ServiceResponse, http::StatusCode, test, web, App,
+};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
 
-fn data_app_data(dir: &PathBuf) -> web::Data<PathBuf> {
-    web::Data::new(dir.clone())
+fn data_app_data(dir: &Path) -> web::Data<PathBuf> {
+    web::Data::new(dir.to_path_buf())
 }
 
 fn read_json_body(body: actix_web::web::Bytes) -> Value {
@@ -36,11 +38,8 @@ macro_rules! make_token_app {
                 let token = token_for_closure.clone();
                 let cookie_value = req.cookie("synkban_token").map(|c| c.value().to_string());
                 let query = req.query_string().to_string();
-                let (authorized, needs_cookie) = synkban::check_token_auth(
-                    cookie_value.as_deref(),
-                    &query,
-                    token.as_str(),
-                );
+                let (authorized, needs_cookie) =
+                    synkban::check_token_auth(cookie_value.as_deref(), &query, token.as_str());
                 let fut = srv.call(req);
                 async move {
                     if !authorized {
@@ -50,12 +49,9 @@ macro_rules! make_token_app {
                     if needs_cookie {
                         res.response_mut().headers_mut().append(
                             actix_web::http::header::SET_COOKIE,
-                            format!(
-                                "synkban_token={}; Path=/; HttpOnly; SameSite=Strict",
-                                token
-                            )
-                            .parse()
-                            .unwrap(),
+                            format!("synkban_token={}; Path=/; HttpOnly; SameSite=Strict", token)
+                                .parse()
+                                .unwrap(),
                         );
                     }
                     Ok(res)
@@ -69,7 +65,10 @@ macro_rules! make_token_app {
 /// Posts JSON, asserts success, returns parsed response body.
 macro_rules! post_json {
     ($app:expr, $uri:expr, $body:expr) => {{
-        let req = test::TestRequest::post().uri($uri).set_json($body).to_request();
+        let req = test::TestRequest::post()
+            .uri($uri)
+            .set_json($body)
+            .to_request();
         let resp = test::call_service(&$app, req).await;
         assert!(
             resp.status().is_success(),
@@ -138,12 +137,16 @@ async fn update_card_null_due_date_clears_it() {
     let app = test::init_service(make_app!(&dir_path)).await;
     let (_, _, cid) = seed_board_list_card!(app);
 
-    let req = test::TestRequest::put().uri(&format!("/api/cards/{}", cid))
-        .set_json(json!({ "due_date": "2025-06-15" })).to_request();
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{}", cid))
+        .set_json(json!({ "due_date": "2025-06-15" }))
+        .to_request();
     test::call_service(&app, req).await;
 
-    let req = test::TestRequest::put().uri(&format!("/api/cards/{}", cid))
-        .set_json(json!({ "due_date": null })).to_request();
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{}", cid))
+        .set_json(json!({ "due_date": null }))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let json = read_json_body(test::read_body(resp).await);
@@ -196,7 +199,10 @@ async fn upload_attachment_captures_content_type_and_filename() {
     let (_, _, cid) = seed_board_list_card!(app);
 
     let req = test::TestRequest::post()
-        .uri(&format!("/api/cards/{}/attachments?filename=my%20doc.pdf", cid))
+        .uri(&format!(
+            "/api/cards/{}/attachments?filename=my%20doc.pdf",
+            cid
+        ))
         .insert_header(("content-type", "application/pdf"))
         .set_payload(b"PDF-DATA".to_vec())
         .to_request();
@@ -235,7 +241,9 @@ async fn delete_unarchived_board_returns_400() {
     let board: Value = post_json!(app, "/api/boards", json!({ "title": "B" }));
     let bid = board["id"].as_str().unwrap();
 
-    let req = test::TestRequest::delete().uri(&format!("/api/boards/{}", bid)).to_request();
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/boards/{}", bid))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
@@ -247,7 +255,9 @@ async fn delete_unarchived_card_returns_400() {
     let app = test::init_service(make_app!(&dir_path)).await;
     let (_, _, cid) = seed_board_list_card!(app);
 
-    let req = test::TestRequest::delete().uri(&format!("/api/cards/{}", cid)).to_request();
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/cards/{}", cid))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
@@ -258,7 +268,9 @@ async fn get_missing_board_returns_404() {
     let dir_path = dir.path().to_path_buf();
     let app = test::init_service(make_app!(&dir_path)).await;
 
-    let req = test::TestRequest::get().uri("/api/boards/nonexistent").to_request();
+    let req = test::TestRequest::get()
+        .uri("/api/boards/nonexistent")
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     let json = read_json_body(test::read_body(resp).await);
@@ -272,12 +284,16 @@ async fn restore_orphaned_card_without_list_id_returns_400() {
     let app = test::init_service(make_app!(&dir_path)).await;
     let (_, lid, cid) = seed_board_list_card!(app);
 
-    let req = test::TestRequest::delete().uri(&format!("/api/lists/{}", lid)).to_request();
+    let req = test::TestRequest::delete()
+        .uri(&format!("/api/lists/{}", lid))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
-    let req = test::TestRequest::put().uri(&format!("/api/cards/{}", cid))
-        .set_json(json!({ "archived": false })).to_request();
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{}", cid))
+        .set_json(json!({ "archived": false }))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
@@ -332,7 +348,11 @@ async fn changes_endpoint_per_board_isolates_quiet_boards() {
 
     // Wait briefly, then mutate only b1.
     std::thread::sleep(std::time::Duration::from_millis(20));
-    let _: Value = post_json!(app, &format!("/api/boards/{b1_id}/lists"), json!({ "title": "L" }));
+    let _: Value = post_json!(
+        app,
+        &format!("/api/boards/{b1_id}/lists"),
+        json!({ "title": "L" })
+    );
 
     let req = test::TestRequest::get().uri("/api/changes").to_request();
     let resp = test::call_service(&app, req).await;
@@ -340,8 +360,14 @@ async fn changes_endpoint_per_board_isolates_quiet_boards() {
     let b1_after = after["boards"][b1_id].as_u64().unwrap();
     let b2_after = after["boards"][b2_id].as_u64().unwrap();
 
-    assert!(b1_after > b1_before, "b1 mtime should advance when b1 changes");
-    assert_eq!(b2_after, b2_before, "b2 mtime should NOT change when b1 changes");
+    assert!(
+        b1_after > b1_before,
+        "b1 mtime should advance when b1 changes"
+    );
+    assert_eq!(
+        b2_after, b2_before,
+        "b2 mtime should NOT change when b1 changes"
+    );
 }
 
 // -- Token middleware (desktop mode) --
@@ -355,7 +381,12 @@ macro_rules! assert_forbidden {
             Ok(resp) => panic!("expected 403, got {}", resp.status()),
             Err(e) => {
                 let status = e.as_response_error().status_code();
-                assert_eq!(status, StatusCode::FORBIDDEN, "expected 403, got {}", status);
+                assert_eq!(
+                    status,
+                    StatusCode::FORBIDDEN,
+                    "expected 403, got {}",
+                    status
+                );
             }
         }
     }};
@@ -408,7 +439,10 @@ async fn token_middleware_accepts_cookie_no_new_cookie_set() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
-    assert!(resp.headers().get(actix_web::http::header::SET_COOKIE).is_none());
+    assert!(resp
+        .headers()
+        .get(actix_web::http::header::SET_COOKIE)
+        .is_none());
 }
 
 #[actix_web::test]
@@ -445,8 +479,10 @@ async fn export_card_pdf_returns_download_with_embedded_image() {
     let app = test::init_service(make_app!(&dir_path)).await;
     let (_, _, cid) = seed_board_list_card!(app);
 
-    let req = test::TestRequest::put().uri(&format!("/api/cards/{}", cid))
-        .set_json(json!({ "title": "Größe/Test", "due_date": "2026-12-24" })).to_request();
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{}", cid))
+        .set_json(json!({ "title": "Größe/Test", "due_date": "2026-12-24" }))
+        .to_request();
     test::call_service(&app, req).await;
 
     let mut png = std::io::Cursor::new(Vec::new());
@@ -458,18 +494,41 @@ async fn export_card_pdf_returns_download_with_embedded_image() {
         .insert_header(("content-type", "image/png"))
         .set_payload(png.into_inner())
         .to_request();
-    assert_eq!(test::call_service(&app, req).await.status(), StatusCode::CREATED);
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::CREATED
+    );
 
-    let req = test::TestRequest::get().uri(&format!("/api/cards/{}/pdf", cid)).to_request();
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/cards/{}/pdf", cid))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     let status = resp.status();
     if status != StatusCode::OK {
-        panic!("{status}: {}", String::from_utf8_lossy(&test::read_body(resp).await));
+        panic!(
+            "{status}: {}",
+            String::from_utf8_lossy(&test::read_body(resp).await)
+        );
     }
-    assert_eq!(resp.headers().get("content-type").unwrap(), "application/pdf");
-    let disposition = resp.headers().get("content-disposition").unwrap().to_str().unwrap().to_string();
-    assert!(disposition.starts_with("attachment; filename=\"Gr__e_Test.pdf\""), "{disposition}");
-    assert!(disposition.contains("filename*=UTF-8''Gr%C3%B6%C3%9Fe_Test.pdf"), "{disposition}");
+    assert_eq!(
+        resp.headers().get("content-type").unwrap(),
+        "application/pdf"
+    );
+    let disposition = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        disposition.starts_with("attachment; filename=\"Gr__e_Test.pdf\""),
+        "{disposition}"
+    );
+    assert!(
+        disposition.contains("filename*=UTF-8''Gr%C3%B6%C3%9Fe_Test.pdf"),
+        "{disposition}"
+    );
     let body = test::read_body(resp).await;
     if let Ok(out) = std::env::var("PDF_TEST_OUT_HTTP") {
         std::fs::write(out, &body).unwrap();
@@ -482,6 +541,11 @@ async fn export_card_pdf_unknown_card_is_404() {
     let dir = TempDir::new().unwrap();
     let dir_path = dir.path().to_path_buf();
     let app = test::init_service(make_app!(&dir_path)).await;
-    let req = test::TestRequest::get().uri("/api/cards/nope/pdf").to_request();
-    assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+    let req = test::TestRequest::get()
+        .uri("/api/cards/nope/pdf")
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::NOT_FOUND
+    );
 }

@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # rust-toolchain.toml pins the version and components (rustfmt, clippy).
+      - name: Install Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      # The embedded frontend dir must exist for include_dir!.
+      - name: Create dummy static dir
+        run: mkdir -p static && touch static/index.html
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings

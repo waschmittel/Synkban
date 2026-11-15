@@ -245,7 +245,11 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let good = create_card(d.path(), &l.id, "Good").unwrap();
-        fs::write(cards_dir(d.path(), &b.id, &l.id).join("broken.json"), b"{ oops").unwrap();
+        fs::write(
+            cards_dir(d.path(), &b.id, &l.id).join("broken.json"),
+            b"{ oops",
+        )
+        .unwrap();
 
         let found = cards(d.path(), &b.id, &l.id).unwrap();
         assert_eq!(found.len(), 1);
@@ -258,9 +262,16 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         create_card(d.path(), &l.id, "C").unwrap();
-        assert!(collect_warnings(d.path()).is_empty(), "healthy tree has no warnings");
+        assert!(
+            collect_warnings(d.path()).is_empty(),
+            "healthy tree has no warnings"
+        );
 
-        fs::write(cards_dir(d.path(), &b.id, &l.id).join("broken.json"), b"nope").unwrap();
+        fs::write(
+            cards_dir(d.path(), &b.id, &l.id).join("broken.json"),
+            b"nope",
+        )
+        .unwrap();
         let warnings = collect_warnings(d.path());
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("broken.json"));
@@ -280,7 +291,11 @@ mod tests {
         create_attachment(d.path(), &c.id, "ok.txt", "text/plain", b"hi").unwrap();
         assert!(collect_warnings(d.path()).is_empty());
 
-        fs::write(attachment_dir(d.path(), &b.id, &c.id).join("broken.json"), b"x").unwrap();
+        fs::write(
+            attachment_dir(d.path(), &b.id, &c.id).join("broken.json"),
+            b"x",
+        )
+        .unwrap();
         let warnings = collect_warnings(d.path());
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("attachment"));

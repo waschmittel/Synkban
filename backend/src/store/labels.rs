@@ -211,14 +211,18 @@ mod tests {
 
     #[test]
     fn find_board_for_label_skips_corrupt_board() {
-        use std::fs;
         use crate::store::paths::board_dir;
+        use std::fs;
         let d = tmp();
         let corrupt = create_board(d.path(), "Corrupt").unwrap();
         let b2 = create_board(d.path(), "Good").unwrap();
         let label = create_label(d.path(), &b2.id, "Bug").unwrap();
         // A corrupt board.json must not stop us finding the label's real owner.
-        fs::write(board_dir(d.path(), &corrupt.id).join("board.json"), b"{ broken").unwrap();
+        fs::write(
+            board_dir(d.path(), &corrupt.id).join("board.json"),
+            b"{ broken",
+        )
+        .unwrap();
         let updated = update_label_by_id(d.path(), &label.id, "Renamed").unwrap();
         assert_eq!(updated.name, "Renamed");
     }
@@ -241,8 +245,18 @@ mod tests {
         let bb = create_label(d.path(), &b.id, "B").unwrap();
         let c = create_label(d.path(), &b.id, "C").unwrap();
         // C first, B second; A unlisted -> last. Unknown id ignored.
-        reorder_labels(d.path(), &b.id, &[c.id.clone(), "fake".into(), bb.id.clone()]).unwrap();
-        let names: Vec<_> = get_board(d.path(), &b.id).unwrap().labels.into_iter().map(|l| l.id).collect();
+        reorder_labels(
+            d.path(),
+            &b.id,
+            &[c.id.clone(), "fake".into(), bb.id.clone()],
+        )
+        .unwrap();
+        let names: Vec<_> = get_board(d.path(), &b.id)
+            .unwrap()
+            .labels
+            .into_iter()
+            .map(|l| l.id)
+            .collect();
         assert_eq!(names, vec![c.id, bb.id, a.id]);
     }
 

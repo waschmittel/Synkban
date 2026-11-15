@@ -6,7 +6,7 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm run build
 
-FROM rust:1.95-bookworm AS backend-build
+FROM rust:1.99.1-bookworm AS backend-build
 WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 COPY backend/src ./src

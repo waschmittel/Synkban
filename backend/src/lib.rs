@@ -29,11 +29,15 @@ pub fn log_timestamp() -> String {
 
 /// Returns (authorized, needs_cookie) for desktop-mode token auth.
 /// `needs_cookie` is true when authorized via query param but no cookie yet (so middleware must set one).
-pub fn check_token_auth(cookie_value: Option<&str>, query_string: &str, token: &str) -> (bool, bool) {
+pub fn check_token_auth(
+    cookie_value: Option<&str>,
+    query_string: &str,
+    token: &str,
+) -> (bool, bool) {
     let has_cookie = cookie_value.map(|v| v == token).unwrap_or(false);
     let has_query = query_string
         .split('&')
-        .any(|p| p.strip_prefix("token=").map_or(false, |v| v == token));
+        .any(|p| p.strip_prefix("token=") == Some(token));
     let authorized = has_cookie || has_query;
     let needs_cookie = has_query && !has_cookie;
     (authorized, needs_cookie)
@@ -41,34 +45,115 @@ pub fn check_token_auth(cookie_value: Option<&str>, query_string: &str, token: &
 
 /// Registers all `/api/*` routes. Used by both web and desktop server configs and by integration tests.
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
-    cfg.route("/api/changes", web::get().to(handlers::boards::check_changes))
-        .route("/api/warnings", web::get().to(handlers::boards::get_warnings))
-        .route("/api/settings", web::get().to(handlers::settings::get_settings))
-        .route("/api/settings", web::put().to(handlers::settings::update_settings))
-        .route("/api/boards", web::get().to(handlers::boards::list_boards))
-        .route("/api/boards", web::post().to(handlers::boards::create_board))
-        .route("/api/boards/archive", web::get().to(handlers::boards::list_archived_boards))
-        .route("/api/boards/order", web::put().to(handlers::boards::reorder_boards))
-        .route("/api/boards/{id}", web::get().to(handlers::boards::get_board))
-        .route("/api/boards/{id}", web::put().to(handlers::boards::update_board))
-        .route("/api/boards/{id}", web::delete().to(handlers::boards::delete_board))
-        .route("/api/boards/{board_id}/archive", web::get().to(handlers::boards::get_archived_cards))
-        .route("/api/boards/{board_id}/lists", web::post().to(handlers::lists::create_list))
-        .route("/api/lists/{id}", web::put().to(handlers::lists::update_list))
-        .route("/api/lists/{id}", web::delete().to(handlers::lists::delete_list))
-        .route("/api/boards/{board_id}/labels", web::post().to(handlers::labels::create_label))
-        .route("/api/boards/{board_id}/labels/order", web::put().to(handlers::labels::reorder_labels))
-        .route("/api/labels/{id}", web::put().to(handlers::labels::update_label))
-        .route("/api/labels/{id}", web::delete().to(handlers::labels::delete_label))
-        .route("/api/lists/{list_id}/cards", web::post().to(handlers::cards::create_card))
-        .route("/api/cards/{id}", web::put().to(handlers::cards::update_card))
-        .route("/api/cards/{id}/history", web::get().to(handlers::cards::get_card_history))
-        .route("/api/cards/{id}/pdf", web::get().to(handlers::cards::export_card_pdf))
-        .route("/api/cards/{id}", web::delete().to(handlers::cards::delete_card))
-        .route("/api/cards/{card_id}/attachments", web::post().to(handlers::cards::upload_attachment))
-        .route("/api/cards/{card_id}/attachments/{att_id}", web::get().to(handlers::cards::download_attachment))
-        .route("/api/cards/{card_id}/attachments/{att_id}/thumb", web::get().to(handlers::cards::download_thumbnail))
-        .route("/api/cards/{card_id}/attachments/{att_id}", web::delete().to(handlers::cards::delete_attachment));
+    cfg.route(
+        "/api/changes",
+        web::get().to(handlers::boards::check_changes),
+    )
+    .route(
+        "/api/warnings",
+        web::get().to(handlers::boards::get_warnings),
+    )
+    .route(
+        "/api/settings",
+        web::get().to(handlers::settings::get_settings),
+    )
+    .route(
+        "/api/settings",
+        web::put().to(handlers::settings::update_settings),
+    )
+    .route("/api/boards", web::get().to(handlers::boards::list_boards))
+    .route(
+        "/api/boards",
+        web::post().to(handlers::boards::create_board),
+    )
+    .route(
+        "/api/boards/archive",
+        web::get().to(handlers::boards::list_archived_boards),
+    )
+    .route(
+        "/api/boards/order",
+        web::put().to(handlers::boards::reorder_boards),
+    )
+    .route(
+        "/api/boards/{id}",
+        web::get().to(handlers::boards::get_board),
+    )
+    .route(
+        "/api/boards/{id}",
+        web::put().to(handlers::boards::update_board),
+    )
+    .route(
+        "/api/boards/{id}",
+        web::delete().to(handlers::boards::delete_board),
+    )
+    .route(
+        "/api/boards/{board_id}/archive",
+        web::get().to(handlers::boards::get_archived_cards),
+    )
+    .route(
+        "/api/boards/{board_id}/lists",
+        web::post().to(handlers::lists::create_list),
+    )
+    .route(
+        "/api/lists/{id}",
+        web::put().to(handlers::lists::update_list),
+    )
+    .route(
+        "/api/lists/{id}",
+        web::delete().to(handlers::lists::delete_list),
+    )
+    .route(
+        "/api/boards/{board_id}/labels",
+        web::post().to(handlers::labels::create_label),
+    )
+    .route(
+        "/api/boards/{board_id}/labels/order",
+        web::put().to(handlers::labels::reorder_labels),
+    )
+    .route(
+        "/api/labels/{id}",
+        web::put().to(handlers::labels::update_label),
+    )
+    .route(
+        "/api/labels/{id}",
+        web::delete().to(handlers::labels::delete_label),
+    )
+    .route(
+        "/api/lists/{list_id}/cards",
+        web::post().to(handlers::cards::create_card),
+    )
+    .route(
+        "/api/cards/{id}",
+        web::put().to(handlers::cards::update_card),
+    )
+    .route(
+        "/api/cards/{id}/history",
+        web::get().to(handlers::cards::get_card_history),
+    )
+    .route(
+        "/api/cards/{id}/pdf",
+        web::get().to(handlers::cards::export_card_pdf),
+    )
+    .route(
+        "/api/cards/{id}",
+        web::delete().to(handlers::cards::delete_card),
+    )
+    .route(
+        "/api/cards/{card_id}/attachments",
+        web::post().to(handlers::cards::upload_attachment),
+    )
+    .route(
+        "/api/cards/{card_id}/attachments/{att_id}",
+        web::get().to(handlers::cards::download_attachment),
+    )
+    .route(
+        "/api/cards/{card_id}/attachments/{att_id}/thumb",
+        web::get().to(handlers::cards::download_thumbnail),
+    )
+    .route(
+        "/api/cards/{card_id}/attachments/{att_id}",
+        web::delete().to(handlers::cards::delete_attachment),
+    );
 }
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
@@ -86,9 +171,7 @@ async fn serve_embedded(req: HttpRequest) -> HttpResponse {
                 .first_or_octet_stream()
                 .to_string()
         };
-        return HttpResponse::Ok()
-            .content_type(mime)
-            .body(file.contents());
+        return HttpResponse::Ok().content_type(mime).body(file.contents());
     }
 
     match STATIC_DIR.get_file("index.html") {
@@ -170,11 +253,8 @@ pub async fn run_desktop_server(
                 let token = token.clone();
                 let cookie_value = req.cookie("synkban_token").map(|c| c.value().to_string());
                 let query = req.query_string().to_string();
-                let (authorized, needs_cookie) = check_token_auth(
-                    cookie_value.as_deref(),
-                    &query,
-                    &token,
-                );
+                let (authorized, needs_cookie) =
+                    check_token_auth(cookie_value.as_deref(), &query, &token);
                 let fut = srv.call(req);
                 async move {
                     if !authorized {
@@ -184,12 +264,9 @@ pub async fn run_desktop_server(
                     if needs_cookie {
                         res.response_mut().headers_mut().append(
                             actix_web::http::header::SET_COOKIE,
-                            format!(
-                                "synkban_token={}; Path=/; HttpOnly; SameSite=Strict",
-                                token
-                            )
-                            .parse()
-                            .unwrap(),
+                            format!("synkban_token={}; Path=/; HttpOnly; SameSite=Strict", token)
+                                .parse()
+                                .unwrap(),
                         );
                     }
                     Ok(res)

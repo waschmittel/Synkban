@@ -126,9 +126,15 @@ fn record_history(card: &mut Card, before: CardContent, attachments: Vec<String>
         return;
     }
     if card.history.is_empty() {
-        card.history.push(HistoryEntry { at: card.created_at.clone(), content: before });
+        card.history.push(HistoryEntry {
+            at: card.created_at.clone(),
+            content: before,
+        });
     }
-    card.history.push(HistoryEntry { at: now_timestamp(), content: after });
+    card.history.push(HistoryEntry {
+        at: now_timestamp(),
+        content: after,
+    });
     let excess = card.history.len().saturating_sub(HISTORY_LIMIT);
     card.history.drain(..excess);
 }
@@ -142,7 +148,10 @@ pub(crate) fn content_snapshot(data_dir: &Path, card_id: &str) -> Result<CardCon
     let board_id = match &loc {
         CardLocation::InList { board_id, .. } | CardLocation::Orphaned { board_id } => board_id,
     };
-    Ok(content_of(&card, attachment_names(data_dir, board_id, card_id)))
+    Ok(content_of(
+        &card,
+        attachment_names(data_dir, board_id, card_id),
+    ))
 }
 
 pub(crate) fn record_attachment_change(
@@ -183,7 +192,11 @@ pub fn export_card(data_dir: &Path, card_id: &str) -> Result<crate::pdf::CardExp
         .collect();
     card.history.clear();
     Ok(crate::pdf::CardExport {
-        labels: board.labels.into_iter().filter(|l| card.label_ids.contains(&l.id)).collect(),
+        labels: board
+            .labels
+            .into_iter()
+            .filter(|l| card.label_ids.contains(&l.id))
+            .collect(),
         board_title: board.title,
         card,
         attachments,
@@ -229,10 +242,13 @@ pub fn create_card(data_dir: &Path, list_id: &str, title: &str) -> Result<Card, 
         history: Vec::new(),
     };
     write_card(&dir.join(format!("{id}.json")), &mut card)?;
-    card_index::record(&id, CardLocation::InList {
-        board_id: board_id.clone(),
-        list_id: list_id.to_string(),
-    });
+    card_index::record(
+        &id,
+        CardLocation::InList {
+            board_id: board_id.clone(),
+            list_id: list_id.to_string(),
+        },
+    );
     Ok(card)
 }
 
@@ -243,6 +259,7 @@ fn max_position(data_dir: &Path, board_id: &str, list_id: &str) -> Result<f64, A
         .fold(0.0, f64::max))
 }
 
+#[allow(clippy::too_many_arguments)] // mirrors the PUT body; every field optional
 pub fn update_card(
     data_dir: &Path,
     card_id: &str,
@@ -256,14 +273,23 @@ pub fn update_card(
     checklist: Option<Vec<ChecklistItem>>,
 ) -> Result<Card, AppError> {
     let mut card = update_card_with_history(
-        data_dir, card_id, title, description, position, new_list_id, label_ids, archived,
-        due_date, checklist,
+        data_dir,
+        card_id,
+        title,
+        description,
+        position,
+        new_list_id,
+        label_ids,
+        archived,
+        due_date,
+        checklist,
     )?;
     // History is served by `get_card_history`, not inlined in card responses.
     card.history = Vec::new();
     Ok(card)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_card_with_history(
     data_dir: &Path,
     card_id: &str,
@@ -279,8 +305,7 @@ fn update_card_with_history(
     let loc = card_index::locate(data_dir, card_id)?;
     let (source_board_id, old_list_id, old_path, is_orphaned) = match &loc {
         CardLocation::InList { board_id, list_id } => {
-            let path =
-                cards_dir(data_dir, board_id, list_id).join(format!("{card_id}.json"));
+            let path = cards_dir(data_dir, board_id, list_id).join(format!("{card_id}.json"));
             (board_id.clone(), list_id.clone(), path, false)
         }
         CardLocation::Orphaned { board_id } => {
@@ -341,14 +366,21 @@ fn update_card_with_history(
         }
         if target_board_id != source_board_id {
             crate::store::attachments::move_card_attachments(
-                data_dir, &source_board_id, &target_board_id, card_id,
+                data_dir,
+                &source_board_id,
+                &target_board_id,
+                card_id,
             )?;
         }
-        card_index::record(card_id, CardLocation::InList {
-            board_id: target_board_id.clone(),
-            list_id: target_list_id.to_string(),
-        });
-        card.attachments = crate::store::attachments::load_attachments(data_dir, &target_board_id, card_id);
+        card_index::record(
+            card_id,
+            CardLocation::InList {
+                board_id: target_board_id.clone(),
+                list_id: target_list_id.to_string(),
+            },
+        );
+        card.attachments =
+            crate::store::attachments::load_attachments(data_dir, &target_board_id, card_id);
         return Ok(card);
     }
 
@@ -365,14 +397,21 @@ fn update_card_with_history(
             fs::remove_file(&old_path)?;
             if target_board_id != source_board_id {
                 crate::store::attachments::move_card_attachments(
-                    data_dir, &source_board_id, &target_board_id, card_id,
+                    data_dir,
+                    &source_board_id,
+                    &target_board_id,
+                    card_id,
                 )?;
             }
-            card_index::record(card_id, CardLocation::InList {
-                board_id: target_board_id.clone(),
-                list_id: target_list_id.to_string(),
-            });
-            card.attachments = crate::store::attachments::load_attachments(data_dir, &target_board_id, card_id);
+            card_index::record(
+                card_id,
+                CardLocation::InList {
+                    board_id: target_board_id.clone(),
+                    list_id: target_list_id.to_string(),
+                },
+            );
+            card.attachments =
+                crate::store::attachments::load_attachments(data_dir, &target_board_id, card_id);
             return Ok(card);
         }
     }
@@ -380,7 +419,8 @@ fn update_card_with_history(
     prune_label_ids(data_dir, &source_board_id, &mut card);
     record_history(&mut card, before, attachments);
     write_card(&old_path, &mut card)?;
-    card.attachments = crate::store::attachments::load_attachments(data_dir, &source_board_id, card_id);
+    card.attachments =
+        crate::store::attachments::load_attachments(data_dir, &source_board_id, card_id);
     Ok(card)
 }
 
@@ -520,8 +560,19 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "Old").unwrap();
-        let updated =
-            update_card(d.path(), &c.id, Some("New"), None, None, None, None, None, None, None).unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            Some("New"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(updated.title, "New");
     }
 
@@ -531,8 +582,19 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let updated =
-            update_card(d.path(), &c.id, None, Some("desc"), None, None, None, None, None, None).unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            None,
+            Some("desc"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(updated.description, "desc");
     }
 
@@ -542,8 +604,19 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let updated =
-            update_card(d.path(), &c.id, None, None, Some(5.5), None, None, None, None, None).unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            Some(5.5),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(updated.position, 5.5);
     }
 
@@ -557,8 +630,19 @@ mod tests {
         let l1 = create_label(d.path(), &b.id, "One").unwrap();
         let l2 = create_label(d.path(), &b.id, "Two").unwrap();
         let ids = vec![l1.id.clone(), l2.id.clone()];
-        let updated =
-            update_card(d.path(), &c.id, None, None, None, None, Some(&ids), None, None, None).unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            Some(&ids),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(updated.label_ids, vec![l1.id, l2.id]);
     }
 
@@ -569,15 +653,37 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
 
-        let updated =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         assert!(updated.archived);
         let detail = get_board(d.path(), &b.id).unwrap();
         assert!(detail.lists[0].cards.is_empty());
         assert_eq!(get_archived_cards(d.path(), &b.id).unwrap().len(), 1);
 
-        let restored =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None, None).unwrap();
+        let restored = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            None,
+            None,
+        )
+        .unwrap();
         assert!(!restored.archived);
         assert_eq!(get_board(d.path(), &b.id).unwrap().lists[0].cards.len(), 1);
     }
@@ -590,12 +696,34 @@ mod tests {
         let c = create_card(d.path(), &l.id, "C").unwrap();
         assert!(c.archived_at.is_none());
 
-        let archived =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        let archived = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         assert!(archived.archived_at.is_some());
 
-        let restored =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None, None).unwrap();
+        let restored = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            None,
+            None,
+        )
+        .unwrap();
         assert!(restored.archived_at.is_none());
     }
 
@@ -607,10 +735,34 @@ mod tests {
         let c1 = create_card(d.path(), &l.id, "First").unwrap();
         let c2 = create_card(d.path(), &l.id, "Second").unwrap();
 
-        update_card(d.path(), &c2.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update_card(
+            d.path(),
+            &c2.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         // Second-resolution timestamps: ensure c1 archives in a later second.
         std::thread::sleep(std::time::Duration::from_millis(1100));
-        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update_card(
+            d.path(),
+            &c1.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
 
         let archived = get_archived_cards(d.path(), &b.id).unwrap();
         let titles: Vec<&str> = archived.iter().map(|c| c.title.as_str()).collect();
@@ -658,8 +810,19 @@ mod tests {
             None,
         )
         .unwrap();
-        let updated =
-            update_card(d.path(), &c.id, None, None, None, None, None, None, Some(None), None).unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(None),
+            None,
+        )
+        .unwrap();
         assert!(updated.due_date.is_none());
     }
 
@@ -705,8 +868,16 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
         let items = vec![
-            ChecklistItem { id: "i1".into(), text: "a".into(), done: false },
-            ChecklistItem { id: "i2".into(), text: "b".into(), done: true },
+            ChecklistItem {
+                id: "i1".into(),
+                text: "a".into(),
+                done: false,
+            },
+            ChecklistItem {
+                id: "i2".into(),
+                text: "b".into(),
+                done: true,
+            },
         ];
         let updated = update_card(
             d.path(),
@@ -769,8 +940,16 @@ mod tests {
         let gone = create_label(d.path(), &b.id, "Gone").unwrap();
 
         update_card(
-            d.path(), &c.id, None, None, None, None,
-            Some(&[keep.id.clone(), gone.id.clone()]), None, None, None,
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            Some(&[keep.id.clone(), gone.id.clone()]),
+            None,
+            None,
+            None,
         )
         .unwrap();
 
@@ -778,9 +957,19 @@ mod tests {
         delete_label(d.path(), &b.id, &gone.id).unwrap();
 
         // Any subsequent save — even a title-only edit — prunes the dead id.
-        let updated =
-            update_card(d.path(), &c.id, Some("C2"), None, None, None, None, None, None, None)
-                .unwrap();
+        let updated = update_card(
+            d.path(),
+            &c.id,
+            Some("C2"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(updated.label_ids, vec![keep.id]);
     }
 
@@ -829,7 +1018,16 @@ mod tests {
         assert!(from_dir.join(&att.id).exists());
 
         let moved = update_card(
-            d.path(), &c.id, None, None, None, Some(&l2.id), None, None, None, None,
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            Some(&l2.id),
+            None,
+            None,
+            None,
+            None,
         )
         .unwrap();
 
@@ -839,7 +1037,8 @@ mod tests {
         assert!(to_dir.join(format!("{}.json", att.id)).exists());
         assert_eq!(moved.attachments.len(), 1);
         // Attachment is still fetchable after the move (resolves to new board).
-        let (meta, data) = crate::store::attachments::get_attachment_data(d.path(), &c.id, &att.id).unwrap();
+        let (meta, data) =
+            crate::store::attachments::get_attachment_data(d.path(), &c.id, &att.id).unwrap();
         assert_eq!(meta.filename, "f.txt");
         assert_eq!(data, b"x");
     }
@@ -847,8 +1046,19 @@ mod tests {
     #[test]
     fn update_card_not_found() {
         let d = tmp();
-        let err = update_card(d.path(), "fake", Some("X"), None, None, None, None, None, None, None)
-            .unwrap_err();
+        let err = update_card(
+            d.path(),
+            "fake",
+            Some("X"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
@@ -868,7 +1078,19 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         delete_card(d.path(), &c.id).unwrap();
         assert!(get_archived_cards(d.path(), &b.id).unwrap().is_empty());
     }
@@ -883,7 +1105,19 @@ mod tests {
         let att_dir = attachment_dir(d.path(), &b.id, &c.id);
         assert!(att_dir.exists());
 
-        update_card(d.path(), &c.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         delete_card(d.path(), &c.id).unwrap();
         assert!(!att_dir.exists());
     }
@@ -910,7 +1144,19 @@ mod tests {
         let c1 = create_card(d.path(), &l1.id, "InList").unwrap();
         let _c2 = create_card(d.path(), &l2.id, "Orphaned").unwrap();
 
-        update_card(d.path(), &c1.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update_card(
+            d.path(),
+            &c1.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         delete_list(d.path(), &l2.id).unwrap();
 
         assert_eq!(get_archived_cards(d.path(), &b.id).unwrap().len(), 2);
@@ -925,9 +1171,19 @@ mod tests {
         delete_list(d.path(), &l.id).unwrap();
 
         let l2 = create_list(d.path(), &b.id, "L2").unwrap();
-        let err =
-            update_card(d.path(), &c.id, None, None, None, None, None, Some(false), None, None)
-                .unwrap_err();
+        let err = update_card(
+            d.path(),
+            &c.id,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            None,
+            None,
+        )
+        .unwrap_err();
         assert!(matches!(err, AppError::BadRequest(_)));
 
         let restored = update_card(
@@ -1042,7 +1298,19 @@ mod tests {
     #[test]
     fn non_content_updates_do_not_add_history() {
         let (d, id) = card_with_list();
-        update_card(d.path(), &id, None, None, Some(5.0), None, None, Some(true), None, None).unwrap();
+        update_card(
+            d.path(),
+            &id,
+            None,
+            None,
+            Some(5.0),
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
         // Same title again is not a change either.
         set_title(d.path(), &id, "first");
         assert!(get_card_history(d.path(), &id).unwrap().entries.is_empty());
@@ -1051,7 +1319,23 @@ mod tests {
     #[test]
     fn history_tracks_labels_due_date_checklist_description() {
         let (d, id) = card_with_list();
-        update_card(d.path(), &id, None, Some("{}"), None, None, None, None, Some(Some("2030-01-02")), Some(vec![ChecklistItem { id: "i".into(), text: "t".into(), done: false }])).unwrap();
+        update_card(
+            d.path(),
+            &id,
+            None,
+            Some("{}"),
+            None,
+            None,
+            None,
+            None,
+            Some(Some("2030-01-02")),
+            Some(vec![ChecklistItem {
+                id: "i".into(),
+                text: "t".into(),
+                done: false,
+            }]),
+        )
+        .unwrap();
         let h = get_card_history(d.path(), &id).unwrap();
         assert_eq!(h.entries.len(), 2);
         assert_eq!(h.entries[0].content.due_date.as_deref(), Some("2030-01-02"));
@@ -1067,7 +1351,10 @@ mod tests {
         }
         let h = get_card_history(d.path(), &id).unwrap();
         assert_eq!(h.entries.len(), HISTORY_LIMIT);
-        assert_eq!(h.entries[0].content.title, format!("t{}", HISTORY_LIMIT + 19));
+        assert_eq!(
+            h.entries[0].content.title,
+            format!("t{}", HISTORY_LIMIT + 19)
+        );
     }
 
     #[test]
@@ -1076,7 +1363,11 @@ mod tests {
         let att = create_attachment(d.path(), &id, "a.txt", "text/plain", b"x").unwrap();
         crate::store::attachments::delete_attachment(d.path(), &id, &att.id).unwrap();
         let h = get_card_history(d.path(), &id).unwrap();
-        let names: Vec<_> = h.entries.iter().map(|e| e.content.attachments.clone()).collect();
+        let names: Vec<_> = h
+            .entries
+            .iter()
+            .map(|e| e.content.attachments.clone())
+            .collect();
         assert_eq!(names, vec![vec![], vec!["a.txt".to_string()], vec![]]);
     }
 
@@ -1087,7 +1378,10 @@ mod tests {
         assert!(c.history.is_empty());
         let json = serde_json::to_string(&c).unwrap();
         assert!(!json.contains("\"history\""));
-        let b = crate::store::boards::list_boards(d.path()).unwrap().remove(0).id;
+        let b = crate::store::boards::list_boards(d.path())
+            .unwrap()
+            .remove(0)
+            .id;
         let detail = get_board(d.path(), &b).unwrap();
         assert!(detail.lists[0].cards[0].history.is_empty());
         assert_eq!(get_card_history(d.path(), &id).unwrap().entries.len(), 2);

@@ -26,13 +26,10 @@ impl ResponseError for AppError {
             AppError::NotFound(msg) => {
                 HttpResponse::NotFound().json(serde_json::json!({"error": msg}))
             }
-            AppError::Io(e) => {
-                HttpResponse::InternalServerError().json(serde_json::json!({"error": e.to_string()}))
-            }
-            AppError::TooLarge => {
-                HttpResponse::PayloadTooLarge()
-                    .json(serde_json::json!({"error": "File too large (max 50 MB)"}))
-            }
+            AppError::Io(e) => HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": e.to_string()})),
+            AppError::TooLarge => HttpResponse::PayloadTooLarge()
+                .json(serde_json::json!({"error": "File too large (max 50 MB)"})),
             AppError::BadRequest(msg) => {
                 HttpResponse::BadRequest().json(serde_json::json!({"error": msg}))
             }

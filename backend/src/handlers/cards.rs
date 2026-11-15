@@ -16,19 +16,36 @@ pub async fn create_card(
     let card = store::audit_op(
         &data_dir,
         |dd| store::create_card(dd, &list_id, &body.title),
-        |c| format!("CREATE card \"{}\" (id: {}) in list {}", c.title, c.id, list_id),
+        |c| {
+            format!(
+                "CREATE card \"{}\" (id: {}) in list {}",
+                c.title, c.id, list_id
+            )
+        },
     )?;
     Ok(HttpResponse::Created().json(card))
 }
 
 fn is_valid_iso_date(s: &str) -> bool {
-    if s.len() != 10 { return false; }
+    if s.len() != 10 {
+        return false;
+    }
     let b = s.as_bytes();
-    if b[4] != b'-' || b[7] != b'-' { return false; }
-    let Ok(y) = s[0..4].parse::<u32>() else { return false };
-    let Ok(m) = s[5..7].parse::<u32>() else { return false };
-    let Ok(d) = s[8..10].parse::<u32>() else { return false };
-    if m < 1 || m > 12 || d < 1 || d > 31 || y < 1 { return false; }
+    if b[4] != b'-' || b[7] != b'-' {
+        return false;
+    }
+    let Ok(y) = s[0..4].parse::<u32>() else {
+        return false;
+    };
+    let Ok(m) = s[5..7].parse::<u32>() else {
+        return false;
+    };
+    let Ok(d) = s[8..10].parse::<u32>() else {
+        return false;
+    };
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || y < 1 {
+        return false;
+    }
     true
 }
 
@@ -39,23 +56,47 @@ pub async fn update_card(
 ) -> Result<HttpResponse, AppError> {
     if let Some(Some(ref dd)) = body.due_date {
         if !is_valid_iso_date(dd) {
-            return Err(AppError::BadRequest("due_date must be in YYYY-MM-DD format".to_string()));
+            return Err(AppError::BadRequest(
+                "due_date must be in YYYY-MM-DD format".to_string(),
+            ));
         }
     }
     let card_id = path.into_inner();
     let due_date = body.due_date.as_ref().map(|dd| dd.as_deref());
 
     let mut changes = Vec::new();
-    if body.title.is_some() { changes.push("title"); }
-    if body.description.is_some() { changes.push("description"); }
-    if body.position.is_some() { changes.push("position"); }
-    if body.list_id.is_some() { changes.push("list_id"); }
-    if body.label_ids.is_some() { changes.push("labels"); }
-    if body.archived == Some(true) { changes.push("archived"); }
-    if body.archived == Some(false) { changes.push("restored"); }
-    if body.due_date.is_some() { changes.push("due_date"); }
-    if body.checklist.is_some() { changes.push("checklist"); }
-    let fields = if changes.is_empty() { "no-op".to_string() } else { changes.join(", ") };
+    if body.title.is_some() {
+        changes.push("title");
+    }
+    if body.description.is_some() {
+        changes.push("description");
+    }
+    if body.position.is_some() {
+        changes.push("position");
+    }
+    if body.list_id.is_some() {
+        changes.push("list_id");
+    }
+    if body.label_ids.is_some() {
+        changes.push("labels");
+    }
+    if body.archived == Some(true) {
+        changes.push("archived");
+    }
+    if body.archived == Some(false) {
+        changes.push("restored");
+    }
+    if body.due_date.is_some() {
+        changes.push("due_date");
+    }
+    if body.checklist.is_some() {
+        changes.push("checklist");
+    }
+    let fields = if changes.is_empty() {
+        "no-op".to_string()
+    } else {
+        changes.join(", ")
+    };
 
     let checklist = body.checklist.clone();
     let card = store::audit_op(
@@ -97,14 +138,29 @@ pub async fn export_card_pdf(
         .card
         .title
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let stem = stem.trim();
     let stem = if stem.is_empty() { "card" } else { stem };
-    let ascii: String = stem.chars().map(|c| if c.is_ascii() { c } else { '_' }).collect();
+    let ascii: String = stem
+        .chars()
+        .map(|c| if c.is_ascii() { c } else { '_' })
+        .collect();
     let encoded: String = stem
         .bytes()
-        .map(|b| if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' { (b as char).to_string() } else { format!("%{b:02X}") })
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
         .collect();
     let disposition =
         format!("attachment; filename=\"{ascii}.pdf\"; filename*=UTF-8''{encoded}.pdf");
@@ -147,10 +203,12 @@ pub async fn upload_attachment(
     let att = store::audit_op(
         &data_dir,
         |dd| store::create_attachment(dd, &card_id, &query.filename, &content_type, &body),
-        |a| format!(
-            "CREATE attachment \"{}\" ({}, {} bytes) on card {}",
-            a.filename, a.content_type, a.size, card_id
-        ),
+        |a| {
+            format!(
+                "CREATE attachment \"{}\" ({}, {} bytes) on card {}",
+                a.filename, a.content_type, a.size, card_id
+            )
+        },
     )?;
     Ok(HttpResponse::Created().json(att))
 }
@@ -174,9 +232,7 @@ pub async fn download_thumbnail(
 ) -> Result<HttpResponse, AppError> {
     let (card_id, att_id) = path.into_inner();
     let data = store::get_thumbnail_data(&data_dir, &card_id, &att_id)?;
-    Ok(HttpResponse::Ok()
-        .content_type("image/jpeg")
-        .body(data))
+    Ok(HttpResponse::Ok().content_type("image/jpeg").body(data))
 }
 
 pub async fn delete_attachment(

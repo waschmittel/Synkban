@@ -120,11 +120,7 @@ pub fn get_attachment_data(
     Ok((att, data))
 }
 
-pub fn delete_attachment(
-    data_dir: &Path,
-    card_id: &str,
-    att_id: &str,
-) -> Result<(), AppError> {
+pub fn delete_attachment(data_dir: &Path, card_id: &str, att_id: &str) -> Result<(), AppError> {
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     let sidecar = att_dir.join(format!("{att_id}.json"));
@@ -171,8 +167,7 @@ pub fn get_thumbnail_data(
     att_id: &str,
 ) -> Result<Vec<u8>, AppError> {
     let (board_id, _) = find_board_and_list(data_dir, card_id)?;
-    let thumb_path =
-        attachment_dir(data_dir, &board_id, card_id).join(format!("{att_id}_thumb"));
+    let thumb_path = attachment_dir(data_dir, &board_id, card_id).join(format!("{att_id}_thumb"));
     if !thumb_path.exists() {
         return Err(AppError::NotFound("Thumbnail not found".into()));
     }
@@ -214,10 +209,8 @@ mod tests {
         assert_eq!(load_attachments(d.path(), &b.id, &c.id).len(), 1);
 
         // Attachment metadata must NOT be persisted on the card JSON.
-        let card: Card = read_json(
-            &cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id)),
-        )
-        .unwrap();
+        let card: Card =
+            read_json(&cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id))).unwrap();
         assert!(card.attachments.is_empty());
     }
 
@@ -257,8 +250,7 @@ mod tests {
         let png_data = png_buf.into_inner();
 
         let att = create_attachment(d.path(), &c.id, "img.png", "image/png", &png_data).unwrap();
-        let thumb_path =
-            attachment_dir(d.path(), &b.id, &c.id).join(format!("{}_thumb", att.id));
+        let thumb_path = attachment_dir(d.path(), &b.id, &c.id).join(format!("{}_thumb", att.id));
         assert!(thumb_path.exists());
     }
 

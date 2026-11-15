@@ -12,7 +12,10 @@ use crate::store::paths::*;
 
 pub(crate) fn find_board_for_list(data_dir: &Path, list_id: &str) -> Result<String, AppError> {
     for board_id in crate::store::walk::board_ids(data_dir)? {
-        if list_dir(data_dir, &board_id, list_id).join("list.json").exists() {
+        if list_dir(data_dir, &board_id, list_id)
+            .join("list.json")
+            .exists()
+        {
             return Ok(board_id);
         }
     }
@@ -96,7 +99,12 @@ pub fn delete_list(data_dir: &Path, list_id: &str) -> Result<(), AppError> {
     fs::remove_dir_all(&dir)?;
     remove_dir_if_empty(&lists_dir(data_dir, &board_id));
     for cid in orphaned_card_ids {
-        card_index::record(&cid, CardLocation::Orphaned { board_id: board_id.clone() });
+        card_index::record(
+            &cid,
+            CardLocation::Orphaned {
+                board_id: board_id.clone(),
+            },
+        );
     }
     Ok(())
 }
@@ -211,7 +219,10 @@ mod tests {
         let lists_parent = lists_dir(d.path(), &b.id);
         assert!(lists_parent.exists());
         delete_list(d.path(), &l.id).unwrap();
-        assert!(!lists_parent.exists(), "lists/ parent should be cleaned up when empty");
+        assert!(
+            !lists_parent.exists(),
+            "lists/ parent should be cleaned up when empty"
+        );
     }
 
     #[test]
@@ -221,6 +232,9 @@ mod tests {
         let l1 = create_list(d.path(), &b.id, "L1").unwrap();
         let _l2 = create_list(d.path(), &b.id, "L2").unwrap();
         delete_list(d.path(), &l1.id).unwrap();
-        assert!(lists_dir(d.path(), &b.id).exists(), "lists/ kept while l2 remains");
+        assert!(
+            lists_dir(d.path(), &b.id).exists(),
+            "lists/ kept while l2 remains"
+        );
     }
 }

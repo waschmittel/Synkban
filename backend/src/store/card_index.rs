@@ -87,8 +87,7 @@ fn scan(data_dir: &Path, card_id: &str) -> Result<CardLocation, AppError> {
                 return Ok(CardLocation::InList { board_id, list_id });
             }
         }
-        let orphan_path =
-            archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
+        let orphan_path = archived_cards_dir(data_dir, &board_id).join(format!("{card_id}.json"));
         if orphan_path.exists() {
             return Ok(CardLocation::Orphaned { board_id });
         }
@@ -118,7 +117,13 @@ mod tests {
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
         let loc = locate(d.path(), &c.id).unwrap();
-        assert_eq!(loc, CardLocation::InList { board_id: b.id, list_id: l.id });
+        assert_eq!(
+            loc,
+            CardLocation::InList {
+                board_id: b.id,
+                list_id: l.id
+            }
+        );
     }
 
     #[test]
@@ -139,12 +144,21 @@ mod tests {
         let c = create_card(d.path(), &l1.id, "C").unwrap();
 
         // Poison: tell index the card lives at a non-existent location.
-        record(&c.id, CardLocation::InList {
-            board_id: b.id.clone(),
-            list_id: l2.id.clone(),
-        });
+        record(
+            &c.id,
+            CardLocation::InList {
+                board_id: b.id.clone(),
+                list_id: l2.id.clone(),
+            },
+        );
 
         let loc = locate(d.path(), &c.id).unwrap();
-        assert_eq!(loc, CardLocation::InList { board_id: b.id, list_id: l1.id });
+        assert_eq!(
+            loc,
+            CardLocation::InList {
+                board_id: b.id,
+                list_id: l1.id
+            }
+        );
     }
 }

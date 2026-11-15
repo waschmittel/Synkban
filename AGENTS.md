@@ -22,7 +22,7 @@ cd electron && pnpm install && pnpm start   # desktop dev (needs the release bin
 ```
 
 After any change:
-1. **Backend:** `cd backend && cargo build` — zero warnings. `cargo test` (PDF goldens: `UPDATE_GOLDEN=1 cargo test --lib pdf` after an *intended* layout change, review the diff).
+1. **Backend:** `cd backend && cargo fmt && cargo clippy --all-targets -- -D warnings && cargo build` — fmt-clean, zero clippy/compiler warnings (CI `ci.yml` enforces fmt + clippy). `cargo test` (PDF goldens: `UPDATE_GOLDEN=1 cargo test --lib pdf` after an *intended* layout change, review the diff).
 2. **Frontend:** `cd frontend && npx tsc --noEmit && npx vitest run && npx vite build`.
 3. **E2E:** `cd frontend && pnpm run test:e2e` (boots `backend/target/release/synkban` on :8091 with temp dirs; needs `pnpm exec playwright install chromium` once). Conventions and caveats: ADR-0018.
 4. **Smoke:** start the server; `curl localhost:8080/api/boards` returns `[]` on a fresh data dir.
@@ -137,7 +137,8 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204
 
 ## Adding things
 
-- **Backend endpoint:** types in `models.rs` → store function (re-export in `store/mod.rs`) → handler in `handlers/*.rs` → route in `main.rs` → `cargo build` (zero warnings) → integration test.
+- **Rust toolchain:** `rust-toolchain.toml` (repo root) pins the version plus `rustfmt`/`clippy`/`rust-analyzer`; rustup installs it on first use. Bump it together with the Dockerfile `rust:` tag. Run `cargo fmt` after editing `.rs` files; fix clippy findings rather than `#[allow]` (only with a reason).
+- **Backend endpoint:** types in `models.rs` → store function (re-export in `store/mod.rs`) → handler in `handlers/*.rs` → route in `main.rs` → `cargo fmt`/`clippy`/`build` (zero warnings) → integration test.
 - **Frontend page:** component in `pages/`, route in `index.tsx`, `api.ts`/`types.ts` as needed.
 - **Frontend component:** `components/`, styles in `app.css`, import in parent.
 - **Data model change:** `models.rs` → `types.ts` → store read/write → `api.ts`; document breaking changes; consider PDF/diff/filter (ADR-0012, 0005).

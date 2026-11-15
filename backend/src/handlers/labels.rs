@@ -14,7 +14,12 @@ pub async fn create_label(
     let label = store::audit_op(
         &data_dir,
         |dd| store::create_label(dd, &board_id, &body.name),
-        |l| format!("CREATE label \"{}\" (id: {}, color: {}) in board {}", l.name, l.id, l.color, board_id),
+        |l| {
+            format!(
+                "CREATE label \"{}\" (id: {}, color: {}) in board {}",
+                l.name, l.id, l.color, board_id
+            )
+        },
     )?;
     Ok(HttpResponse::Created().json(label))
 }

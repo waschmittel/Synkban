@@ -17,7 +17,10 @@ fn settings_response(data_dir: &std::path::Path, cfg: &config::Config) -> Settin
             .unwrap_or(false)
     });
     SettingsResponse {
-        startup_view: cfg.startup_view.clone().unwrap_or_else(|| "overview".into()),
+        startup_view: cfg
+            .startup_view
+            .clone()
+            .unwrap_or_else(|| "overview".into()),
         theme: cfg.theme.clone().unwrap_or_else(|| "system".into()),
         last_board_id,
         data_dir: data_dir.display().to_string(),
