@@ -88,28 +88,29 @@ export default function Card(props: Props) {
 
     if (e.shiftKey) {
       // Move card
-      if (key === "ArrowDown") {
+      if (key === "ArrowDown" || key === "ArrowUp") {
         e.preventDefault();
-        let next = el.nextElementSibling as HTMLElement | null;
-        while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
-        if (!next) return;
-        let afterNext = next.nextElementSibling as HTMLElement | null;
-        while (afterNext && !afterNext.classList.contains("card")) afterNext = afterNext.nextElementSibling as HTMLElement | null;
-        const nextPos = parseFloat(next.dataset.cardPosition || "0");
-        const afterNextPos = afterNext ? parseFloat(afterNext.dataset.cardPosition || "0") : undefined;
-        props.onMove(props.card.id, props.card.list_id, withinListMoveDown(nextPos, afterNextPos));
-        return;
-      }
-      if (key === "ArrowUp") {
-        e.preventDefault();
-        let prev = el.previousElementSibling as HTMLElement | null;
-        while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
-        if (!prev) return;
-        let beforePrev = prev.previousElementSibling as HTMLElement | null;
-        while (beforePrev && !beforePrev.classList.contains("card")) beforePrev = beforePrev.previousElementSibling as HTMLElement | null;
-        const prevPos = parseFloat(prev.dataset.cardPosition || "0");
-        const beforePrevPos = beforePrev ? parseFloat(beforePrev.dataset.cardPosition || "0") : undefined;
-        props.onMove(props.card.id, props.card.list_id, withinListMoveUp(prevPos, beforePrevPos));
+        const cards = Array.from(
+          currentList?.querySelectorAll<HTMLElement>(".card") ?? [],
+        );
+        const idx = cards.indexOf(el);
+        if (idx < 0 || cards.length < 2) return;
+        const pos = (c: HTMLElement | undefined) =>
+          c ? parseFloat(c.dataset.cardPosition || "0") : undefined;
+        let newPos: number;
+        if (key === "ArrowDown") {
+          // Wraps: from the bottom, to the top of the list.
+          newPos =
+            idx === cards.length - 1
+              ? moveToTop(pos(cards[0])!)
+              : withinListMoveDown(pos(cards[idx + 1])!, pos(cards[idx + 2]));
+        } else {
+          newPos =
+            idx === 0
+              ? moveToBottom(pos(cards[cards.length - 1])!)
+              : withinListMoveUp(pos(cards[idx - 1])!, pos(cards[idx - 2]));
+        }
+        props.onMove(props.card.id, props.card.list_id, newPos);
         return;
       }
       if (key === "ArrowRight" || key === "ArrowLeft") {
@@ -150,18 +151,15 @@ export default function Card(props: Props) {
       e.stopPropagation();
       const cards = currentList?.querySelectorAll<HTMLElement>(".card");
       cards?.[cards.length - 1]?.focus();
-    } else if (key === "ArrowDown") {
+    } else if (key === "ArrowDown" || key === "ArrowUp") {
       e.preventDefault();
       e.stopPropagation();
-      let next = el.nextElementSibling as HTMLElement | null;
-      while (next && !next.classList.contains("card")) next = next.nextElementSibling as HTMLElement | null;
-      next?.focus();
-    } else if (key === "ArrowUp") {
-      e.preventDefault();
-      e.stopPropagation();
-      let prev = el.previousElementSibling as HTMLElement | null;
-      while (prev && !prev.classList.contains("card")) prev = prev.previousElementSibling as HTMLElement | null;
-      prev?.focus();
+      // Wraps around the list's cards.
+      const cards = Array.from(currentList?.querySelectorAll<HTMLElement>(".card") ?? []);
+      const idx = cards.indexOf(el);
+      if (idx < 0) return;
+      const step = key === "ArrowDown" ? 1 : -1;
+      cards[(idx + step + cards.length) % cards.length].focus();
     } else if (key === "ArrowRight" || key === "ArrowLeft") {
       e.preventDefault();
       // stopPropagation: prevent doc-level navigateArrow from running after

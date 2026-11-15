@@ -10,6 +10,8 @@ interface Props {
   onToggleLabel: (labelId: string) => void;
   onClear: () => void;
   onClose: () => void;
+  /// False when re-mounted by view restoration (ADR-0021): keep focus where it is.
+  autofocus?: boolean;
 }
 
 /// Text + label-chip filter. Autofocuses the input on mount. Escape clears
@@ -21,7 +23,9 @@ export default function FilterBar(props: Props) {
     <div class="filter-bar">
       <div class="filter-input-wrapper">
         <input
-          ref={(el) => requestAnimationFrame(() => el.focus())}
+          ref={(el) => {
+            if (props.autofocus !== false) requestAnimationFrame(() => el.focus());
+          }}
           class="filter-text-input"
           type="text"
           placeholder="Filter cards..."

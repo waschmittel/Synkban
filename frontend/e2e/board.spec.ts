@@ -985,3 +985,267 @@ test("many labels: assigned first, capped with +N more, order frozen while inter
   await expect(toggles.nth(0)).toHaveAttribute("aria-pressed", "true");
   await expect(toggles).toHaveCount(12);
 });
+
+test("switching boards remembers active card and scroll positions", async ({ page, request }) => {
+  const mk = async (title: string, lists: number, cards: number) => {
+    const board = await (await request.post("/api/boards", { data: { title } })).json();
+    for (let l = 0; l < lists; l++) {
+      const list = await (
+        await request.post(`/api/boards/${board.id}/lists`, { data: { title: `L${l}` } })
+      ).json();
+      for (let c = 0; c < cards; c++)
+        await request.post(`/api/lists/${list.id}/cards`, { data: { title: `L${l} card ${c}` } });
+    }
+    return board;
+  };
+  const a = await mk("View A", 8, 30);
+  const b = await mk("View B", 1, 2);
+
+  await page.setViewportSize({ width: 800, height: 600 });
+  await page.goto(`/board/${a.id}`);
+  const firstList = page.locator(".list").first();
+  const cards = firstList.locator(".cards-container");
+  await expect(firstList.locator(".card")).toHaveCount(30);
+
+  const container = page.locator(".lists-container");
+  await page.locator(".card", { hasText: /^L0 card 12$/ }).focus();
+  // Scroll after focusing: focus() scrolls its card into view.
+  await container.evaluate((el) => (el.scrollLeft = 300));
+  await cards.evaluate((el) => (el.scrollTop = 200));
+
+  await page.locator(`.board-dock-dot[data-board-id="${b.id}"]`).click();
+  await expect(page.locator(".list")).toHaveCount(1);
+  await expect(page.locator(".card")).toHaveCount(2);
+
+  await page.locator(`.board-dock-dot[data-board-id="${a.id}"]`).click();
+  await expect(page.locator(".list")).toHaveCount(8);
+  await expect(page.locator(".card", { hasText: /^L0 card 12$/ })).toBeFocused();
+  await expect.poll(() => container.evaluate((el) => el.scrollLeft)).toBe(300);
+  await expect
+    .poll(() => page.locator(".list").first().locator(".cards-container").evaluate((el) => el.scrollTop))
+    .toBe(200);
+
+  // Boards stay independent: B never had a focused card.
+  await page.locator(`.board-dock-dot[data-board-id="${b.id}"]`).click();
+  await expect(page.locator(".list")).toHaveCount(1);
+  await expect(page.locator(".card:focus")).toHaveCount(0);
+});
+
+test("switching boards remembers each board's filter and drops deleted labels", async ({
+  page,
+  request,
+}) => {
+  const mk = async (title: string) => {
+    const board = await (await request.post("/api/boards", { data: { title } })).json();
+    const list = await (
+      await request.post(`/api/boards/${board.id}/lists`, { data: { title: "L" } })
+    ).json();
+    for (const t of ["milk", "bread"])
+      await request.post(`/api/lists/${list.id}/cards`, { data: { title: t } });
+    return board;
+  };
+  const a = await mk("Filter A");
+  const b = await mk("Filter B");
+  const dot = (id: string) => page.locator(`.board-dock-dot[data-board-id="${id}"]`);
+
+  await page.goto(`/board/${a.id}`);
+  await page.locator(".board-filter-btn").click();
+  await page.locator(".filter-text-input").fill("milk");
+  await expect(page.locator(".card")).toHaveCount(1);
+
+  // Unvisited board starts unfiltered (the filter must not leak across boards).
+  await dot(b.id).click();
+  await expect(page.locator(".card", { hasText: "bread" })).toBeVisible();
+  await expect(page.locator(".filter-bar")).toHaveCount(0);
+
+  // Back: filter bar open, text kept, list filtered, focus not stolen by the bar.
+  await dot(a.id).click();
+  await expect(page.locator(".filter-text-input")).toHaveValue("milk");
+  await expect(page.locator(".card")).toHaveCount(1);
+  await expect(page.locator(".filter-text-input")).not.toBeFocused();
+
+  // Closed-but-active filter stays active (bar closed) on return.
+  await page.locator(".board-filter-btn").click();
+  await expect(page.locator(".filter-bar")).toHaveCount(0);
+  await dot(b.id).click();
+  await expect(page.locator(".card")).toHaveCount(2);
+  await dot(a.id).click();
+  await expect(page.locator(".card")).toHaveCount(1);
+  await expect(page.locator(".filter-bar")).toHaveCount(0);
+});
+
+test("remembered label filter ignores labels deleted meanwhile", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Lbl A" } })).json();
+  const other = await (await request.post("/api/boards", { data: { title: "Lbl B" } })).json();
+  const label = await (
+    await request.post(`/api/boards/${board.id}/labels`, { data: { name: "Urgent" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "L" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "one" } });
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "two" } });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".board-filter-btn").click();
+  await page.locator(".filter-bar").getByText("Urgent").click();
+  await expect(page.locator(".card")).toHaveCount(0);
+
+  await page.locator(`.board-dock-dot[data-board-id="${other.id}"]`).click();
+  await expect(page.locator(".filter-bar")).toHaveCount(0);
+  await request.delete(`/api/labels/${label.id}`);
+
+  await page.locator(`.board-dock-dot[data-board-id="${board.id}"]`).click();
+  // Deleted label is dropped: nothing filters, nothing hides.
+  await expect(page.locator(".card")).toHaveCount(2);
+});
+
+test("narrow screen: switching boards remembers snapped list, card and list scroll", async ({
+  page,
+  request,
+}) => {
+  const mk = async (title: string, lists: number) => {
+    const board = await (await request.post("/api/boards", { data: { title } })).json();
+    for (let l = 0; l < lists; l++) {
+      const list = await (
+        await request.post(`/api/boards/${board.id}/lists`, { data: { title: `N${l}` } })
+      ).json();
+      for (let c = 0; c < 25; c++)
+        await request.post(`/api/lists/${list.id}/cards`, { data: { title: `N${l} card ${c}` } });
+    }
+    return board;
+  };
+  const a = await mk("Narrow A", 4);
+  const b = await mk("Narrow B", 2);
+  await page.setViewportSize({ width: 375, height: 667 });
+  const dot = (id: string) => page.locator(`.board-dock-dot[data-board-id="${id}"]`);
+
+  await page.goto(`/board/${a.id}`);
+  await expect(page.locator(".list")).toHaveCount(4);
+  const container = page.locator(".lists-container");
+  const card = page.locator(".card", { hasText: /^N2 card 5$/ });
+  await card.focus(); // snaps to the third list
+  await expect.poll(() => container.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  const x = await container.evaluate((el) => el.scrollLeft);
+  const cards = page.locator(".list").nth(2).locator(".cards-container");
+  await cards.evaluate((el) => (el.scrollTop = 150));
+  await page.keyboard.press("Escape");
+  await card.focus();
+
+  await dot(b.id).click();
+  await expect(page.locator(".list")).toHaveCount(2);
+  await expect.poll(() => container.evaluate((el) => el.scrollLeft)).toBe(0);
+
+  await dot(a.id).click();
+  await expect(page.locator(".list")).toHaveCount(4);
+  await expect(card).toBeFocused();
+  await expect.poll(() => container.evaluate((el) => el.scrollLeft)).toBe(x);
+  await expect
+    .poll(() => page.locator(".list").nth(2).locator(".cards-container").evaluate((el) => el.scrollTop))
+    .toBe(150);
+});
+
+test("board view survives a page reload (sessionStorage)", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Reload" } })).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "L" } })
+  ).json();
+  for (let c = 0; c < 30; c++)
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: `r${c}` } });
+  await page.setViewportSize({ width: 800, height: 500 });
+
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".card", { hasText: /^r7$/ }).focus();
+  await page.locator(".cards-container").evaluate((el) => (el.scrollTop = 120));
+  await page.locator(".board-filter-btn").click();
+  await page.locator(".filter-text-input").fill("r");
+
+  await page.reload();
+  await expect(page.locator(".filter-text-input")).toHaveValue("r");
+  await expect(page.locator(".card", { hasText: /^r7$/ })).toBeFocused();
+  await expect
+    .poll(() => page.locator(".cards-container").evaluate((el) => el.scrollTop))
+    .toBe(120);
+
+  // A fresh tab (new sessionStorage) starts clean.
+  const tab = await page.context().newPage();
+  await tab.goto(`/board/${board.id}`);
+  await expect(tab.locator(".card").first()).toBeVisible();
+  await expect(tab.locator(".filter-bar")).toHaveCount(0);
+});
+
+test("closing the card dialog keeps every list's scroll position", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Close" } })).json();
+  for (const t of ["A", "B"]) {
+    const list = await (
+      await request.post(`/api/boards/${board.id}/lists`, { data: { title: t } })
+    ).json();
+    for (let c = 0; c < 30; c++)
+      await request.post(`/api/lists/${list.id}/cards`, { data: { title: `${t}${c}` } });
+  }
+  await page.setViewportSize({ width: 900, height: 500 });
+  await page.goto(`/board/${board.id}`);
+  const scroller = (n: number) => page.locator(".list").nth(n).locator(".cards-container");
+  await expect(page.locator(".card")).toHaveCount(60);
+
+  await scroller(1).evaluate((el) => (el.scrollTop = 250));
+  await scroller(0).evaluate((el) => (el.scrollTop = 120));
+  await page.locator(".card", { hasText: /^A3$/ }).click({ force: true });
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+
+  await expect.poll(() => scroller(1).evaluate((el) => el.scrollTop)).toBe(250);
+  await expect.poll(() => scroller(0).evaluate((el) => el.scrollTop)).toBe(120);
+});
+
+test("Arrow Up/Down wrap between cards; Shift+Arrow wraps when moving a card", async ({
+  page,
+  request,
+}) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Wrap" } })).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "L" } })
+  ).json();
+  const solo = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Solo" } })
+  ).json();
+  for (const t of ["one", "two", "three"])
+    await request.post(`/api/lists/${list.id}/cards`, { data: { title: t } });
+  await request.post(`/api/lists/${solo.id}/cards`, { data: { title: "only" } });
+
+  await page.goto(`/board/${board.id}`);
+  const order = () => page.locator(".list").first().locator(".card").allInnerTexts();
+  const card = (t: string) => page.locator(".card", { hasText: new RegExp(`^${t}$`) });
+
+  // Focus moves: bottom → top, top → bottom.
+  await card("three").focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(card("one")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(card("three")).toBeFocused();
+
+  // Move: bottom card down → top; then back up from the top → bottom.
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect.poll(order).toEqual(["three", "one", "two"]);
+  await expect(card("three")).toBeFocused();
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect.poll(order).toEqual(["one", "two", "three"]);
+  await expect(card("three")).toBeFocused();
+
+  // Plain (non-wrapping) steps still work, and the order persists.
+  await card("one").focus();
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect.poll(order).toEqual(["two", "three", "one"]);
+  await page.reload();
+  await expect.poll(order).toEqual(["two", "three", "one"]);
+
+  // A lone card has nowhere to wrap to.
+  const only = card("only");
+  await only.focus();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(only).toBeFocused();
+  await expect(page.locator(".list").nth(1).locator(".card")).toHaveCount(1);
+});

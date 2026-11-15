@@ -51,7 +51,7 @@ After any change:
 
 - **SolidJS, not React**: `createSignal`/`createResource`/`Show`/`For`; never `useState`/`useEffect`; don't destructure props; `createMemo` for derived values. Router `@solidjs/router` (`index.tsx`, `pages/`).
 - `api.ts` is the only backend access; `types.ts` mirrors `models.rs` (keep in sync). All styles in `styles/app.css` (no modules/Tailwind/CSS-in-JS).
-- `pages/` `Home`, `Board` (coordinator); `components/` leaf and section components (cards, lists, CardDetail sections, dialogs, drawers); shared utilities at `src/` root, notably `platform.ts`, `shortcutRouter.ts`, `boardInput.ts` (`isInInput`), `focusTrap.ts`/`dialogKeys.ts`/`overlayLayers.ts` (ADR-0009), `focusRestoration.ts`/`changePoller.ts` (ADR-0010), `positions.ts`, `touchDrag.ts` (ADR-0011), `settings.ts`/`theme.ts` (ADR-0002/0013), `diff.ts` (ADR-0005), and the editor modules `schema.ts`, `proseEditor.ts`, `links.ts`, `autolink.ts`, `editorMenu.ts`, `tables.ts`, `tableIcons.ts` (ADR-0015–0017).
+- `pages/` `Home`, `Board` (coordinator); `components/` leaf and section components (cards, lists, CardDetail sections, dialogs, drawers); shared utilities at `src/` root, notably `platform.ts`, `shortcutRouter.ts`, `boardInput.ts` (`isInInput`), `focusTrap.ts`/`dialogKeys.ts`/`overlayLayers.ts` (ADR-0009), `focusRestoration.ts`/`changePoller.ts` (ADR-0010), `boardView.ts` (ADR-0021), `positions.ts`, `touchDrag.ts` (ADR-0011), `settings.ts`/`theme.ts` (ADR-0002/0013), `diff.ts` (ADR-0005), and the editor modules `schema.ts`, `proseEditor.ts`, `links.ts`, `autolink.ts`, `editorMenu.ts`, `tables.ts`, `tableIcons.ts` (ADR-0015–0017).
 - Contexts: `LabelDrawerContext` (`useLabelDrawer`), `BoardHeaderContext` (`useBoardHeader`), wrapped in `App.tsx`.
 - Inputs auto-focus with `ref={(el) => requestAnimationFrame(() => el.focus())}`, not `autofocus`. Focus styles use `:focus`, not `:focus-visible` (Safari/WebView).
 - Card/label titles support `**bold**`/`*italic*` via `renderTitle()` (`innerHTML`; stored as markdown) and `handleMarkdownShortcut` on plain inputs.
@@ -81,6 +81,7 @@ After any change:
 | 0018 | Testing conventions |
 | 0019 | Window geometry restore |
 | 0020 | Inline image attachments in the description |
+| 0021 | Board view (active card, scroll) remembered per session |
 
 ## Data model (summary)
 

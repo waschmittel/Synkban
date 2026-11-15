@@ -97,14 +97,14 @@ export default function ShortcutHelp(props: Props) {
             <Row keys={["Esc"]} desc="Close form / archive" />
           </Section>
           <Section title="Navigation">
-            <Row keys={["↑", "↓"]} desc="Move between cards" />
+            <Row keys={["↑", "↓"]} desc="Move between cards (wraps)" />
             <Row keys={["←", "→"]} desc="Jump to adjacent list" />
             <Row keys={["Home"]} alt={["PgUp"]} desc="Focus first card in list" />
             <Row keys={["End"]} alt={["PgDn"]} desc="Focus last card in list" />
           </Section>
           <Section title="Move Card">
-            <Row keys={["Shift", "↑"]} desc="Move card up" />
-            <Row keys={["Shift", "↓"]} desc="Move card down" />
+            <Row keys={["Shift", "↑"]} desc="Move card up (wraps to bottom)" />
+            <Row keys={["Shift", "↓"]} desc="Move card down (wraps to top)" />
             <Row keys={["Shift", "←"]} desc="Move card to prev list" />
             <Row keys={["Shift", "→"]} desc="Move card to next list" />
             <Row keys={["Shift", "Home"]} alt={["PgUp"]} desc="Move card to top of list" />

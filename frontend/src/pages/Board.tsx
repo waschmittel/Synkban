@@ -2,6 +2,7 @@ import {
   createResource,
   createSignal,
   createEffect,
+  batch,
   For,
   Show,
   onMount,
@@ -28,6 +29,14 @@ import { cardMatchesFilter as filterCard } from "../filter";
 import { isTypingIn, isInUiOverlay } from "../boardInput";
 import { recordLastBoard } from "../settings";
 import { createFocusRestoration } from "../focusRestoration";
+import {
+  trackBoardView,
+  restoreBoardView,
+  restoreBoardScroll,
+  recordBoardFilter,
+  rememberedFilter,
+  forgetBoardViews,
+} from "../boardView";
 import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 import { tip } from "../platform";
@@ -90,6 +99,47 @@ export default function BoardPage() {
     if (b) header.setTitle(b.title);
   });
 
+  // Remember each board's active card and scroll offsets while switching
+  // boards (ADR-0021). `shownId` is the board whose DOM is rendered: the
+  // resource keeps the old board on screen until the new one has loaded.
+  let pageEl!: HTMLDivElement;
+  const shownId = () => (board.error ? undefined : board()?.id);
+  // `restoredFor` is the board the view signals (filter) currently belong to.
+  let restoredFor: string | undefined;
+  let restoring = false;
+  createEffect(() => {
+    const id = shownId();
+    if (!id || id !== params.id) return;
+    if (id === restoredFor) {
+      // Refetch (card dialog closed, poll): new list nodes start scrolled to top.
+      restoreBoardScroll(pageEl, id);
+      return;
+    }
+    restoredFor = id;
+    const b = board();
+    const f = rememberedFilter(id, b?.labels.map((l) => l.id) ?? []);
+    restoring = true;
+    batch(() => {
+      setShowFilterBar(f?.open ?? false);
+      setFilterText(f?.text ?? "");
+      setFilterLabelIds(f?.labelIds ?? []);
+    });
+    // After the filtered lists have rendered, so offsets aren't clamped.
+    queueMicrotask(() => {
+      restoring = false;
+      if (shownId() === id && params.id === id) restoreBoardView(pageEl, id);
+    });
+  });
+  createEffect(() => {
+    const f = { open: showFilterBar(), text: filterText(), labelIds: filterLabelIds() };
+    if (restoredFor) recordBoardFilter(restoredFor, f);
+  });
+  // Forget views of boards that are gone.
+  createEffect(() => {
+    const list = allBoards();
+    if (list) forgetBoardViews(list.map((b) => b.id));
+  });
+
   // The dock scrolls once there are more boards than fit the window, so the
   // dot for the board you're actually on has to be brought back into it.
   createEffect(() => {
@@ -109,6 +159,7 @@ export default function BoardPage() {
   });
 
   onMount(() => {
+    const stopTracking = trackBoardView(pageEl, shownId);
     header.setIsOnBoard(true);
     refreshWarnings();
 
@@ -301,6 +352,7 @@ export default function BoardPage() {
       header.setRenaming(false);
       drawer.close();
       stopPoller();
+      stopTracking();
       dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
       document.removeEventListener("commit-board-rename", handleCommitRename as EventListener);
@@ -606,6 +658,7 @@ export default function BoardPage() {
 
   return (
     <div
+      ref={pageEl}
       class="board-page"
       tabindex="-1"
       onClick={(e) => {
@@ -676,6 +729,7 @@ export default function BoardPage() {
                 onToggleLabel={toggleFilterLabel}
                 onClear={clearFilters}
                 onClose={() => setShowFilterBar(false)}
+                autofocus={!restoring}
               />
             </Show>
             <div
