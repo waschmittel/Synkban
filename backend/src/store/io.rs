@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 
 use crate::errors::AppError;
 use crate::store::paths::boards_dir;
@@ -90,12 +91,28 @@ pub(crate) fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T
         .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))
 }
 
+/// Writes via a temp file and rename: readers and concurrent writers never
+/// see a torn file (two interleaved `fs::write`s left trailing garbage).
 pub(crate) fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), AppError> {
     let data = serde_json::to_string_pretty(value)
         .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
     track("wrote", path);
-    fs::write(path, data)?;
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let tmp = path.with_file_name(format!(".{name}.{}.tmp", uuid::Uuid::new_v4()));
+    fs::write(&tmp, data)?;
+    fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })?;
     Ok(())
+}
+
+static CARD_WRITES: Mutex<()> = Mutex::new(());
+
+/// Serialises read-modify-write of cards (updates, attachment changes with
+/// their history entry): parallel uploads to one card must not drop each
+/// other's changes.
+pub(crate) fn card_write_lock() -> MutexGuard<'static, ()> {
+    CARD_WRITES.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 pub(crate) fn now_timestamp() -> String {

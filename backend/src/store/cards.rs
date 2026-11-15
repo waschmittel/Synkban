@@ -298,6 +298,7 @@ fn max_position(data_dir: &Path, board_id: &str, list_id: &str) -> Result<f64, A
 }
 
 pub fn update_card(data_dir: &Path, card_id: &str, patch: CardPatch) -> Result<Card, AppError> {
+    let _lock = crate::store::io::card_write_lock();
     let mut card = update_card_with_history(data_dir, card_id, patch)?;
     // History is served by `get_card_history`, not inlined in card responses.
     card.history = Vec::new();

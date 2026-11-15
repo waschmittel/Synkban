@@ -18,7 +18,9 @@ use std::path::{Path, PathBuf};
 use crate::errors::AppError;
 use crate::models::Attachment;
 use crate::store::card_index::find_board_and_list;
-use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, write_json};
+use crate::store::io::{
+    card_write_lock, now_timestamp, read_json, remove_dir_if_empty, track, write_json,
+};
 use crate::store::paths::*;
 
 fn sidecar_path(data_dir: &Path, board_id: &str, card_id: &str, att_id: &str) -> PathBuf {
@@ -78,6 +80,7 @@ pub fn create_attachment(
     content_type: &str,
     data: &[u8],
 ) -> Result<Attachment, AppError> {
+    let _lock = card_write_lock();
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let before = crate::store::cards::content_snapshot(data_dir, card_id)?;
     let att_id = uuid::Uuid::new_v4().to_string();
@@ -133,6 +136,7 @@ pub fn get_attachment_data(
 }
 
 pub fn delete_attachment(data_dir: &Path, card_id: &str, att_id: &str) -> Result<(), AppError> {
+    let _lock = card_write_lock();
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
     let sidecar = att_dir.join(format!("{att_id}.json"));
@@ -226,6 +230,45 @@ mod tests {
         let card: Card =
             read_json(&cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id))).unwrap();
         assert!(card.attachments.is_empty());
+    }
+
+    /// Regression: concurrent uploads rewrote the card file at once and left
+    /// it unparseable ("trailing characters"), failing every later request.
+    #[test]
+    fn parallel_uploads_keep_the_card_valid_and_every_history_entry() {
+        let d = tmp();
+        let b = create_board(d.path(), "B").unwrap();
+        let l = create_list(d.path(), &b.id, "L").unwrap();
+        let c = create_card(d.path(), &l.id, "C").unwrap();
+        let path = cards_dir(d.path(), &b.id, &l.id).join(format!("{}.json", c.id));
+        let history = || read_json::<Card>(&path).unwrap().history.len();
+        let ids: Vec<String> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..8)
+                .map(|i| {
+                    let (dir, card) = (d.path(), &c.id);
+                    s.spawn(move || {
+                        create_attachment(dir, card, &format!("f{i}.txt"), "text/plain", b"x")
+                            .unwrap()
+                            .id
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        assert_eq!(load_attachments(d.path(), &b.id, &c.id).len(), 8);
+        // The original version, then one per upload.
+        assert_eq!(history(), 1 + 8);
+        // No temp files left behind.
+        let dir = cards_dir(d.path(), &b.id, &l.id);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        std::thread::scope(|s| {
+            for id in &ids {
+                let (dir, card) = (d.path(), &c.id);
+                s.spawn(move || delete_attachment(dir, card, id).unwrap());
+            }
+        });
+        assert!(load_attachments(d.path(), &b.id, &c.id).is_empty());
+        assert_eq!(history(), 1 + 16);
     }
 
     #[test]
