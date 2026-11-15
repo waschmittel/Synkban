@@ -78,6 +78,7 @@ After any change:
 | 0016 | Editor menu & text styles |
 | 0017 | Editor tables |
 | 0018 | Testing conventions |
+| 0019 | Window geometry restore |
 
 ## Data model (summary)
 

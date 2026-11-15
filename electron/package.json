@@ -9,6 +9,7 @@
   "desktopName": "synkban.desktop",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
     "dist": "electron-builder"
   },
   "devDependencies": {

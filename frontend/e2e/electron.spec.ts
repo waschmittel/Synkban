@@ -153,6 +153,38 @@ test.describe("electron desktop shell", () => {
     // …and no child BrowserWindow was spawned (handler returned deny).
     expect(app.windows().length).toBe(windowsBefore);
   });
+
+  test("window size and position are restored on relaunch", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "synkban-electron-e2e-"));
+    const launch = () =>
+      electron.launch({
+        executablePath: exe!,
+        args: [join(__dirname, "..", "..", "electron", "main.js"), `--user-data-dir=${userDataDir}`],
+        env: {
+          ...process.env,
+          DATA_DIR: mkdtempSync(join(tmpdir(), "synkban-electron-e2e-data-")),
+          SYNKBAN_CONFIG_DIR: mkdtempSync(join(tmpdir(), "synkban-electron-e2e-config-")),
+        },
+      });
+    const bounds = () =>
+      app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getNormalBounds());
+
+    app = await launch();
+    await app.firstWindow();
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setBounds({ x: 60, y: 70, width: 900, height: 650 }),
+    );
+    const before = await bounds();
+    await app.close();
+
+    app = await launch();
+    await app.firstWindow();
+    const after = await bounds();
+    expect(after.width).toBe(before.width);
+    expect(after.height).toBe(before.height);
+    expect(after.x).toBe(before.x);
+    expect(after.y).toBe(before.y);
+  });
 });
 
 // The Linux menu/taskbar icon is looked up by name in the hicolor theme, whose

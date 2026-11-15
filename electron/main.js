@@ -1,7 +1,8 @@
-const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, dialog, ipcMain, screen } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
+const windowState = require('./window-state');
 
 let mainWindow = null;
 let backendProcess = null;
@@ -110,9 +111,16 @@ async function createWindow() {
   const port = await startBackend(token);
 
   const isMac = process.platform === 'darwin';
+  const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+  const saved = windowState.load(stateFile);
+  const bounds = windowState.fitToDisplays(
+    saved ?? windowState.DEFAULT,
+    screen.getAllDisplays().map((d) => d.workArea),
+  );
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    ...bounds,
+    minWidth: windowState.MIN.width,
+    minHeight: windowState.MIN.height,
     title: 'Synkban',
     // Seamless titlebar: the window is frameless and the app's own .app-header
     // extends to the top edge, with the OS window controls drawn over it
@@ -137,6 +145,10 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+
+  if (saved?.maximized) mainWindow.maximize();
+  if (saved?.fullScreen) mainWindow.setFullScreen(true);
+  windowState.track(mainWindow, stateFile);
 
   const appOrigin = `http://127.0.0.1:${port}`;
 
