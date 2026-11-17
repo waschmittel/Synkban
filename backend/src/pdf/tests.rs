@@ -1835,6 +1835,72 @@ fn inline_image_reference_prints_its_file_name() {
     assert_in_bounds(&layout_card(&e).unwrap(), true);
 }
 
+#[test]
+fn inline_shown_images_are_omitted_from_the_attachment_list() {
+    let mut e = with_thumbs(
+        vec![
+            json!({"type": "paragraph", "content": [img_node("shown.png", "shown.png")]}),
+            json!({"type": "paragraph", "content": [img_node("bad.png", "bad.png")]}),
+            json!({"type": "table", "content": [{"type": "table_row", "content": [
+                {"type": "table_cell", "attrs": {"align": null}, "content": [
+                    {"type": "paragraph", "content": [img_node("in_table.png", "in_table.png")]}
+                ]}
+            ]}]}),
+        ],
+        &[
+            ("shown.png", jpeg(120, 80)),
+            ("extra.png", jpeg(90, 60)),
+            ("in_table.png", jpeg(70, 50)),
+            ("bad.png", b"not a jpeg".to_vec()),
+        ],
+    );
+    e.attachments.push((attachment("notes.txt", 42), None));
+
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+
+    let text = pdf_text(&pdf);
+    assert!(text.contains("Attachments (4)"), "got:\n{text}");
+    assert!(
+        !text.contains("shown.png"),
+        "shown.png should be omitted:\n{text}"
+    );
+    for expected in ["extra.png", "in_table.png", "bad.png", "notes.txt"] {
+        assert!(text.contains(expected), "missing {expected}:\n{text}");
+    }
+    let image_ops = l
+        .pages
+        .iter()
+        .flatten()
+        .filter(|op| matches!(op, Op::Image { .. }))
+        .count();
+    assert_eq!(image_ops, 3, "1 inline + 2 unshown attachment thumbnails");
+}
+
+#[test]
+fn attachments_section_is_omitted_when_every_attachment_is_shown_inline() {
+    let e = with_thumbs(
+        vec![json!({"type": "paragraph", "content": [
+            img_node("a.png", "a.png"),
+            img_node("b.png", "b.png"),
+        ]})],
+        &[("a.png", jpeg(80, 60)), ("b.png", jpeg(60, 80))],
+    );
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    let text = pdf_text(&pdf);
+    assert!(!text.contains("Attachments"), "unexpected section:\n{text}");
+    let image_ops = l
+        .pages
+        .iter()
+        .flatten()
+        .filter(|op| matches!(op, Op::Image { .. }))
+        .count();
+    assert_eq!(image_ops, 2);
+}
+
 // ── page-break rules (as in the terminal app's export) ───────────────────
 
 /// `n` one-line paragraphs, to push what follows to every possible page offset.

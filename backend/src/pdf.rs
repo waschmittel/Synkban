@@ -1640,7 +1640,13 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
     }
 
     // Attachments: header and file list stay together; images follow.
-    if !export.attachments.is_empty() {
+    // Images already shown inline in the description aren't repeated here.
+    let attachments: Vec<_> = export
+        .attachments
+        .iter()
+        .filter(|(att, _)| !l.thumb_idx.contains_key(&att.id))
+        .collect();
+    if !attachments.is_empty() {
         let (size, x, w) = (10.0, MARGIN + 20.0, CONTENT_W - 20.0);
         let attachment_spans = |att: &Attachment| {
             vec![
@@ -1654,18 +1660,14 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
                 },
             ]
         };
-        let list_h: f32 = export
-            .attachments
+        let list_h: f32 = attachments
             .iter()
             .map(|(att, _)| {
                 l.wrap(&attachment_spans(att), size, w, INK).len() as f32 * size * 1.4 + 2.0
             })
             .sum();
-        l.heading_rule(
-            &format!("Attachments ({})", export.attachments.len()),
-            list_h,
-        );
-        for (att, _) in &export.attachments {
+        l.heading_rule(&format!("Attachments ({})", attachments.len()), list_h);
+        for (att, _) in &attachments {
             l.marker = Some(("\u{2022}".to_string(), MARGIN + 2.0));
             l.flow(
                 &attachment_spans(att),
@@ -1679,7 +1681,7 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
             l.gap(2.0);
         }
         l.gap(6.0);
-        place_images(&mut l, &export.attachments);
+        place_images(&mut l, &attachments);
     }
 
     // Footer on every page.
@@ -1729,7 +1731,7 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
 }
 
 /// Image thumbnails, packed left to right and wrapped.
-fn place_images(l: &mut Layout, atts: &[(Attachment, Option<Vec<u8>>)]) {
+fn place_images(l: &mut Layout, atts: &[&(Attachment, Option<Vec<u8>>)]) {
     const MAX: f32 = 230.0;
     let (mut cx, mut row_h) = (0.0f32, 0.0f32);
     for (_, thumb) in atts {

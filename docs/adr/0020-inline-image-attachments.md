@@ -23,7 +23,7 @@ Every stored reference names an existing attachment of its card. Kept by:
 - **Attachment list:** shows "in description" for referenced attachments (live from the editor).
 - **Copy/paste across cards:** the editor's clipboard HTML tags references `<card>/<attachment>`. On paste (`pastedRefs.ts`) own attachments stay, other cards' attachments are copied (`POST /api/cards/:id/attachments/copy`) and the reference re-pointed, unknown ones are dropped. Only `img[data-att]` parses from HTML; foreign images are dropped.
 - **Diff/history:** `[image: name]` (`diff.ts`).
-- **PDF (`pdf.rs`):** the thumbnail is embedded at the reference's position: the paragraph is split, the picture gets its own line, natural size (1px = 1pt) scaled down so that it is neither wider than the available line (narrower inside lists/quotes) nor higher than half the text area of a page, never upscaled; moves to the next page when it doesn't fit. In **table cells**, for dangling references and non-decodable thumbnails the text `[image: name]` stands in. `description_text` ignores images.
+- **PDF (`pdf.rs`):** the original (or thumbnail) is embedded at the reference's position: the paragraph is split, the picture gets its own line, natural size (1px = 1pt) scaled down so that it is neither wider than the available line (narrower inside lists/quotes) nor higher than half the text area of a page, never upscaled; moves to the next page when it doesn't fit. Images shown inline in the description are omitted from the Attachments list (and its thumbnails). In **table cells**, for dangling references and non-decodable images the text `[image: name]` stands in (and unshown attachments stay in the Attachments list). `description_text` ignores images.
 
 ## Considered and rejected
 

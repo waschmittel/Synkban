@@ -201,7 +201,7 @@ fn corner_cases() -> Vec<(&'static str, CardExport)> {
                     json!({"type": "table", "content": [{"type": "table_row", "content": [
                         {"type": "table_cell", "attrs": {"align": null}, "content": [p(vec![text_node("in a cell "), img("small")])]}]}]}),
                 ],
-                &[wide_pic, tall_pic, ("small", 40, 20)],
+                &[wide_pic, tall_pic, ("small", 40, 20), ("unreferenced", 120, 80)],
             ),
         ),
         (
@@ -368,6 +368,19 @@ fn image_cases_have_the_expected_page_counts() {
     assert!(pages("13-inline-images-page-break") >= 2);
     assert!(pages("06-long-table-repeats-header") >= 3);
     assert_eq!(pages("01-empty-card"), 1);
+}
+
+#[test]
+fn inline_images_example_keeps_only_unreferenced_attachments() {
+    let (_, e) = corner_cases()
+        .into_iter()
+        .find(|(name, _)| *name == "12-inline-images")
+        .unwrap();
+    let text = pdf_text(&render(&e));
+    assert!(text.contains("Attachments (1)"), "got:\n{text}");
+    assert!(text.contains("unreferenced.png"), "got:\n{text}");
+    assert!(!text.contains("wide.png"), "got:\n{text}");
+    assert!(!text.contains("tall.png"), "got:\n{text}");
 }
 
 #[test]
