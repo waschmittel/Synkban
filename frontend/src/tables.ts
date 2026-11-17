@@ -17,7 +17,9 @@ import {
 } from "prosemirror-state";
 import { keymap } from "prosemirror-keymap";
 import {
+  CellSelection,
   TableMap,
+  type TableRect,
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
@@ -29,6 +31,7 @@ import {
   isInTable,
   moveTableColumn,
   moveTableRow,
+  selectedRect,
   selectionCell,
   tableEditing,
   tableNodeTypes,
@@ -127,10 +130,8 @@ export const insertTable: Command = (state, dispatch) => {
 };
 
 /// No inserting above the header row — it would displace the header.
-export const insertRowAbove: Command = (state, dispatch) => {
-  const ctx = cellContext(state);
-  return !!ctx && ctx.row > 0 && addRowBefore(state, dispatch);
-};
+export const insertRowAbove: Command = (state, dispatch) =>
+  isInTable(state) && selectedRect(state).top > 0 && addRowBefore(state, dispatch);
 export const insertRowBelow: Command = addRowAfter;
 export const insertColumnLeft: Command = addColumnBefore;
 export const insertColumnRight: Command = addColumnAfter;
@@ -140,16 +141,20 @@ export const removeTable: Command = deleteTable;
 
 // ── Alignment ────────────────────────────────────────────────────────────
 
-/// Aligns the cursor's column. Only the header cell is written; the header
-/// plugin propagates it down the column in the same transaction round.
+/// Aligns every column in the selection. Only the header cells are written; the
+/// header plugin propagates them down each column in the same transaction round.
 function alignColumn(align: Align): Command {
   return (state, dispatch) => {
-    const ctx = cellContext(state);
-    if (!ctx) return false;
+    if (!isInTable(state)) return false;
     if (dispatch) {
-      const pos = ctx.tablePos + 1 + ctx.map.map[ctx.col];
-      const cell = state.doc.nodeAt(pos)!;
-      dispatch(state.tr.setNodeMarkup(pos, undefined, { ...cell.attrs, align }));
+      const rect = selectedRect(state);
+      const tr = state.tr;
+      for (let col = rect.left; col < rect.right; col++) {
+        const pos = rect.tableStart + rect.map.map[col];
+        const cell = state.doc.nodeAt(pos)!;
+        tr.setNodeMarkup(pos, undefined, { ...cell.attrs, align });
+      }
+      dispatch(tr);
     }
     return true;
   };
@@ -160,47 +165,60 @@ export const alignRight = alignColumn("right");
 
 // ── Move (swap with the neighbour) ───────────────────────────────────────
 
-/// Dispatch wrapper that puts the caret at the end of cell (`row`, `col`) of the
-/// moved table. The library's own selection options either select the whole
-/// row/column (`select`) or leave the mapped selection wherever the replaced
-/// table collapsed it (`!select`); a caret that follows the moved cell lets the
-/// move be repeated and typing continue.
-function followCell(
-  ctx: CellContext,
-  row: number,
-  col: number,
+/// Dispatch wrapper that keeps the moved selection intact: a cell selection
+/// stays over the moved rectangle, a caret lands at the end of its moved cell.
+/// The library's own selection options either select the whole row/column
+/// (`select`) or leave the mapped selection wherever the replaced table
+/// collapsed it (`!select`); following the selection lets the move be repeated
+/// and typing continue.
+function followMove(
+  rect: TableRect,
+  dRow: number,
+  dCol: number,
+  isCellSel: boolean,
   dispatch: (tr: Transaction) => void,
 ): (tr: Transaction) => void {
   return (tr) => {
-    const table = tr.doc.nodeAt(ctx.tablePos)!;
+    const table = tr.doc.nodeAt(rect.tableStart - 1)!;
     const map = TableMap.get(table);
-    const cellPos = ctx.tablePos + 1 + map.map[row * map.width + col];
-    const cell = tr.doc.nodeAt(cellPos)!;
-    tr.setSelection(TextSelection.near(tr.doc.resolve(cellPos + cell.nodeSize - 1), -1));
+    const cellPos = (r: number, c: number) => rect.tableStart + map.map[r * map.width + c];
+    if (isCellSel) {
+      tr.setSelection(
+        CellSelection.create(
+          tr.doc,
+          cellPos(rect.top + dRow, rect.left + dCol),
+          cellPos(rect.bottom - 1 + dRow, rect.right - 1 + dCol),
+        ),
+      );
+    } else {
+      const pos = cellPos(rect.top + dRow, rect.left + dCol);
+      const cell = tr.doc.nodeAt(pos)!;
+      tr.setSelection(TextSelection.near(tr.doc.resolve(pos + cell.nodeSize - 1), -1));
+    }
     dispatch(tr.scrollIntoView());
   };
 }
 
 function moveRow(state: EditorState, dispatch: ((tr: Transaction) => void) | undefined, dir: -1 | 1) {
-  const ctx = cellContext(state);
-  if (!ctx) return false;
-  const to = ctx.row + dir;
+  if (!isInTable(state)) return false;
+  const rect = selectedRect(state);
   // The header row stays first: it can't move, and no row may swap into it.
-  if (ctx.row < 1 || to < 1 || to >= ctx.map.height) return false;
-  return moveTableRow({ from: ctx.row, to, select: false })(
+  if (rect.top < 1 || (dir === -1 ? rect.top < 2 : rect.bottom >= rect.map.height)) return false;
+  const [from, to] = dir === -1 ? [rect.top - 1, rect.bottom - 1] : [rect.bottom, rect.top];
+  return moveTableRow({ from, to, select: false })(
     state,
-    dispatch && followCell(ctx, to, ctx.col, dispatch),
+    dispatch && followMove(rect, dir, 0, state.selection instanceof CellSelection, dispatch),
   );
 }
 
 function moveColumn(state: EditorState, dispatch: ((tr: Transaction) => void) | undefined, dir: -1 | 1) {
-  const ctx = cellContext(state);
-  if (!ctx) return false;
-  const to = ctx.col + dir;
-  if (to < 0 || to >= ctx.map.width) return false;
-  return moveTableColumn({ from: ctx.col, to, select: false })(
+  if (!isInTable(state)) return false;
+  const rect = selectedRect(state);
+  if (dir === -1 ? rect.left < 1 : rect.right >= rect.map.width) return false;
+  const [from, to] = dir === -1 ? [rect.left - 1, rect.right - 1] : [rect.right, rect.left];
+  return moveTableColumn({ from, to, select: false })(
     state,
-    dispatch && followCell(ctx, ctx.row, to, dispatch),
+    dispatch && followMove(rect, 0, dir, state.selection instanceof CellSelection, dispatch),
   );
 }
 

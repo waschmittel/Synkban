@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { EditorState, TextSelection, type Command } from "prosemirror-state";
+import { CellSelection, selectedRect } from "prosemirror-tables";
 import type { Node as PmNode } from "prosemirror-model";
 import { schema } from "./proseEditor";
 import {
@@ -16,6 +17,7 @@ import {
   removeRow,
   cellContext,
   enterInTable,
+  alignLeft,
   alignRight,
   alignCenter,
   tabForward,
@@ -50,6 +52,21 @@ function inCell(state: EditorState, text: string): EditorState {
   return state.apply(state.tr.setSelection(TextSelection.create(state.doc, pos)));
 }
 
+/// Selects a rectangular range of cells by their text labels.
+function selectCells(state: EditorState, anchorText: string, headText: string): EditorState {
+  const cellPos = (text: string) => {
+    let pos = -1;
+    state.doc.descendants((n, p) => {
+      if (n.isText && n.text === text) pos = p;
+      return true;
+    });
+    if (pos < 0) throw new Error(`no cell ${text}`);
+    return state.doc.resolve(pos).before(-1);
+  };
+  return state.apply(
+    state.tr.setSelection(CellSelection.create(state.doc, cellPos(anchorText), cellPos(headText))),
+  );
+}
 function run(state: EditorState, cmd: Command): EditorState {
   let next = state;
   const ok = cmd(state, (tr) => (next = state.apply(tr)));
@@ -208,5 +225,47 @@ describe("tables", () => {
     s = run(s, moveColumnRight);
     expect(aligns(s).map((r) => r[1])).toEqual(["right", "right"]);
     expect(aligns(s).map((r) => r[0])).toEqual([null, null]);
+  });
+
+  it("aligning a multi-cell selection applies to all selected columns", () => {
+    let s = selectCells(stateWith(filled(3, 3), para("")), "r1c2", "r2c1");
+    s = run(s, alignRight);
+    expect(aligns(s)).toEqual([
+      [null, "right", "right"],
+      [null, "right", "right"],
+      [null, "right", "right"],
+    ]);
+    s = run(s, alignLeft);
+    expect(aligns(s)).toEqual([
+      [null, "left", "left"],
+      [null, "left", "left"],
+      [null, "left", "left"],
+    ]);
+  });
+
+  it("insertRowAbove is refused when a multi-cell selection includes the header row", () => {
+    const s = selectCells(stateWith(filled(3, 2), para("")), "r2c0", "r0c1");
+    expect(insertRowAbove(s)).toBe(false);
+  });
+
+  it("moving a multi-cell selection moves all selected rows or columns and keeps them selected", () => {
+    let s = selectCells(stateWith(filled(4, 3), para("")), "r1c0", "r2c1");
+    expect(moveRowUp(s)).toBe(false);
+    s = run(s, moveRowDown);
+    expect(rows(s).map((r) => r[0])).toEqual(["r0c0", "r3c0", "r1c0", "r2c0"]);
+    expect(s.selection instanceof CellSelection).toBe(true);
+    expect(selectedRect(s)).toMatchObject({ top: 2, bottom: 4, left: 0, right: 2 });
+
+    s = run(s, moveColumnRight);
+    expect(rows(s)[2]).toEqual(["r1c2", "r1c0", "r1c1"]);
+    expect(selectedRect(s)).toMatchObject({ top: 2, bottom: 4, left: 1, right: 3 });
+
+    s = run(s, moveRowUp);
+    expect(rows(s).map((r) => r[1])).toEqual(["r0c0", "r1c0", "r2c0", "r3c0"]);
+    expect(selectedRect(s)).toMatchObject({ top: 1, bottom: 3, left: 1, right: 3 });
+
+    s = run(s, moveColumnLeft);
+    expect(rows(s)[1]).toEqual(["r1c0", "r1c1", "r1c2"]);
+    expect(selectedRect(s)).toMatchObject({ top: 1, bottom: 3, left: 0, right: 2 });
   });
 });

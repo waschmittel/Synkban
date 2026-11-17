@@ -284,3 +284,32 @@ test("column alignment: menu keys, header always centred, new rows inherit", asy
   await page.locator(".card", { hasText: "Table card" }).click();
   expect(await align(".editor-wrapper .ProseMirror td", 8)).toBe("right");
 });
+
+test("multi-cell selection: align column right applies to all selected columns", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Tables Multi Align");
+  await insertTable(page);
+  await fill(page, ["A", "B", "C", "1", "2", "3", "4", "5", "6"]);
+
+  // Drag across cells in row 1 from column 1 ("2") to column 2 ("3").
+  const c1 = page.locator(".editor-wrapper .ProseMirror td").nth(1);
+  const c2 = page.locator(".editor-wrapper .ProseMirror td").nth(2);
+  const b1 = (await c1.boundingBox())!;
+  const b2 = (await c2.boundingBox())!;
+  await page.mouse.move(b1.x + b1.width / 2, b1.y + b1.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+  await page.mouse.up();
+  await expect(page.locator(".editor-wrapper .ProseMirror .selectedCell")).toHaveCount(2);
+
+  await menuKey(page, "3");
+  const align = (n: number) =>
+    page.locator(".editor-wrapper .ProseMirror td").nth(n).evaluate((el) => getComputedStyle(el).textAlign);
+  expect(await align(0)).toBe("start");
+  expect(await align(1)).toBe("right");
+  expect(await align(2)).toBe("right");
+  expect(await align(4)).toBe("right");
+  expect(await align(5)).toBe("right");
+});
