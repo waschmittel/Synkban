@@ -908,11 +908,12 @@ impl Layout {
                 let indent = indent_for(w, 14.0);
                 self.blocks(content, x + indent, w - indent, size, MUTED);
                 let end = (self.pages.len() - 1, self.y);
-                for p in start.0..=end.0 {
+                for (offset, page) in self.pages[start.0..=end.0].iter_mut().enumerate() {
+                    let p = start.0 + offset;
                     let y0 = if p == start.0 { start.1 } else { TOP };
                     let y1 = if p == end.0 { end.1 } else { BOTTOM };
                     if y1 > y0 {
-                        self.pages[p].push(Op::Rect {
+                        page.push(Op::Rect {
                             x: x + 2.0,
                             y: y0,
                             w: 2.5,

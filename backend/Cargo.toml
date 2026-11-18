@@ -29,5 +29,5 @@ rustybuzz = "0.20"
 [build-dependencies]
 
 [dev-dependencies]
-lopdf = "0.46.0"
+lopdf = "0.47.0"
 tempfile = "3"
