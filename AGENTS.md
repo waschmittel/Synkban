@@ -162,7 +162,7 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204 (also strips inline refere
 
 - Reading an errored SolidJS resource throws; guard it in effects (ADR-0010) and distinguish `isNotFoundError` from `isNetworkError` rather than falling back to empty/not-found states (ADR-0026).
 - Concurrent requests must not overwrite newer global state (`api.ts` uses `seq > lastFailureSeq`), and pages must not trigger `refetch()` from `onReconnect` (causes a loop with sibling mount requests; ADR-0026).
-- E2E tests: wait for animations/`networkidle` and use `expect.poll`/`toPass` for scroll, layout, and drag-and-drop (ADR-0018).
+- E2E tests: wait for animations/`networkidle`, dialog/overlay focus (`toBeFocused()`) and close (`toHaveCount(0)`), blur onto focusable elements inside `focusTrap`, and use `expect.poll`/`toPass` for scroll, layout, drag-and-drop, and API persistence after UI mutations (ADR-0018).
 - Position gaps are fine; don't normalise.
 - A card/list lookup scans directories (no index).
 - Code that rewrites a card must use `read_card` (keeps history, ADR-0005).

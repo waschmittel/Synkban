@@ -16,6 +16,7 @@ test("exporting a clean card downloads its PDF with the shortcut", async ({ page
   const { board } = await seedCard(request, "PDF Board", "Export me");
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Export me" }).click();
+  await expect(page.locator(".modal-title-input")).toBeFocused();
 
   const download = page.waitForEvent("download");
   await page.keyboard.press("ControlOrMeta+p");

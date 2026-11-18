@@ -909,7 +909,7 @@ test("card detail layout, both views: icons left of their sections in one column
     const title = page.locator(`${root} .modal-title-input`);
     await title.focus();
     await page.keyboard.press("End");
-    await page.locator(`${root} .checklist-area .detail-row-label`).click();
+    await page.locator(`${root} .ProseMirror`).click();
     await expect(title).not.toBeFocused();
     await expect
       .poll(() =>

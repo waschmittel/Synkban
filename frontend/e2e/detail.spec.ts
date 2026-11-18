@@ -148,8 +148,9 @@ for (const mode of ["kanban", "notes"] as const) {
     await titleInput.fill("Restored title");
     await expect(root.locator(".detail-error-banner")).toHaveCount(0);
     await save.click();
-    const board = await (await request.get(`/api/boards/${s.boardId}`)).json();
-    expect(board.lists[0].cards[0].title).toBe("Restored title");
+    await expect
+      .poll(async () => (await (await request.get(`/api/boards/${s.boardId}`)).json()).lists[0].cards[0].title)
+      .toBe("Restored title");
   });
 }
 
@@ -159,6 +160,7 @@ test("board color can be set and reset to default", async ({ page, request }) =>
   await page.goto(`/board/${s.boardId}`);
   await page.locator(".board-color-btn").click();
   await page.locator(".board-color-reset").click();
+  await expect(page.locator(".board-color-dropdown")).toHaveCount(0);
   const board = await (await request.get(`/api/boards/${s.boardId}`)).json();
   expect(board.color).toBeUndefined();
 });
