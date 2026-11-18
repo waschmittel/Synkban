@@ -688,7 +688,11 @@ export default function CardDetail(props: Props) {
             }}
             onKeyDown={handleTitleKeyDown}
             // Back to the start, so the ellipsis cuts the end, not the beginning.
-            onBlur={(e) => (e.currentTarget.scrollLeft = 0)}
+            onBlur={(e) => {
+              const el = e.currentTarget;
+              el.scrollLeft = 0;
+              requestAnimationFrame(() => (el.scrollLeft = 0));
+            }}
             placeholder="Card title..."
             title={tip("Edit title", accel("E"))}
           />

@@ -260,19 +260,18 @@ test("reorder items via drag and drop", async ({ page, request }) => {
   await addItems(page, ["a", "b", "c"]);
 
   const items = page.locator(".checklist-item");
+  await page.locator(".modal-content").evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   // Drag "a" onto the top half of "c" → insert before c: b, a, c.
   // Manual mouse events: locator.dragTo() doesn't trigger Chromium's
   // intercepted HTML5 drag here, and the modal can autoscroll during the
   // drag, so aim at the top edge of the target row.
-  const src = (await items.nth(0).boundingBox())!;
-  const tgt = (await items.nth(2).boundingBox())!;
-  await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(tgt.x + tgt.width / 2, tgt.y + 4, { steps: 10 });
-  // Autoscroll/render lag can leave the cached coordinates stale, turning the
-  // drop into a silent no-op — re-aim at the target's fresh position until
-  // the insertion indicator confirms the drop slot, only then release.
   await expect(async () => {
+    await page.mouse.up();
+    const src = (await items.nth(0).boundingBox())!;
+    const tgt = (await items.nth(2).boundingBox())!;
+    await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(tgt.x + tgt.width / 2, tgt.y + 4, { steps: 10 });
     const fresh = (await items.nth(2).boundingBox())!;
     await page.mouse.move(fresh.x + fresh.width / 2, fresh.y + 4, { steps: 2 });
     await expect(items.nth(2)).toHaveClass(/checklist-item--drop-before/, { timeout: 500 });

@@ -911,16 +911,20 @@ test("card detail layout, both views: icons left of their sections in one column
     await page.keyboard.press("End");
     await page.locator(`${root} .checklist-area .detail-row-label`).click();
     await expect(title).not.toBeFocused();
-    expect(await title.evaluate((el: HTMLInputElement) => [
-      getComputedStyle(el).textOverflow,
-      // (Inputs don't report overflow via scrollWidth: measure the text.)
-      (() => {
-        const ctx = document.createElement("canvas").getContext("2d")!;
-        ctx.font = getComputedStyle(el).font;
-        return ctx.measureText(el.value).width > el.clientWidth;
-      })(),
-      el.scrollLeft,
-    ])).toEqual(["ellipsis", true, 0]);
+    await expect
+      .poll(() =>
+        title.evaluate((el: HTMLInputElement) => [
+          getComputedStyle(el).textOverflow,
+          // (Inputs don't report overflow via scrollWidth: measure the text.)
+          (() => {
+            const ctx = document.createElement("canvas").getContext("2d")!;
+            ctx.font = getComputedStyle(el).font;
+            return ctx.measureText(el.value).width > el.clientWidth;
+          })(),
+          el.scrollLeft,
+        ]),
+      )
+      .toEqual(["ellipsis", true, 0]);
     await expect(title).toHaveValue(long);
   };
 
