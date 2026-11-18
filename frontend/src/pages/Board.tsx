@@ -41,7 +41,7 @@ import { crossListInsertPosition, listDropPosition, moveToBottom } from "../posi
 import { adjacentList, listOfCard, pickCard, resolveSelection } from "../notesView";
 import { cardMatchesFilter as filterCard, type DueFilter } from "../filter";
 import { findLabel, parseQuickAdd } from "../quickAdd";
-import { focusListEntry } from "../listFocus";
+import { focusAdjacentList, focusListEntry, isHorizontalNavigation, resetPreferredRow } from "../listFocus";
 import { draftCard } from "../cardContent";
 import { isTypingIn, isInUiOverlay } from "../boardInput";
 import { recordLastBoard } from "../settings";
@@ -578,9 +578,10 @@ export default function BoardPage() {
           const adj = (e.key === "ArrowLeft"
             ? currentList.previousElementSibling
             : currentList.nextElementSibling) as HTMLElement | null;
-          if (adj?.classList.contains("list")) focusListEntry(adj, e.key === "ArrowLeft");
+          if (adj?.classList.contains("list")) focusAdjacentList(adj, null, e.key === "ArrowLeft");
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
+          resetPreferredRow();
           const cards = currentList.querySelectorAll<HTMLElement>(".card");
           cards[cards.length - 1]?.focus();
         }
@@ -721,9 +722,14 @@ export default function BoardPage() {
       }
     };
 
+    const handleFocusIn = () => {
+      if (!isHorizontalNavigation()) resetPreferredRow();
+    };
+
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     document.addEventListener("commit-board-rename", handleCommitRename as EventListener);
     document.addEventListener("click", handleDocClick);
+    document.addEventListener("focusin", handleFocusIn);
 
     onCleanup(() => {
       header.setIsOnBoard(false);
@@ -738,6 +744,8 @@ export default function BoardPage() {
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
       document.removeEventListener("commit-board-rename", handleCommitRename as EventListener);
       document.removeEventListener("click", handleDocClick);
+      document.removeEventListener("focusin", handleFocusIn);
+      resetPreferredRow();
       document.documentElement.style.setProperty("--board-color", "#0079bf");
     });
   });

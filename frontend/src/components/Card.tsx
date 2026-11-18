@@ -3,7 +3,7 @@ import type { Card as CardType, Label } from "../types";
 import { crossListInsertPosition, listDropPosition, moveToBottom, moveToTop, withinListMoveDown, withinListMoveUp } from "../positions";
 import { tip } from "../platform";
 import { dueInfo } from "../dueDate";
-import { focusListEntry } from "../listFocus";
+import { focusAdjacentList, resetPreferredRow } from "../listFocus";
 
 interface Props {
   card: CardType;
@@ -45,8 +45,6 @@ export default function Card(props: Props) {
     (e.target as HTMLElement).classList.remove("dragging");
     document.querySelectorAll(".drop-placeholder").forEach((el) => el.remove());
   };
-
-  const focusAddTrigger = (list: Element | null) => focusListEntry(list);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const el = e.currentTarget as HTMLElement;
@@ -164,16 +162,19 @@ export default function Card(props: Props) {
     if (key === "Home") {
       e.preventDefault();
       e.stopPropagation();
+      resetPreferredRow();
       const cards = currentList?.querySelectorAll<HTMLElement>(".card");
       cards?.[0]?.focus();
     } else if (key === "End") {
       e.preventDefault();
       e.stopPropagation();
+      resetPreferredRow();
       const cards = currentList?.querySelectorAll<HTMLElement>(".card");
       cards?.[cards.length - 1]?.focus();
     } else if (key === "ArrowDown" || key === "ArrowUp") {
       e.preventDefault();
       e.stopPropagation();
+      resetPreferredRow();
       // Wraps around the list's cards.
       const cards = Array.from(currentList?.querySelectorAll<HTMLElement>(".card") ?? []);
       const idx = cards.indexOf(el);
@@ -192,12 +193,7 @@ export default function Card(props: Props) {
       if (adjList?.classList.contains("list")) {
         const curCards = Array.from(currentList!.querySelectorAll<HTMLElement>(".card"));
         const curIdx = curCards.indexOf(el);
-        const adjCards = adjList.querySelectorAll<HTMLElement>(".card");
-        if (adjCards.length > 0) {
-          adjCards[Math.min(curIdx, adjCards.length - 1)].focus();
-        } else {
-          focusAddTrigger(adjList);
-        }
+        focusAdjacentList(adjList, curIdx >= 0 ? curIdx : null);
       }
     }
   };

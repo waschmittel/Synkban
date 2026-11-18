@@ -74,6 +74,59 @@ test("arrow navigation stops at empty list between non-empty lists", async ({
   await expect(listBLocator.locator(".add-trigger")).toBeFocused();
 });
 
+test("ArrowRight/ArrowLeft remembers vertical row across shorter and empty lists", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Sticky Row" } })
+  ).json();
+  const listA = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "A" } })
+  ).json();
+  const listB = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "B short" } })
+  ).json();
+  const listC = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "C empty" } })
+  ).json();
+  const listD = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "D" } })
+  ).json();
+
+  for (let i = 0; i < 5; i++) {
+    await request.post(`/api/lists/${listA.id}/cards`, { data: { title: `A${i}` } });
+    await request.post(`/api/lists/${listD.id}/cards`, { data: { title: `D${i}` } });
+  }
+  await request.post(`/api/lists/${listB.id}/cards`, { data: { title: "B0" } });
+  await request.post(`/api/lists/${listB.id}/cards`, { data: { title: "B1" } });
+
+  await page.goto(`/board/${board.id}`);
+  await expect(page.locator(".card", { hasText: "A3" })).toBeVisible();
+
+  // Start at row 3 in A -> clamp to row 1 in B -> stay on empty C -> restore row 3 in D.
+  await page.locator(".card", { hasText: "A3" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".card", { hasText: "B1" })).toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.locator(`.list[data-list-id="${listC.id}"] .add-trigger`),
+  ).toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".card", { hasText: "D3" })).toBeFocused();
+
+  // Navigating back left also restores row 3 in A, and ArrowUp resets the target row.
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".card", { hasText: "B1" })).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.locator(".card", { hasText: "B0" })).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".card", { hasText: "A0" })).toBeFocused();
+});
+
 test("create board from home page and open it", async ({ page }) => {
   await page.goto("/");
 

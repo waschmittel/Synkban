@@ -5,7 +5,7 @@ import AddForm from "./AddForm";
 import QuickAddPreview from "./QuickAddPreview";
 import { parseQuickAdd } from "../quickAdd";
 import { tip } from "../platform";
-import { focusListEntry } from "../listFocus";
+import { focusAdjacentList } from "../listFocus";
 
 interface Props {
   list: ListWithCards;
@@ -161,7 +161,7 @@ export default function List(props: Props) {
             if (e.key === "ArrowUp" || e.key === "ArrowDown") return;
             const list = e.currentTarget.closest(".list");
             const adj = e.key === "ArrowLeft" ? list?.previousElementSibling : list?.nextElementSibling;
-            if (adj?.classList.contains("list")) focusListEntry(adj, e.key === "ArrowLeft");
+            if (adj?.classList.contains("list")) focusAdjacentList(adj, null, e.key === "ArrowLeft");
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
