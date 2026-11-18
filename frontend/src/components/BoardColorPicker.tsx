@@ -16,8 +16,8 @@ export default function BoardColorPicker(props: Props) {
   return (
     <div class="board-color-area" onClick={(e) => e.stopPropagation()}>
       <button
-        class="board-color-btn"
-        classList={{ "board-color-btn--active": props.open }}
+        class="header-btn header-btn--icon board-color-btn"
+        classList={{ "header-btn--active": props.open }}
         onClick={props.onToggle}
         title="Board color"
       >

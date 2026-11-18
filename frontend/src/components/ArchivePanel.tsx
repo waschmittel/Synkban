@@ -61,12 +61,12 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
 
   return (
     <div
-      class="archive-overlay archive-modal-overlay"
+      class="archive-overlay dialog-overlay archive-modal-overlay"
       ref={(el) => { overlayRef = el; onCleanup(focusTrap(el)); }}
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      <div class="archive-modal" tabindex="-1">
+      <div class="dialog-surface archive-modal" tabindex="-1">
         <div class="archive-modal-header">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="21 8 21 21 3 21 3 8" />
@@ -74,7 +74,7 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
             <line x1="10" y1="12" x2="14" y2="12" />
           </svg>
           <span>{props.title}</span>
-          <button class="modal-close" onClick={props.onClose} title={tip("Close", "Esc")}>
+          <button class="btn-close modal-close" onClick={props.onClose} title={tip("Close", "Esc")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

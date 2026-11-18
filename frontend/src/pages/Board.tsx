@@ -379,6 +379,82 @@ export default function BoardPage() {
   onMount(() => {
     const stopTracking = trackBoardView(pageEl, shownId);
     header.setIsOnBoard(true);
+    const loadedBoard = () => (board.error ? undefined : board());
+    header.setControls({
+      left: () => (
+        <Show when={loadedBoard()}>
+          <div class="board-mode-switch" role="group" aria-label="View">
+            <button
+              class="board-mode-btn"
+              classList={{ "board-mode-btn--active": !notes() }}
+              aria-pressed={!notes()}
+              onClick={() => switchMode("kanban")}
+              title={tip("Board view", "V")}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="5" height="16" rx="1" />
+                <rect x="10" y="4" width="5" height="11" rx="1" />
+                <rect x="17" y="4" width="4" height="7" rx="1" />
+              </svg>
+              Board
+            </button>
+            <button
+              class="board-mode-btn"
+              classList={{ "board-mode-btn--active": notes() }}
+              aria-pressed={notes()}
+              onClick={() => switchMode("notes")}
+              title={tip("Notes view", "V")}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <line x1="9" y1="4" x2="9" y2="20" />
+                <line x1="12" y1="9" x2="18" y2="9" />
+                <line x1="12" y1="13" x2="18" y2="13" />
+              </svg>
+              Notes
+            </button>
+          </div>
+          <button
+            class="header-btn board-filter-btn"
+            classList={{ "header-btn--active": showFilterBar() || isFiltering() }}
+            onClick={() => setShowFilterBar((v) => !v)}
+            title={tip("Filter cards", "F")}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            Filter
+          </button>
+        </Show>
+      ),
+      right: () => (
+        <Show when={loadedBoard()}>
+          {(b) => (
+            <>
+              <button
+                class="header-btn header-btn--icon board-archive-btn"
+                onClick={openArchive}
+                title={tip("View archived cards", "A")}
+                aria-label="View archived cards"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="21 8 21 21 3 21 3 8" />
+                  <rect x="1" y="3" width="22" height="5" />
+                  <line x1="10" y1="12" x2="14" y2="12" />
+                </svg>
+              </button>
+              <BoardColorPicker
+                open={showColorPicker()}
+                currentColor={b().color}
+                onToggle={() => setShowColorPicker((v) => !v)}
+                onSelect={handleSetBoardColor}
+                onPreview={(c) => document.documentElement.style.setProperty("--board-color", c)}
+              />
+            </>
+          )}
+        </Show>
+      ),
+    });
     refreshWarnings();
 
     // Watch only this board's mtime so quiet boards don't trigger refetch when
@@ -585,20 +661,28 @@ export default function BoardPage() {
 
     const handleToggleShortcuts = () => toggleHelp();
     const handleCommitRename = () => commitRename();
+    const handleDocClick = (e: MouseEvent) => {
+      if (showColorPicker() && !(e.target as HTMLElement | null)?.closest(".board-color-area")) {
+        setShowColorPicker(false);
+      }
+    };
 
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     document.addEventListener("commit-board-rename", handleCommitRename as EventListener);
+    document.addEventListener("click", handleDocClick);
 
     onCleanup(() => {
       header.setIsOnBoard(false);
       header.setTitle("");
       header.setRenaming(false);
+      header.setControls(null);
       drawer.close();
       stopPoller();
       stopTracking();
       dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
       document.removeEventListener("commit-board-rename", handleCommitRename as EventListener);
+      document.removeEventListener("click", handleDocClick);
       document.documentElement.style.setProperty("--board-color", "#0079bf");
     });
   });
@@ -982,9 +1066,8 @@ export default function BoardPage() {
       class="board-page"
       tabindex="-1"
       onClick={(e) => {
-        if (showColorPicker()) setShowColorPicker(false);
         const target = e.target as HTMLElement;
-        if (target === e.currentTarget || target.classList.contains("lists-container") || target.classList.contains("board-title-bar")) {
+        if (target === e.currentTarget || target.classList.contains("lists-container")) {
           const cardId = focus.lastFocused();
           if (cardId) {
             const card = document.querySelector(`[data-card-id="${cardId}"]`) as HTMLElement | null;
@@ -1008,69 +1091,6 @@ export default function BoardPage() {
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
         {(b) => (
           <>
-            <div class="board-title-bar">
-              <div class="board-mode-switch" role="group" aria-label="View">
-                <button
-                  class="board-mode-btn"
-                  classList={{ "board-mode-btn--active": !notes() }}
-                  aria-pressed={!notes()}
-                  onClick={() => switchMode("kanban")}
-                  title={tip("Board view", "V")}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="5" height="16" rx="1" />
-                    <rect x="10" y="4" width="5" height="11" rx="1" />
-                    <rect x="17" y="4" width="4" height="7" rx="1" />
-                  </svg>
-                  Board
-                </button>
-                <button
-                  class="board-mode-btn"
-                  classList={{ "board-mode-btn--active": notes() }}
-                  aria-pressed={notes()}
-                  onClick={() => switchMode("notes")}
-                  title={tip("Notes view", "V")}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                    <line x1="9" y1="4" x2="9" y2="20" />
-                    <line x1="12" y1="9" x2="18" y2="9" />
-                    <line x1="12" y1="13" x2="18" y2="13" />
-                  </svg>
-                  Notes
-                </button>
-              </div>
-              <button
-                class="board-filter-btn"
-                classList={{ "board-filter-btn--active": showFilterBar() || isFiltering() }}
-                onClick={() => setShowFilterBar((v) => !v)}
-                title={tip("Filter cards", "F")}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                </svg>
-                Filter
-              </button>
-              <button
-                class="board-archive-btn"
-                onClick={openArchive}
-                title={tip("View archived cards", "A")}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="21 8 21 21 3 21 3 8" />
-                  <rect x="1" y="3" width="22" height="5" />
-                  <line x1="10" y1="12" x2="14" y2="12" />
-                </svg>
-                Archive
-              </button>
-              <BoardColorPicker
-                open={showColorPicker()}
-                currentColor={b().color}
-                onToggle={() => setShowColorPicker((v) => !v)}
-                onSelect={handleSetBoardColor}
-                onPreview={(c) => document.documentElement.style.setProperty("--board-color", c)}
-              />
-            </div>
             <Show when={showFilterBar()}>
               <FilterBar
                 text={filterText()}

@@ -142,15 +142,15 @@ export default function HistoryDialog(props: Props) {
 
   return (
     <div
-      class="history-overlay"
+      class="dialog-overlay history-overlay"
       ref={(el) => onCleanup(focusTrap(el))}
       onClick={(e) => e.target === e.currentTarget && props.onClose()}
     >
-      <div class="history-dialog" role="dialog" aria-label="Card history">
+      <div class="dialog-surface history-dialog" role="dialog" aria-label="Card history">
         <div class="history-header">
           <h3>Card history</h3>
           <span class="history-hint">Showing what each version changed</span>
-          <button class="shortcut-help-close" onClick={props.onClose} title="Close (Esc)">
+          <button class="btn-close shortcut-help-close" onClick={props.onClose} title="Close (Esc)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

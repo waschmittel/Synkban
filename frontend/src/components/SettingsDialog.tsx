@@ -149,14 +149,14 @@ export default function SettingsDialog(props: Props) {
 
   return (
     <div
-      class="settings-overlay"
+      class="dialog-overlay settings-overlay"
       ref={(el) => onCleanup(focusTrap(el))}
       onClick={handleOverlayClick}
     >
-      <div class="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
+      <div class="dialog-surface settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="settings-header">
           <h3>Settings</h3>
-          <button class="settings-close" onClick={close} title={tip("Close", "Esc")}>
+          <button class="btn-close settings-close" onClick={close} title={tip("Close", "Esc")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -225,11 +225,11 @@ export default function SettingsDialog(props: Props) {
                   <code>{dataDir()}</code>
                 </div>
                 <div class="settings-path-actions">
-                  <button class="settings-btn" onClick={browse}>
+                  <button class="btn btn-outline settings-btn" onClick={browse}>
                     Browse…
                   </button>
                   <Show when={dataDir() !== settings()!.default_data_dir}>
-                    <button class="settings-btn" onClick={() => setStagedDataDir(null)}>
+                    <button class="btn btn-outline settings-btn" onClick={() => setStagedDataDir(null)}>
                       Use default
                     </button>
                   </Show>
@@ -250,11 +250,11 @@ export default function SettingsDialog(props: Props) {
         </div>
 
         <div class="settings-footer">
-          <button class="settings-btn" onClick={close} disabled={saving()}>
+          <button class="btn btn-outline settings-btn" onClick={close} disabled={saving()}>
             Cancel
           </button>
           <button
-            class="settings-btn settings-btn--primary"
+            class="btn btn-primary"
             onClick={save}
             disabled={saving() || !settings()}
           >

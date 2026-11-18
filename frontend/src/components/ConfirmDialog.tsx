@@ -40,12 +40,12 @@ export default function ConfirmDialog(props: Props) {
 
   return (
     <div
-      class="unsaved-overlay archive-overlay"
+      class="dialog-overlay unsaved-overlay archive-overlay"
       ref={(el) => onCleanup(focusTrap(el))}
       onClick={(e) => { if (e.target === e.currentTarget) props.onCancel(); }}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      <div class="unsaved-dialog">
+      <div class="dialog-surface unsaved-dialog">
         <p>{props.message}</p>
         <div class="unsaved-dialog-actions">
           <button

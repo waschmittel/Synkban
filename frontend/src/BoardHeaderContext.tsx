@@ -1,5 +1,10 @@
 import { createContext, createSignal, useContext } from "solid-js";
-import type { ParentProps } from "solid-js";
+import type { JSX, ParentProps } from "solid-js";
+
+export interface BoardHeaderControls {
+  left: () => JSX.Element;
+  right: () => JSX.Element;
+}
 
 interface BoardHeaderContextValue {
   isOnBoard: () => boolean;
@@ -10,6 +15,8 @@ interface BoardHeaderContextValue {
   setRenaming: (v: boolean) => void;
   renameValue: () => string;
   setRenameValue: (v: string) => void;
+  controls: () => BoardHeaderControls | null;
+  setControls: (c: BoardHeaderControls | null) => void;
 }
 
 const BoardHeaderContext = createContext<BoardHeaderContextValue>();
@@ -19,6 +26,7 @@ export function BoardHeaderProvider(props: ParentProps) {
   const [title, setTitle] = createSignal("");
   const [renaming, setRenaming] = createSignal(false);
   const [renameValue, setRenameValue] = createSignal("");
+  const [controls, setControls] = createSignal<BoardHeaderControls | null>(null);
 
   return (
     <BoardHeaderContext.Provider
@@ -31,6 +39,8 @@ export function BoardHeaderProvider(props: ParentProps) {
         setRenaming,
         renameValue,
         setRenameValue,
+        controls,
+        setControls,
       }}
     >
       {props.children}

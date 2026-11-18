@@ -347,8 +347,8 @@ export default function ShortcutHelp(props: Props) {
   );
 
   return (
-    <div class="shortcut-help-overlay" ref={(el) => onCleanup(focusTrap(el))} onClick={handleOverlayClick}>
-      <div class="shortcut-help-modal" role="dialog" aria-label="Keyboard shortcuts">
+    <div class="dialog-overlay shortcut-help-overlay" ref={(el) => onCleanup(focusTrap(el))} onClick={handleOverlayClick}>
+      <div class="dialog-surface shortcut-help-modal" role="dialog" aria-label="Keyboard shortcuts">
         <div class="shortcut-help-header">
           <h3>Keyboard shortcuts</h3>
           <div
@@ -379,7 +379,7 @@ export default function ShortcutHelp(props: Props) {
               )}
             </For>
           </div>
-          <button class="shortcut-help-close" onClick={props.onClose} title={tip("Close", "Esc")}>
+          <button class="btn-close shortcut-help-close" onClick={props.onClose} title={tip("Close", "Esc")}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

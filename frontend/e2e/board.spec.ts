@@ -1362,3 +1362,59 @@ test("list rename: Enter commits, Esc cancels (the unmount blur doesn't commit)"
   await page.locator(".board-page").click({ position: { x: 5, y: 5 } });
   await expect.poll(title).toBe("Blurred");
 });
+
+test("board controls live in the top bar with centered title", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Header Layout" } })).json();
+  await page.setViewportSize({ width: 1200, height: 700 });
+  await page.goto(`/board/${board.id}`);
+  await expect(page.locator(".app-logo--board")).toHaveText("Header Layout");
+  await expect(page.locator(".board-title-bar")).toHaveCount(0);
+
+  const left = page.locator(".app-header-left");
+  const title = page.locator(".app-logo--board");
+  const right = page.locator(".app-header-actions");
+
+  await expect(left.locator(".app-logo-home")).toBeVisible();
+  await expect(left.locator(".board-mode-switch")).toBeVisible();
+  await expect(left.locator(".board-filter-btn")).toBeVisible();
+
+  await expect(right.locator(".header-btn-group .board-archive-btn")).toBeVisible();
+  await expect(right.locator(".header-btn-group .board-color-btn")).toBeVisible();
+  await expect(right.locator(".header-btn-group .btn-header-labels")).toBeVisible();
+  await expect(right.locator(".board-archive-btn")).toHaveText("");
+  await expect(right.locator(".btn-header-labels")).toHaveText("");
+  await expect(right.locator(".btn-header-shortcuts")).toBeVisible();
+  await expect(right.locator(".btn-header-settings")).toBeVisible();
+
+  const [leftBox, titleBox, rightBox, backBox, archiveBox, colorBox, labelsBox, modeBox, filterBox, helpBox, settingsBox] =
+    await Promise.all([
+      left.boundingBox(),
+      title.boundingBox(),
+      right.boundingBox(),
+      left.locator(".app-logo-home").boundingBox(),
+      right.locator(".board-archive-btn").boundingBox(),
+      right.locator(".board-color-btn").boundingBox(),
+      right.locator(".btn-header-labels").boundingBox(),
+      left.locator(".board-mode-switch").boundingBox(),
+      left.locator(".board-filter-btn").boundingBox(),
+      right.locator(".btn-header-shortcuts").boundingBox(),
+      right.locator(".btn-header-settings").boundingBox(),
+    ]);
+  const titleCenter = titleBox!.x + titleBox!.width / 2;
+  const gapCenter = (leftBox!.x + leftBox!.width + rightBox!.x) / 2;
+  expect(Math.abs(titleCenter - gapCenter)).toBeLessThan(2);
+  expect(archiveBox!.x).toBeLessThan(colorBox!.x);
+  expect(colorBox!.x).toBeLessThan(labelsBox!.x);
+  const backCenterY = backBox!.y + backBox!.height / 2;
+  for (const box of [backBox, modeBox, filterBox, archiveBox, colorBox, labelsBox, helpBox, settingsBox]) {
+    expect(box!.height).toBe(backBox!.height);
+    expect(box!.height).toBe(30);
+    expect(Math.abs(box!.y + box!.height / 2 - backCenterY)).toBeLessThan(1);
+  }
+
+  // Color picker opens inside the header and closes on outside header click.
+  await right.locator(".board-color-btn").click();
+  await expect(page.locator(".board-color-dropdown")).toBeVisible();
+  await page.locator(".app-header").click({ position: { x: titleBox!.x - 20, y: 20 } });
+  await expect(page.locator(".board-color-dropdown")).toHaveCount(0);
+});

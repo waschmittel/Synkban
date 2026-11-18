@@ -34,8 +34,8 @@ export default function ExportPdfDialog(props: Props) {
   );
 
   return (
-    <div class="unsaved-overlay export-pdf-overlay" ref={(el) => onCleanup(focusTrap(el))}>
-      <div class="unsaved-dialog">
+    <div class="dialog-overlay unsaved-overlay export-pdf-overlay" ref={(el) => onCleanup(focusTrap(el))}>
+      <div class="dialog-surface unsaved-dialog">
         <p>You have unsaved changes. The PDF contains the saved card.</p>
         <div class="unsaved-dialog-actions">
           <button
