@@ -173,6 +173,20 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 static STATIC_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/static");
 
+/// Cache-Control (and optional extra header) for embedded PWA metadata files.
+fn pwa_headers(path: &str) -> Option<(&'static str, Option<(&'static str, &'static str)>)> {
+    if path == "sw.js" {
+        Some(("no-cache", Some(("Service-Worker-Allowed", "/"))))
+    } else if path == "manifest.webmanifest" {
+        Some(("public, max-age=3600", None))
+    } else if path == "favicon.png" || path == "apple-touch-icon.png" || path.starts_with("icons/")
+    {
+        Some(("public, max-age=86400", None))
+    } else {
+        None
+    }
+}
+
 async fn serve_embedded(req: HttpRequest) -> HttpResponse {
     let path = req.path().trim_start_matches('/');
 
@@ -186,7 +200,15 @@ async fn serve_embedded(req: HttpRequest) -> HttpResponse {
                 .first_or_octet_stream()
                 .to_string()
         };
-        return HttpResponse::Ok().content_type(mime).body(file.contents());
+        let mut res = HttpResponse::Ok();
+        res.content_type(mime);
+        if let Some((cache_control, extra)) = pwa_headers(path) {
+            res.insert_header(("Cache-Control", cache_control));
+            if let Some((k, v)) = extra {
+                res.insert_header((k, v));
+            }
+        }
+        return res.body(file.contents());
     }
 
     match STATIC_DIR.get_file("index.html") {
@@ -382,5 +404,30 @@ mod tests {
         // ensure token=tok12 doesn't match token=tok123 prefix
         let (auth, _) = check_token_auth(None, "token=tok12", "tok123");
         assert!(!auth);
+    }
+
+    #[test]
+    fn pwa_headers_cover_metadata_paths() {
+        assert_eq!(
+            pwa_headers("sw.js"),
+            Some(("no-cache", Some(("Service-Worker-Allowed", "/"))))
+        );
+        assert_eq!(
+            pwa_headers("manifest.webmanifest"),
+            Some(("public, max-age=3600", None))
+        );
+        assert_eq!(
+            pwa_headers("apple-touch-icon.png"),
+            Some(("public, max-age=86400", None))
+        );
+        assert_eq!(
+            pwa_headers("favicon.png"),
+            Some(("public, max-age=86400", None))
+        );
+        assert_eq!(
+            pwa_headers("icons/icon-192.png"),
+            Some(("public, max-age=86400", None))
+        );
+        assert_eq!(pwa_headers("index.html"), None);
     }
 }

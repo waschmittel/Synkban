@@ -91,38 +91,11 @@ By default the app opens on the board overview. **⚙ Settings** → *On startup
 
 Data is plain JSON files: to back up, copy the directory; to migrate, move it to the new host and point `DATA_DIR` at it. The on-disk layout and file formats are documented in the [development guide](docs/development.md#data-storage).
 
-## Docker
+## Self-Hosting & Docker
 
-### Build
+Synkban's web server has **no authentication of its own** (single-user MVP), so run it locally, on a private network, or behind an authenticating reverse proxy:
 
-```bash
-./docker-build.sh            # defaults to synkban:latest
-./docker-build.sh myapp 1.0  # custom name:tag
-# or directly:
-docker build -t synkban .
-```
-
-### Run
-
-```bash
-# Ephemeral
-docker run -p 8080:8080 synkban
-
-# Persistent data
-docker run -p 8080:8080 -v synkban-data:/app/data synkban
-```
-
-The Dockerfile is a multi-stage build:
-
-1. **node:22** — builds frontend
-2. **rust:1.95** — copies frontend dist into `static/`, compiles backend with embedded assets
-3. **debian:bookworm-slim** — minimal runtime image with just the binary
-
-## Self-Hosting (Docker Compose + authenticating proxy)
-
-Synkban's web server has **no authentication of its own** (single-user MVP), so run it behind an authenticating reverse proxy on an internal network with no published ports. Full step-by-step setup with Docker Compose + Caddy (login form + long-lived session cookie via the `caddy-security` plugin):
-
-➡️ **[Self-hosting behind Caddy + caddy-security](docs/self-hosting-caddy-security.md)**
+➡️ **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docs/docker/README.md)** — `ghcr.io/waschmittel/synkban`, local/standalone Docker runs, and Docker Compose with persistent single-prompt login and unauthenticated PWA metadata
 
 ## License
 

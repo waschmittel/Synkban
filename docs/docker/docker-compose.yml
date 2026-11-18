@@ -1,0 +1,78 @@
+services:
+  traefik:
+    image: traefik:v3.4
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certs:/letsencrypt
+
+  tinyauth:
+    image: ghcr.io/tinyauthapp/tinyauth:v5
+    container_name: tinyauth
+    restart: unless-stopped
+    environment:
+      - TINYAUTH_APPURL=https://${TINYAUTH_DOMAIN}
+      - TINYAUTH_AUTH_USERS=${TINYAUTH_USERS}
+      # Keep the session cookie for 1 year (31536000s) so the installed PWA
+      # asks for authentication once and stays signed in like a native app.
+      - TINYAUTH_AUTH_SESSIONEXPIRY=${TINYAUTH_SESSION_EXPIRY:-31536000}
+      - TINYAUTH_AUTH_SESSIONMAXLIFETIME=0
+      - TINYAUTH_AUTH_SECURE=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tinyauth.rule=Host(`${TINYAUTH_DOMAIN}`)"
+      - "traefik.http.routers.tinyauth.entrypoints=websecure"
+      - "traefik.http.routers.tinyauth.tls.certresolver=letsencrypt"
+      - "traefik.http.services.tinyauth.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.tinyauth.forwardauth.address=http://tinyauth:3000/api/auth/traefik"
+      - "traefik.http.middlewares.tinyauth.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.tinyauth.forwardauth.authResponseHeaders=X-Forwarded-User"
+
+  synkban:
+    image: ghcr.io/waschmittel/synkban:${SYNKBAN_IMAGE_TAG:-latest}
+    # To build locally instead of pulling from GHCR, uncomment:
+    # build:
+    #   context: ../..
+    #   dockerfile: Dockerfile
+    container_name: synkban
+    restart: unless-stopped
+    environment:
+      - DATA_DIR=/app/data
+      - SYNKBAN_CONFIG_DIR=/app/config
+    volumes:
+      - ${SYNKBAN_HOST_DATA_DIR:-./data}:/app/data
+      - ${SYNKBAN_HOST_CONFIG_DIR:-./config}:/app/config
+    labels:
+      - "traefik.enable=true"
+      # Main app router (protected by Tinyauth forwardAuth)
+      - "traefik.http.routers.synkban.rule=Host(`${SYNKBAN_DOMAIN}`)"
+      - "traefik.http.routers.synkban.entrypoints=websecure"
+      - "traefik.http.routers.synkban.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.synkban.middlewares=tinyauth"
+      - "traefik.http.services.synkban.loadbalancer.server.port=8080"
+      # Public PWA metadata router (no auth middleware) so iOS/Android homescreen
+      # installers and background Service Worker checks work without a session cookie.
+      - "traefik.http.routers.synkban-pwa.rule=Host(`${SYNKBAN_DOMAIN}`) && (Path(`/manifest.webmanifest`) || Path(`/sw.js`) || Path(`/favicon.png`) || Path(`/apple-touch-icon.png`) || PathPrefix(`/icons/`))"
+      - "traefik.http.routers.synkban-pwa.entrypoints=websecure"
+      - "traefik.http.routers.synkban-pwa.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.synkban-pwa.priority=100"
+      - "traefik.http.routers.synkban-pwa.service=synkban"
+
+volumes:
+  traefik-certs:
