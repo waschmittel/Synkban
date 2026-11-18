@@ -15,8 +15,9 @@
   --color-surface: #ffffff;
   --color-surface-2: #f4f5f7;
   --color-surface-3: #ebecf0;
-  --color-primary: #0079bf;
-  --color-primary-hover: #026aa7;
+  --color-primary: oklch(from var(--board-color) clamp(0.38, l, 0.52) c h);
+  --color-primary-hover: oklch(from var(--board-color) clamp(0.30, calc(l - 0.06), 0.45) c h);
+  --color-accent: var(--color-primary);
   --color-danger: #eb5a46;
   --color-success: #36b37e;
 
@@ -38,7 +39,7 @@
   --shadow-list: var(--shadow-card);
   --shadow-xl: 0 24px 60px rgba(15, 23, 42, 0.24), 0 8px 16px rgba(15, 23, 42, 0.12);
 
-  --ring: 0 0 0 3px rgba(0, 121, 191, 0.35);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent);
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --t-fast: 120ms var(--ease);
@@ -336,7 +337,7 @@ html.electron .app-header .board-color-dropdown {
 
 /* Board cards on home */
 .board-card {
-  background: linear-gradient(135deg, #0079bf, #0067a3);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
   border-radius: var(--radius-md);
   padding: 12px 16px;
   min-height: 0;
@@ -694,7 +695,7 @@ html.electron .app-header .board-color-dropdown {
 }
 
 .label-drawer-item:focus {
-  outline: 2px solid #0079bf;
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -707,11 +708,11 @@ html.electron .app-header .board-color-dropdown {
 }
 
 .label-drawer-item--drop-before {
-  box-shadow: 0 -2px 0 0 #0079bf;
+  box-shadow: 0 -2px 0 0 var(--color-accent);
 }
 
 .label-drawer-item--drop-after {
-  box-shadow: 0 2px 0 0 #0079bf;
+  box-shadow: 0 2px 0 0 var(--color-accent);
 }
 
 .label-drawer-swatch {
@@ -759,7 +760,7 @@ html.electron .app-header .board-color-dropdown {
 
 .label-drawer-edit-input {
   flex: 1;
-  border: 2px solid #0079bf;
+  border: 2px solid var(--color-accent);
   border-radius: 5px;
   padding: 4px 8px;
   font-size: 14px;
@@ -786,7 +787,7 @@ html.electron .app-header .board-color-dropdown {
 }
 
 .label-drawer-input:focus {
-  border-color: #0079bf;
+  border-color: var(--color-accent);
 }
 
 .btn-sm {
@@ -929,7 +930,7 @@ html.electron .app-header .board-color-dropdown {
 }
 
 .notes-tab--drop {
-  outline: 2px dashed var(--color-primary);
+  outline: 2px dashed var(--color-accent);
   outline-offset: -2px;
   background: #e4f0f8;
 }
@@ -1313,7 +1314,7 @@ html.electron .app-header .board-color-dropdown {
   max-width: 286px;
   min-height: 100px;
   background: rgba(2, 106, 167, 0.15);
-  border: 2px dashed #026aa7;
+  border: 2px dashed var(--color-accent);
   border-radius: var(--radius-lg);
   flex-shrink: 0;
 }
@@ -1349,11 +1350,11 @@ html.electron .app-header .board-color-dropdown {
   font-weight: 600;
   color: var(--color-text);
   padding: 2px 4px;
-  border: 1px solid #0079bf;
+  border: 1px solid var(--color-accent);
   border-radius: 4px;
   background: var(--color-surface);
   outline: none;
-  box-shadow: 0 0 0 1px #0079bf;
+  box-shadow: 0 0 0 1px var(--color-accent);
   font-family: inherit;
 }
 
@@ -1427,7 +1428,7 @@ html.electron .app-header .board-color-dropdown {
 }
 
 .list--collapsed.list--drop {
-  box-shadow: 0 0 0 2px var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-accent);
 }
 
 .list-expand,
@@ -1557,7 +1558,7 @@ html.theme-dark .list-collapse:hover {
   background: var(--color-primary);
   border-radius: 2px;
   margin: 4px 0;
-  box-shadow: 0 0 0 4px rgba(0, 121, 191, 0.18);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
 .card-content {
@@ -1664,7 +1665,7 @@ html.theme-dark .list-collapse:hover {
 
 .add-form input {
   width: 100%;
-  border: 2px solid #0079bf;
+  border: 2px solid var(--color-accent);
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 14px;
@@ -1674,7 +1675,7 @@ html.theme-dark .list-collapse:hover {
 }
 
 .add-form input:focus {
-  box-shadow: 0 0 0 1px #0079bf;
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 /* Quick-add: what the #label / due: tokens will set. */
@@ -1859,7 +1860,7 @@ html.theme-dark .list-collapse:hover {
 .board-error-home {
   display: inline-block;
   padding: 8px 16px;
-  background: #0079bf;
+  background: var(--color-primary);
   color: #fff;
   border-radius: 4px;
   text-decoration: none;
@@ -1867,7 +1868,7 @@ html.theme-dark .list-collapse:hover {
 }
 
 .board-error-home:hover {
-  background: #026aa7;
+  background: var(--color-primary-hover);
 }
 
 .warning-banner {
@@ -2261,26 +2262,26 @@ html.theme-dark .list-collapse:hover {
   width: 30px;
   height: 30px;
   padding: 0;
-  background: color-mix(in srgb, var(--board-color) 14%, var(--color-surface));
-  color: color-mix(in srgb, var(--board-color) 85%, #000);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-accent);
 }
 
 .modal-export-btn:hover,
 .modal-history-btn:hover {
-  background: color-mix(in srgb, var(--board-color) 24%, var(--color-surface));
-  color: color-mix(in srgb, var(--board-color) 85%, #000);
+  background: color-mix(in srgb, var(--color-accent) 24%, var(--color-surface));
+  color: var(--color-accent);
 }
 
 html.theme-dark .modal-export-btn,
 html.theme-dark .modal-history-btn {
-  background: color-mix(in srgb, var(--board-color) 24%, var(--color-surface));
-  color: color-mix(in srgb, var(--board-color) 45%, #fff);
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
+  color: var(--color-accent);
 }
 
 html.theme-dark .modal-export-btn:hover,
 html.theme-dark .modal-history-btn:hover {
-  background: color-mix(in srgb, var(--board-color) 36%, var(--color-surface));
-  color: color-mix(in srgb, var(--board-color) 45%, #fff);
+  background: color-mix(in srgb, var(--color-accent) 32%, var(--color-surface));
+  color: var(--color-accent);
 }
 
 .unsaved-overlay {
@@ -2338,7 +2339,7 @@ html.theme-dark .modal-history-btn:hover {
 }
 
 .editor-wrapper:focus-within {
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
   box-shadow: var(--ring);
 }
 
@@ -2364,7 +2365,7 @@ html.theme-dark .modal-history-btn:hover {
 }
 
 .editor-wrapper .ProseMirror img.editor-image.ProseMirror-selectednode {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-accent);
 }
 
 .editor-wrapper .ProseMirror p.is-editor-empty:first-child::before {
@@ -2462,7 +2463,7 @@ html.theme-dark .modal-history-btn:hover {
 }
 
 .editor-wrapper .ProseMirror a {
-  color: #0079bf;
+  color: var(--color-accent);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -2555,7 +2556,7 @@ html.theme-dark .modal-history-btn:hover {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 121, 191, 0.22);
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
   pointer-events: none;
 }
 
@@ -2614,7 +2615,7 @@ html.theme-dark .modal-history-btn:hover {
 
 .table-menu-item--hi:not(:disabled) {
   background: var(--color-surface-3);
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -2639,7 +2640,7 @@ html.theme-dark .modal-history-btn:hover {
 
 .table-menu-item--active {
   font-weight: 600;
-  color: #0079bf;
+  color: var(--color-accent);
 }
 
 .table-menu-item kbd {
@@ -2699,7 +2700,7 @@ html.theme-dark .modal-history-btn:hover {
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-active {
   background: #d2e4f7;
-  color: #0079bf;
+  color: var(--color-accent);
   border-radius: 4px;
 }
 
@@ -2827,7 +2828,7 @@ html.theme-dark .modal-history-btn:hover {
 
 .label-toggle:focus-visible,
 .label-new-chip:focus-visible {
-  outline: 2px solid #0079bf;
+  outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
 
@@ -2882,7 +2883,7 @@ html.theme-dark .modal-history-btn:hover {
 }
 
 .label-more-chip:focus-visible {
-  outline: 2px solid #0079bf;
+  outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
 
@@ -2925,14 +2926,14 @@ html.theme-dark .modal-history-btn:hover {
 
 .label-create-input:focus {
   outline: none;
-  border-color: var(--color-primary, #0079bf);
+  border-color: var(--color-accent);
 }
 
 .label-create-btn {
   padding: 6px 14px;
   border: none;
   border-radius: 6px;
-  background: var(--color-primary, #0079bf);
+  background: var(--color-primary);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -3016,7 +3017,7 @@ html.theme-dark .modal-history-btn:hover {
 
 .shortcut-tab-here {
   font-size: 8px;
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .shortcut-help-body {
@@ -3373,7 +3374,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .archive-card-item:focus {
-  outline: 2px solid #0079bf;
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
   border-radius: 4px;
 }
@@ -3413,7 +3414,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .archive-board-item:focus {
-  outline: 2px solid #0079bf;
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
   border-radius: 4px;
 }
@@ -3422,7 +3423,7 @@ html.theme-dark .history-line--added .history-line-sign {
   width: 24px;
   height: 16px;
   border-radius: 3px;
-  background: #0079bf;
+  background: var(--color-primary);
   flex-shrink: 0;
 }
 
@@ -3460,7 +3461,7 @@ html.theme-dark .history-line--added .history-line-sign {
 
 .attachment-item:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
   box-shadow: var(--ring);
 }
 
@@ -3500,7 +3501,7 @@ html.theme-dark .history-line--added .history-line-sign {
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
-  background: rgba(0, 121, 191, 0.9);
+  background: color-mix(in srgb, var(--color-accent) 90%, transparent);
   color: white;
 }
 
@@ -3553,7 +3554,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .attachment-insert:hover {
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .attachment-delete:hover {
@@ -3647,7 +3648,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .checklist-item:focus {
-  outline: 2px solid #0079bf;
+  outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
 
@@ -3678,7 +3679,7 @@ html.theme-dark .history-line--added .history-line-sign {
   min-width: 0;
   font-size: 13px;
   padding: 2px 6px;
-  border: 1px solid #0079bf;
+  border: 1px solid var(--color-accent);
   border-radius: 4px;
   outline: none;
 }
@@ -3712,11 +3713,11 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .checklist-item--drop-before {
-  box-shadow: 0 -2px 0 0 #0079bf;
+  box-shadow: 0 -2px 0 0 var(--color-accent);
 }
 
 .checklist-item--drop-after {
-  box-shadow: 0 2px 0 0 #0079bf;
+  box-shadow: 0 2px 0 0 var(--color-accent);
 }
 
 .checklist-confirm {
@@ -3747,7 +3748,7 @@ html.theme-dark .history-line--added .history-line-sign {
 
 .checklist-add-input:focus {
   background: var(--color-surface);
-  border-color: #0079bf;
+  border-color: var(--color-accent);
   border-style: solid;
 }
 
@@ -3883,8 +3884,8 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .link-dialog-input:focus {
-  border-color: #0079bf;
-  box-shadow: 0 0 0 1px #0079bf;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .link-dialog-error {
@@ -4025,7 +4026,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .due-picker-input:focus {
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
 }
 
 .due-picker-input--invalid,
@@ -4094,7 +4095,7 @@ html.theme-dark .history-line--added .history-line-sign {
 
 .due-picker-day:focus {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-accent);
 }
 
 .due-picker-day--out {
@@ -4103,7 +4104,7 @@ html.theme-dark .history-line--added .history-line-sign {
 
 .due-picker-day--today {
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .due-picker-day--selected,
@@ -4176,7 +4177,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .filter-text-input:focus {
-  border-color: #0079bf;
+  border-color: var(--color-accent);
   background: var(--color-surface);
 }
 
@@ -4275,7 +4276,7 @@ html.theme-dark .history-line--added .history-line-sign {
 }
 
 .filter-due-chip:focus {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -4387,13 +4388,13 @@ html.theme-dark .filter-due-chip:hover:not(.filter-due-chip--active) {
 }
 
 .settings-choice--selected {
-  border-color: #0079bf;
+  border-color: var(--color-accent);
   background: #f0f7fb;
-  box-shadow: 0 0 0 1px #0079bf inset;
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
 }
 
 .settings-choice input {
-  accent-color: #0079bf;
+  accent-color: var(--color-accent);
   margin-top: 2px;
   flex-shrink: 0;
 }
@@ -4511,8 +4512,10 @@ html.theme-dark {
   --color-surface: #242a33;
   --color-surface-2: #2d333d;
   --color-surface-3: #383f4a;
-  /* Primary blue is kept as-is (readable as a button fill with white text and
-     as borders/rings on dark); a few accent-text usages are brightened below. */
+  --color-primary: oklch(from var(--board-color) clamp(0.42, l, 0.54) c h);
+  --color-primary-hover: oklch(from var(--board-color) clamp(0.35, calc(l - 0.06), 0.48) c h);
+  --color-accent: oklch(from var(--board-color) clamp(0.68, l, 0.78) min(c, 0.16) h);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 40%, transparent);
 
   /* Deeper shadows read on dark surfaces where the light navy ones vanish. */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
@@ -4562,7 +4565,7 @@ html.theme-dark .card:hover {
 
 html.theme-dark .card:focus,
 html.theme-dark .card.card--selected:not(:focus) {
-  background: #233042;
+  background: color-mix(in srgb, var(--color-accent) 16%, #1f242d);
 }
 
 html.theme-dark .add-trigger:hover {
@@ -4725,7 +4728,7 @@ html.theme-dark .settings-choice:hover {
 }
 
 html.theme-dark .settings-choice--selected {
-  background: rgba(0, 121, 191, 0.16);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
 }
 
 /* ── Amber / red info boxes: dark-tinted fills instead of pale pastels ── */

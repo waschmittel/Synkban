@@ -1418,3 +1418,33 @@ test("board controls live in the top bar with centered title", async ({ page, re
   await page.locator(".app-header").click({ position: { x: titleBox!.x - 20, y: 20 } });
   await expect(page.locator(".board-color-dropdown")).toHaveCount(0);
 });
+
+test("active and primary colors derive from board color with safe contrast", async ({ page, request }) => {
+  const board = await (await request.post("/api/boards", { data: { title: "Pale Accent" } })).json();
+  await request.put(`/api/boards/${board.id}`, { data: { color: "#fef08a" } });
+  await page.goto(`/board/${board.id}`);
+  await page.locator(".add-trigger").first().click();
+
+  const relLum = (rgb: string) => {
+    const m = rgb.match(/\d+(\.\d+)?/g)!.map(Number);
+    const ch = (v: number) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * ch(m[0]) + 0.7152 * ch(m[1]) + 0.0722 * ch(m[2]);
+  };
+
+  // Pale yellow board color is clamped dark enough for white text on .btn-primary.
+  const lightBtnBg = await page.locator(".btn-primary").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(relLum(lightBtnBg)).toBeLessThan(0.22);
+
+  // Dark mode brightens --color-accent for outlines/text on dark surfaces while keeping .btn-primary dark.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveClass(/theme-dark/);
+  const darkBtnBg = await page.locator(".btn-primary").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(relLum(darkBtnBg)).toBeLessThan(0.22);
+  await page.locator(".board-filter-btn").click();
+  await page.locator(".filter-due-chip").first().click();
+  const chipColor = await page.locator(".filter-due-chip--active").evaluate((el) => getComputedStyle(el).color);
+  expect(relLum(chipColor)).toBeGreaterThan(0.25);
+});
