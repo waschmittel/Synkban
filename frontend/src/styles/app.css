@@ -2585,6 +2585,17 @@ html.theme-dark .modal-history-btn:hover {
   text-align: center !important;
 }
 
+.editor-wrapper .ProseMirror table[data-matrix] tr:first-child > :first-child {
+  border-top-style: hidden;
+  border-left-style: hidden;
+  background: transparent;
+  pointer-events: none;
+}
+
+.editor-wrapper .ProseMirror table[data-matrix] tr:first-child > :first-child::after {
+  display: none;
+}
+
 .editor-wrapper .ProseMirror td p,
 .editor-wrapper .ProseMirror th p {
   margin: 0;
@@ -2728,8 +2739,12 @@ html.theme-dark .modal-history-btn:hover {
   align-items: center;
 }
 
-.editor-wrapper .ProseMirror-menubar .ProseMirror-icon:hover {
+.editor-wrapper .ProseMirror-menubar .ProseMirror-icon:hover:not(.ProseMirror-menu-disabled) {
   background: var(--color-surface-3);
+}
+
+.editor-wrapper .ProseMirror-menubar .ProseMirror-icon.ProseMirror-menu-disabled {
+  cursor: default;
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-active {

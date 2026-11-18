@@ -176,7 +176,7 @@ test("Accel+K menu is contextual: link, inline code, text style", async ({ page,
   await expect(labels).toHaveText([
     "Add link…", "Remove link", "Inline code", "Insert image…",
     "Plain text", "Code block", "Heading 1", "Heading 2", "Heading 3",
-    "Insert table (3×3)",
+    "Insert table (3×3)", "Insert matrix (3×3)",
   ]);
   // No link at the cursor and nothing selected: link actions are greyed out.
   await expect(page.locator(".table-menu-item", { hasText: "Add link" })).toBeDisabled();
@@ -354,7 +354,7 @@ test("the Accel+K menu is arrow-navigable and offers images", async ({ page, req
   await expect(hi).toHaveText(/^Insert image…/);
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp"); // wraps to the last item
-  await expect(hi).toHaveText(/^Insert table/);
+  await expect(hi).toHaveText(/^Insert matrix/);
   await page.keyboard.press("End");
   await page.keyboard.press("Home");
   await expect(hi).toHaveText(/^Inline code/);

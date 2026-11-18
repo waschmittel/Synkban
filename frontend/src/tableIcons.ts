@@ -14,6 +14,10 @@ export const svg = (inner: string, size = 16): string =>
 export const TABLE_ICON =
   '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/>';
 
+/// A grid with a header row and header column, without the top-left cell.
+export const MATRIX_ICON =
+  '<path d="M10 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10M3 10h18M10 4v16"/>';
+
 const BAND = 'fill="currentColor" fill-opacity=".28" stroke="none"';
 
 export const ICONS = {
@@ -24,6 +28,7 @@ export const ICONS = {
   moveDown: '<path d="M12 4v15M6 13l6 6 6-6"/>',
   moveLeft: '<path d="M20 12H5M11 6l-6 6 6 6"/>',
   moveRight: '<path d="M4 12h15M13 6l6 6-6 6"/>',
+  transpose: '<path d="M16 3l4 4-4 4M20 7H11a4 4 0 0 0-4 4v9M3 16l4 4 4-4"/>',
   // Insert: the existing grid plus a "+" where the new line goes.
   rowAbove: '<rect x="3" y="12" width="18" height="8" rx="1.5"/><path d="M12 3v6M9 6h6"/>',
   rowBelow: '<rect x="3" y="4" width="18" height="8" rx="1.5"/><path d="M12 15v6M9 18h6"/>',

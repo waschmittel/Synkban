@@ -105,17 +105,21 @@ export function descriptionLines(description: string): string[] {
         return;
       }
       case "table": {
+        const matrix = !!node.attrs?.matrix;
         // One markdown-style line per row (header gets a separator), so a row
         // or column change shows as a changed line instead of a pile of cells.
         (node.content ?? []).forEach((row: any, ri: number) => {
-          const cells = (row.content ?? []).map((c: any) =>
-            (c.content ?? []).map(inline).join(" ").trim()
-          );
+          const cells = (row.content ?? []).map((c: any, ci: number) => {
+            const text = (c.content ?? []).map(inline).join(" ").trim();
+            if (!matrix || ri === 0 || ci === 0) return text;
+            const a = c.attrs?.align;
+            return a === "center" ? `:${text}:` : a === "right" ? `${text}:` : a === "left" ? `:${text}` : text;
+          });
           lines.push(indent + "| " + cells.join(" | ") + " |");
           // Header separator carries the column alignment, markdown-style.
           if (ri === 0) {
             const sep = (row.content ?? []).map((c: any) => {
-              const a = c.attrs?.align;
+              const a = matrix ? null : c.attrs?.align;
               return a === "center" ? ":---:" : a === "right" ? "---:" : a === "left" ? ":---" : "---";
             });
             lines.push(indent + "| " + sep.join(" | ") + " |");

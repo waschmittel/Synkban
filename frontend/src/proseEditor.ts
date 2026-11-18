@@ -14,7 +14,7 @@ import { sinkListItem, liftListItem } from "prosemirror-schema-list";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
-import { tablePlugins } from "./tables";
+import { insertMatrix, insertTable, tablePlugins } from "./tables";
 import { schema, TEXT_STYLES } from "./schema";
 import { api } from "./api";
 import { pastedImageFiles } from "./pasteImages";
@@ -38,8 +38,8 @@ import {
   openLinkEditor,
   sanitizeLinkHref,
 } from "./links";
-import { ICONS, TABLE_ICON, svg } from "./tableIcons";
-import { accel, isMac, tip } from "./platform";
+import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
+import { isMac } from "./platform";
 import {
   MenuItem,
   Dropdown,
@@ -81,16 +81,10 @@ export function isDocEmpty(doc: PmNode): boolean {
 }
 
 
-/// The toolbar button's icon (prosemirror-menu clones the node it is given).
-function tableIconDom(): HTMLElement {
+/// Toolbar icon wrapper (prosemirror-menu clones the node it is given).
+function iconDom(markup: string): HTMLElement {
   const span = document.createElement("span");
-  span.innerHTML = svg(TABLE_ICON, 16); // static markup from tableIcons.ts
-  return span;
-}
-
-function imageIconDom(): HTMLElement {
-  const span = document.createElement("span");
-  span.innerHTML = svg(ICONS.image, 16); // static markup from tableIcons.ts
+  span.innerHTML = svg(markup, 16); // static markup from tableIcons.ts
   return span;
 }
 
@@ -154,7 +148,7 @@ export function createCardEditor(
 
   const imageItem = new MenuItem({
     title: "Insert image",
-    icon: { dom: imageIconDom() },
+    icon: { dom: iconDom(ICONS.image) },
     class: "image-menu-trigger",
     enable: (state) => canInsertImage(state),
     run(_state, _dispatch, view) {
@@ -174,18 +168,24 @@ export function createCardEditor(
   const typeDropdown = new TypeDropdown(TEXT_STYLES.map((t) => t.item()));
 
   const tableItem = new MenuItem({
-    title: tip("Table", accel("K")),
-    icon: { dom: tableIconDom() },
-    class: "table-menu-trigger",
-    run(_state, _dispatch, view) {
-      openEditorMenu(view);
-      return true;
-    },
+    title: "Insert table",
+    icon: { dom: iconDom(TABLE_ICON) },
+    class: "insert-table-btn",
+    enable: (state) => insertTable(state),
+    run: insertTable,
+  });
+
+  const matrixItem = new MenuItem({
+    title: "Insert matrix",
+    icon: { dom: iconDom(MATRIX_ICON) },
+    class: "insert-matrix-btn",
+    enable: (state) => insertMatrix(state),
+    run: insertMatrix,
   });
 
   const menuContent = inlineMenu
     .concat([[typeDropdown]])
-    .concat([[tableItem]])
+    .concat([[tableItem, matrixItem]])
     .concat([[undoItem, redoItem]])
     .concat(items.blockMenu);
 

@@ -1,5 +1,5 @@
-/// The editor menu (Accel+K, the toolbar's "Table" button, or right-click
-/// anywhere in the editor — the same menu, anchored at the pointer).
+/// The editor menu (Accel+K or right-click anywhere in the editor — the same
+/// menu, anchored at the pointer).
 ///
 /// One mechanism for keyboard and touch: the menu is a small popup beside the
 /// caret whose items are clickable *and* carry single-key shortcuts that are
@@ -18,11 +18,12 @@
 ///
 ///   always            l link (add/edit) · u remove link · i inline code · m image
 ///                     ↑ ↓ Home End move a highlight, Enter runs it
-///   outside a table   0 plain · b code block · 1/2/3 heading · t insert table
+///   outside a table   0 plain · b code block · 1/2/3 heading · t table · x matrix
 ///   inside a table    w s / a d … move the row up, down / column left, right
+///                     x … transpose (matrix only)
 ///                     Shift+arrow … insert a row / column in that direction
-///                     1 / 2 / 3 … align column left / center / right
-///                     r / c / t … delete row / column / table
+///                     1 / 2 / 3 … align column (matrix: cell) left / center / right
+///                     r / c / t … delete row / column / table (or matrix)
 ///   always            Esc / Accel+K … close
 
 import type { EditorView } from "prosemirror-view";
@@ -32,7 +33,7 @@ import { linkTarget, markActive, openLinkEditor, removeLink } from "./links";
 import { TEXT_STYLES, schema } from "./schema";
 import { dialogKeys } from "./dialogKeys";
 import { accel, hasAccel, isMac, tip } from "./platform";
-import { ICONS, TABLE_ICON, svg } from "./tableIcons";
+import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
 import { menuNav, navKey } from "./menuNav";
 import { canInsertImage, hooksOf, openImagePicker } from "./imagePicker";
 
@@ -40,8 +41,10 @@ import {
   cellContext,
   insertColumnLeft,
   insertColumnRight,
+  insertMatrix,
   insertRowAbove,
   insertRowBelow,
+  isMatrix,
   alignCenter,
   alignLeft,
   alignRight,
@@ -53,6 +56,7 @@ import {
   removeColumn,
   removeRow,
   removeTable,
+  transposeMatrix,
 } from "./tables";
 
 const SHIFT = isMac ? "⇧" : "Shift+";
@@ -146,29 +150,46 @@ const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
   command: (s, d, v) => t.command(s, d, v) || t.active(s),
 }));
 
-const TABLE_ITEMS: Item[] = [
-  // Move
+const inMatrix = (s: EditorState) => {
+  const c = cellContext(s);
+  return !!c && isMatrix(c.table);
+};
+
+const MOVE_ITEMS: Item[] = [
   { label: "Move row up", icon: ICONS.moveUp, group: 3, hint: "W", match: letter("w"), command: moveRowUp },
   { label: "Move row down", icon: ICONS.moveDown, group: 3, hint: "S", match: letter("s"), command: moveRowDown },
   { label: "Move column left", icon: ICONS.moveLeft, group: 3, hint: "A", match: letter("a"), command: moveColumnLeft },
   { label: "Move column right", icon: ICONS.moveRight, group: 3, hint: "D", match: letter("d"), command: moveColumnRight },
+];
+
+const TRANSPOSE_ITEM: Item = {
+  label: "Transpose",
+  icon: ICONS.transpose,
+  group: 3,
+  hint: "X",
+  match: letter("x"),
+  command: transposeMatrix,
+};
+
+const TABLE_REST_ITEMS: Item[] = [
   // Insert
   { label: "Insert row above", icon: ICONS.rowAbove, group: 4, hint: `${SHIFT}↑`, match: arrow("ArrowUp", true), command: insertRowAbove },
   { label: "Insert row below", icon: ICONS.rowBelow, group: 4, hint: `${SHIFT}↓`, match: arrow("ArrowDown", true), command: insertRowBelow },
   { label: "Insert column left", icon: ICONS.colLeft, group: 4, hint: `${SHIFT}←`, match: arrow("ArrowLeft", true), command: insertColumnLeft },
   { label: "Insert column right", icon: ICONS.colRight, group: 4, hint: `${SHIFT}→`, match: arrow("ArrowRight", true), command: insertColumnRight },
   // Align
-  { label: "Align column left", icon: ICONS.alignLeft, group: 5, hint: "1", match: digit("1"), command: alignLeft },
-  { label: "Align column center", icon: ICONS.alignCenter, group: 5, hint: "2", match: digit("2"), command: alignCenter },
-  { label: "Align column right", icon: ICONS.alignRight, group: 5, hint: "3", match: digit("3"), command: alignRight },
+  { label: (s) => (inMatrix(s) ? "Align cell left" : "Align column left"), icon: ICONS.alignLeft, group: 5, hint: "1", match: digit("1"), command: alignLeft },
+  { label: (s) => (inMatrix(s) ? "Align cell center" : "Align column center"), icon: ICONS.alignCenter, group: 5, hint: "2", match: digit("2"), command: alignCenter },
+  { label: (s) => (inMatrix(s) ? "Align cell right" : "Align column right"), icon: ICONS.alignRight, group: 5, hint: "3", match: digit("3"), command: alignRight },
   // Delete
   { label: "Delete row", icon: ICONS.deleteRow, group: 6, danger: true, hint: "R", match: letter("r"), command: removeRow },
   { label: "Delete column", icon: ICONS.deleteColumn, group: 6, danger: true, hint: "C", match: letter("c"), command: removeColumn },
-  { label: "Delete table", icon: ICONS.deleteTable, group: 6, danger: true, hint: "T", match: letter("t"), command: removeTable },
+  { label: (s) => (inMatrix(s) ? "Delete matrix" : "Delete table"), icon: ICONS.deleteTable, group: 6, danger: true, hint: "T", match: letter("t"), command: removeTable },
 ];
 
 const INSERT_ITEMS: Item[] = [
   { label: "Insert table (3×3)", icon: TABLE_ICON, group: 3, hint: "T", match: letter("t"), command: insertTable },
+  { label: "Insert matrix (3×3)", icon: MATRIX_ICON, group: 3, hint: "X", match: letter("x"), command: insertMatrix },
 ];
 
 let close: (() => void) | null = null;
@@ -191,10 +212,14 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
   menu.setAttribute("aria-label", "Editor");
   document.body.appendChild(menu);
 
-  const items = (): Item[] =>
-    cellContext(view.state)
-      ? [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...TABLE_ITEMS]
-      : [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...STYLE_ITEMS, ...INSERT_ITEMS];
+  const items = (): Item[] => {
+    const ctx = cellContext(view.state);
+    if (!ctx) return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...STYLE_ITEMS, ...INSERT_ITEMS];
+    const tableItems = isMatrix(ctx.table)
+      ? [...MOVE_ITEMS, TRANSPOSE_ITEM, ...TABLE_REST_ITEMS]
+      : [...MOVE_ITEMS, ...TABLE_REST_ITEMS];
+    return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...tableItems];
+  };
 
   const nav = menuNav(menu);
 
@@ -304,8 +329,7 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
 
   const onPointerDown = (e: PointerEvent) => {
     const target = e.target as Element | null;
-    // The toolbar button toggles the menu itself.
-    if (target?.closest(".table-menu, .table-menu-trigger")) return;
+    if (target?.closest(".table-menu")) return;
     dispose();
   };
 

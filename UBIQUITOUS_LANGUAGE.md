@@ -52,6 +52,7 @@
 | **Editor Menu** | The context-sensitive `Accel+K` popup in the description editor: link, code, text style, table (ADR-0016) | Table menu, command palette |
 | **Text Style** | Block type of a description paragraph: Plain text, Code block, Heading 1–3 (never "H1") | Block type, format |
 | **Header Row** | First row of a description table; always the header, source of column alignment (ADR-0017) | Table head |
+| **Matrix** | A description table (`attrs.matrix`) with an empty, uneditable top-left corner, centred headers on both the first row and first column, per-cell alignment, and a transpose action (ADR-0017) | Grid |
 | **Overlay Layer** | An entry in the open-order stack of overlays; traps yield to higher layers (ADR-0009) | Modal stack |
 | **Desktop Mode** | Electron shell around the binary with token auth and a random port (ADR-0003) | Native app |
 | **Web Mode** | Standalone binary serving the UI at `:8080` | Server mode |

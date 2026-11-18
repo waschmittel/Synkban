@@ -6,15 +6,15 @@
 
 ## The menu
 
-`Accel+K`, right-click, or the toolbar Table button opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. Groups, divided by separators, no headings, an icon each:
+`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, dedicated **Insert table** and **Insert matrix** buttons insert a 3×3 table/matrix directly and disable when insertion is invalid (e.g. inside a table or matrix). Groups, divided by separators, no headings, an icon each:
 
 | Group | Items (key) | Availability |
 |---|---|---|
 | Link | Add/Edit link… (`L`), Remove link (`U`) | greyed when not applicable |
 | Code | Inline code (`I`) | always |
 | Text style | Plain (`0`), Code block (`B`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
-| Insert | Insert table 3×3 (`T`) | outside tables |
-| Table | move row/column (`W`/`S` up/down, `A`/`D` left/right), insert row/column (Shift+arrows), align column (`1`/`2`/`3`), delete row/column/table (`R`/`C`/`T`; tinted danger) | inside tables |
+| Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`) | outside tables |
+| Table | move row/column (`W`/`S` up/down, `A`/`D` left/right), transpose matrix (`X`), insert row/column (Shift+arrows), align column or matrix cell (`1`/`2`/`3`), delete row/column/table or matrix (`R`/`C`/`T`; tinted danger) | inside tables/matrices |
 
 ## Why
 
@@ -28,7 +28,7 @@ A modifier chord per operation doesn't scale and collides across OSes (ADR-0008)
 - Keys match only *enabled* items.
 - **Right-click does exactly what Accel+K does**, anchored at the pointer: same menu, same items. The caret moves to the click first (like a native right-click) unless the click lands inside the current selection, which is kept. The native context menu is not offered inside the editor.
 - Icons are static inline SVG (`tableIcons.ts`) — the only `innerHTML` source; nothing user-controlled reaches it.
-- Discoverability per ADR-0008 (toolbar tooltip `Table (⌘K)`, `ShortcutHelp.tsx`, `tooltips.spec.ts`).
+- Discoverability per ADR-0008 (`ShortcutHelp.tsx`, `tooltips.spec.ts`).
 
 ## Menu navigation and image items
 

@@ -922,7 +922,13 @@ impl Layout {
                     }
                 }
             }
-            "table" => self.table(content, x, w, size),
+            "table" => {
+                let matrix = node
+                    .pointer("/attrs/matrix")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                self.table(content, x, w, size, matrix);
+            }
             _ => {
                 if !content.is_empty() {
                     self.blocks(content, x, w, size, color);
@@ -1082,14 +1088,16 @@ impl Layout {
     /// Tables are centred at their natural width (capped at the available
     /// width, widest columns shrinking first) and kept on one page when they
     /// fit; a longer table splits between rows and repeats its header.
-    fn table(&mut self, rows: &[Value], x: f32, w: f32, size: f32) {
+    /// Matrices (`matrix == true`) leave the top-left corner open and style
+    /// both the first row and the first column as centred headers.
+    fn table(&mut self, rows: &[Value], x: f32, w: f32, size: f32, matrix: bool) {
         let size = size - 1.0;
         let line_h = size * 1.4;
         let pad = 4.0;
         let grid: Vec<Vec<Cell>> = rows
             .iter()
             .enumerate()
-            .map(|(ri, r)| table_cells(r, ri == 0))
+            .map(|(ri, r)| table_cells(r, ri, matrix))
             .collect();
         let ncols = grid.iter().map(Vec::len).max().unwrap_or(0);
         if ncols == 0 {
@@ -1128,6 +1136,8 @@ impl Layout {
             cols: &cols,
             x0,
             pad,
+            matrix,
+            has_body: grid.len() > 1,
         };
         self.gap(3.0);
         for ri in 0..grid.len() {
@@ -1142,10 +1152,10 @@ impl Layout {
             if self.y + need > BOTTOM && self.y > TOP {
                 self.new_page();
                 if ri > 0 && heights[0] + heights[ri] <= BOTTOM - TOP {
-                    self.table_row(&grid[0], &wrapped[0], &geom, heights[0], size);
+                    self.table_row(&grid[0], &wrapped[0], &geom, heights[0], size, true);
                 }
             }
-            self.table_row(&grid[ri], &wrapped[ri], &geom, heights[ri], size);
+            self.table_row(&grid[ri], &wrapped[ri], &geom, heights[ri], size, ri == 0);
         }
         self.gap(8.0);
     }
@@ -1157,8 +1167,16 @@ impl Layout {
         grid: &Grid,
         h: f32,
         size: f32,
+        first_row: bool,
     ) {
-        let Grid { cols, x0, pad } = *grid;
+        let Grid {
+            cols,
+            x0,
+            pad,
+            matrix,
+            has_body,
+        } = *grid;
+        let open_corner = matrix && first_row;
         let top = self.y;
         let total_w: f32 = cols.iter().sum();
         let mut cx = x0;
@@ -1177,12 +1195,26 @@ impl Layout {
                     cell.align,
                 );
             }
-            self.rect(cx, top, 0.6, h, RULE);
+            if !(open_corner && ci == 0) {
+                self.rect(cx, top, 0.6, h, RULE);
+            }
             cx += cols[ci];
         }
-        self.rect(cx, top, 0.6, h, RULE);
-        self.rect(x0, top, total_w, 0.6, RULE);
-        self.rect(x0, top + h, total_w, 0.6, RULE);
+        if !(open_corner && cols.len() == 1) {
+            self.rect(cx, top, 0.6, h, RULE);
+        }
+        let skip = if open_corner {
+            cols.first().copied().unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        if total_w > skip {
+            self.rect(x0 + skip, top, total_w - skip, 0.6, RULE);
+        }
+        let b_skip = if open_corner && !has_body { skip } else { 0.0 };
+        if total_w > b_skip {
+            self.rect(x0 + b_skip, top + h, total_w - b_skip, 0.6, RULE);
+        }
         self.y = top + h;
     }
 }
@@ -1226,6 +1258,8 @@ struct Grid<'a> {
     cols: &'a [f32],
     x0: f32,
     pad: f32,
+    matrix: bool,
+    has_body: bool,
 }
 
 struct Cell {
@@ -1248,39 +1282,53 @@ fn indent_for(width: f32, indent: f32) -> f32 {
 
 const MIN_TEXT_W: f32 = 120.0;
 
-fn table_cells(row: &Value, header: bool) -> Vec<Cell> {
+fn table_cells(row: &Value, ri: usize, matrix: bool) -> Vec<Cell> {
     let cells = row
         .get("content")
         .and_then(Value::as_array)
         .map_or(&[][..], Vec::as_slice);
     cells
         .iter()
-        .map(|cell| {
-            let paras = cell
-                .get("content")
-                .and_then(Value::as_array)
-                .map_or(&[][..], Vec::as_slice);
+        .enumerate()
+        .map(|(ci, cell)| {
+            let corner = matrix && ri == 0 && ci == 0;
+            let header = if matrix {
+                (ri == 0) != (ci == 0)
+            } else {
+                ri == 0
+            };
             let mut spans = Vec::new();
-            for (pi, p) in paras.iter().enumerate() {
-                if pi > 0 {
-                    spans.push(Span {
-                        text: "\n".into(),
-                        ..Span::default()
-                    });
+            if !corner {
+                let paras = cell
+                    .get("content")
+                    .and_then(Value::as_array)
+                    .map_or(&[][..], Vec::as_slice);
+                for (pi, p) in paras.iter().enumerate() {
+                    if pi > 0 {
+                        spans.push(Span {
+                            text: "\n".into(),
+                            ..Span::default()
+                        });
+                    }
+                    inline(
+                        p.get("content")
+                            .and_then(Value::as_array)
+                            .map_or(&[][..], Vec::as_slice),
+                        &mut spans,
+                        header,
+                    );
                 }
-                inline(
-                    p.get("content")
-                        .and_then(Value::as_array)
-                        .map_or(&[][..], Vec::as_slice),
-                    &mut spans,
-                    header,
-                );
             }
-            let align = match cell.pointer("/attrs/align").and_then(Value::as_str) {
-                _ if header => Align::Center,
-                Some("center") => Align::Center,
-                Some("right") => Align::Right,
-                _ => Align::Left,
+            let align = if corner {
+                Align::Left
+            } else if header {
+                Align::Center
+            } else {
+                match cell.pointer("/attrs/align").and_then(Value::as_str) {
+                    Some("center") => Align::Center,
+                    Some("right") => Align::Right,
+                    _ => Align::Left,
+                }
             };
             Cell {
                 spans,

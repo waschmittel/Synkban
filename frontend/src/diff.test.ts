@@ -126,6 +126,34 @@ describe("descriptionLines tables", () => {
     });
     expect(descriptionLines(d)).toEqual(["| L | C | R | N |", "| :--- | :---: | ---: | --- |"]);
   });
+
+  it("renders matrices with per-cell alignment markers on body cells", () => {
+    const cell = (type: string, text: string, align: string | null = null) => ({
+      type,
+      attrs: { align },
+      content: [{ type: "paragraph", content: text ? [{ type: "text", text }] : [] }],
+    });
+    const d = JSON.stringify({
+      type: "doc",
+      content: [
+        {
+          type: "table",
+          attrs: { matrix: true },
+          content: [
+            { type: "table_row", content: [cell("table_cell", ""), cell("table_header", "A"), cell("table_header", "B")] },
+            { type: "table_row", content: [cell("table_header", "x"), cell("table_cell", "1", "left"), cell("table_cell", "2", "right")] },
+            { type: "table_row", content: [cell("table_header", "y"), cell("table_cell", "3", "center"), cell("table_cell", "4", null)] },
+          ],
+        },
+      ],
+    });
+    expect(descriptionLines(d)).toEqual([
+      "|  | A | B |",
+      "| --- | --- | --- |",
+      "| x | :1 | 2: |",
+      "| y | :3: | 4 |",
+    ]);
+  });
 });
 
 

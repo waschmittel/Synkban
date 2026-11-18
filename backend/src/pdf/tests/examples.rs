@@ -246,6 +246,60 @@ fn corner_cases() -> Vec<(&'static str, CardExport)> {
             e.attachments.push((attachment("report \u{e4}\u{f6}\u{fc}.pdf", 1_500_000), None));
             e
         }),
+        ("17-matrix", {
+            let mcell = |kind: &str, align: Option<&str>, t: &str| {
+                let content = if t.is_empty() { json!([]) } else { json!([para(t)]) };
+                json!({"type": kind, "attrs": {"align": align}, "content": content})
+            };
+            let mut nodes = vec![
+                para("A matrix leaves the top-left corner open, centres both header row and header column, and aligns body cells individually."),
+                json!({
+                    "type": "table",
+                    "attrs": {"matrix": true},
+                    "content": [
+                        {"type": "table_row", "content": [
+                            mcell("table_cell", None, ""),
+                            mcell("table_header", None, "North"),
+                            mcell("table_header", None, "South"),
+                            mcell("table_header", None, "East"),
+                        ]},
+                        {"type": "table_row", "content": [
+                            mcell("table_header", None, "Q1"),
+                            mcell("table_cell", Some("left"), "10"),
+                            mcell("table_cell", Some("center"), "20"),
+                            mcell("table_cell", Some("right"), "30"),
+                        ]},
+                        {"type": "table_row", "content": [
+                            mcell("table_header", None, "Q2 (summary)"),
+                            mcell("table_cell", Some("right"), "400"),
+                            mcell("table_cell", Some("left"), "500"),
+                            mcell("table_cell", Some("center"), "600"),
+                        ]},
+                    ]
+                }),
+            ];
+            let mut long_matrix = vec![json!({
+                "type": "table_row",
+                "content": [
+                    mcell("table_cell", None, ""),
+                    mcell("table_header", None, "Alpha"),
+                    mcell("table_header", None, "Beta"),
+                ]
+            })];
+            for i in 0..60 {
+                long_matrix.push(json!({
+                    "type": "table_row",
+                    "content": [
+                        mcell("table_header", None, &format!("Item {i}")),
+                        mcell("table_cell", Some("right"), &format!("{}", i * 3)),
+                        mcell("table_cell", Some("center"), if i % 2 == 0 { "yes" } else { "no" }),
+                    ]
+                }));
+            }
+            nodes.push(para("A long matrix repeats its top header across page breaks:"));
+            nodes.push(json!({"type": "table", "attrs": {"matrix": true}, "content": long_matrix}));
+            with_description(nodes)
+        }),
     ];
     // Unless a case sets its own title, the file name is the title.
     cases

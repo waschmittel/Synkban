@@ -5,22 +5,30 @@ import { CellSelection, selectedRect } from "prosemirror-tables";
 import type { Node as PmNode } from "prosemirror-model";
 import { schema } from "./proseEditor";
 import {
+  createMatrix,
   createTable,
   tablePlugins,
+  insertMatrix,
   insertTable,
+  insertColumnLeft,
+  insertColumnRight,
   insertRowAbove,
   insertRowBelow,
+  isMatrix,
   moveRowUp,
   moveRowDown,
   moveColumnLeft,
   moveColumnRight,
+  removeColumn,
   removeRow,
   cellContext,
   enterInTable,
   alignLeft,
   alignRight,
   alignCenter,
+  tabBackward,
   tabForward,
+  transposeMatrix,
 } from "./tables";
 
 const para = (text: string) => schema.node("paragraph", null, text ? [schema.text(text)] : []);
@@ -35,6 +43,20 @@ function filled(rows: number, cols: number): PmNode {
     rowNodes.push(row.type.create(null, cells));
   });
   return t.type.create(null, rowNodes);
+}
+
+/// A matrix whose non-corner cells read "r<row>c<col>".
+function filledMatrix(rows: number, cols: number): PmNode {
+  const m = createMatrix(schema, rows, cols);
+  const rowNodes: PmNode[] = [];
+  m.forEach((row, _o, r) => {
+    const cells: PmNode[] = [];
+    row.forEach((cell, _co, c) =>
+      cells.push(cell.type.create(cell.attrs, para(r === 0 && c === 0 ? "" : `r${r}c${c}`))),
+    );
+    rowNodes.push(row.type.create(null, cells));
+  });
+  return m.type.create(m.attrs, rowNodes);
 }
 
 function stateWith(...blocks: PmNode[]): EditorState {
@@ -114,9 +136,13 @@ describe("tables", () => {
     expect(cellContext(s)).not.toBeNull();
   });
 
-  it("insertTable is a no-op inside a table", () => {
-    const s = inCell(stateWith(filled(3, 2), para("")), "r1c0");
-    expect(insertTable(s)).toBe(false);
+  it("insertTable and insertMatrix are no-ops inside a table or matrix", () => {
+    const inTable = inCell(stateWith(filled(3, 2), para("")), "r1c0");
+    expect(insertTable(inTable)).toBe(false);
+    expect(insertMatrix(inTable)).toBe(false);
+    const inMat = inCell(stateWith(filledMatrix(3, 3), para("")), "r1c1");
+    expect(insertTable(inMat)).toBe(false);
+    expect(insertMatrix(inMat)).toBe(false);
   });
 
   it("rows can be added below but not above the header", () => {
@@ -267,5 +293,182 @@ describe("tables", () => {
     s = run(s, moveColumnLeft);
     expect(rows(s)[1]).toEqual(["r1c0", "r1c1", "r1c2"]);
     expect(selectedRect(s)).toMatchObject({ top: 1, bottom: 3, left: 0, right: 2 });
+  });
+});
+
+describe("matrices", () => {
+  const aligns = (state: EditorState): (string | null)[][] => {
+    const out: (string | null)[][] = [];
+    state.doc.descendants((n) => {
+      if (n.type === schema.nodes.table_row) {
+        const r: (string | null)[] = [];
+        n.forEach((c) => r.push(c.attrs.align));
+        out.push(r);
+      }
+      return true;
+    });
+    return out;
+  };
+
+  it("createMatrix marks matrix=true, keeps (0,0) as table_cell, and makes row 0 / col 0 headers", () => {
+    const m = createMatrix(schema, 3, 3);
+    expect(isMatrix(m)).toBe(true);
+    const s = stateWith(m);
+    expect(headerKinds(s)).toEqual([
+      "table_cell,table_header,table_header",
+      "table_header,table_cell,table_cell",
+      "table_header,table_cell,table_cell",
+    ]);
+  });
+
+  it("insertMatrix inserts a matrix and selects (0, 1); Shift+Tab never enters (0, 0)", () => {
+    let s = run(stateWith(para("")), insertMatrix);
+    expect(isMatrix(s.doc.child(0))).toBe(true);
+    expect(s.doc.lastChild!.type.name).toBe("paragraph");
+    expect(cellContext(s)).toMatchObject({ row: 0, col: 1 });
+    expect(tabBackward(s)).toBe(false);
+
+    // Tab advances through (0, 2) -> (1, 0), and Shift+Tab returns to (0, 2).
+    s = run(s, tabForward);
+    expect(cellContext(s)).toMatchObject({ row: 0, col: 2 });
+    s = run(s, tabForward);
+    expect(cellContext(s)).toMatchObject({ row: 1, col: 0 });
+    s = run(s, tabBackward);
+    expect(cellContext(s)).toMatchObject({ row: 0, col: 2 });
+  });
+
+  it("header column cannot move or gain a column to its left", () => {
+    let s = inCell(stateWith(filledMatrix(3, 3), para("")), "r1c0");
+    expect(insertColumnLeft(s)).toBe(false);
+    expect(moveColumnLeft(s)).toBe(false);
+    expect(moveColumnRight(s)).toBe(false);
+
+    s = inCell(s, "r1c1");
+    expect(moveColumnLeft(s)).toBe(false);
+    s = run(s, moveColumnRight);
+    expect(rows(s)[0]).toEqual(["", "r0c2", "r0c1"]);
+    expect(rows(s)[1]).toEqual(["r1c0", "r1c2", "r1c1"]);
+
+    // Inserting right of column 0 adds a normal body column (with header at row 0).
+    s = run(inCell(s, "r1c0"), insertColumnRight);
+    expect(rows(s)[0]).toEqual(["", "", "r0c2", "r0c1"]);
+    expect(headerKinds(s)[1]).toBe("table_header,table_cell,table_cell,table_cell");
+  });
+
+  it("deleting row 0 or col 0 promotes the next line and clears (0, 0); 2×2 refuses deletion", () => {
+    let s = inCell(stateWith(filledMatrix(3, 3), para("")), "r0c1");
+    s = run(s, removeRow);
+    expect(rows(s)).toEqual([
+      ["", "r1c1", "r1c2"],
+      ["r2c0", "r2c1", "r2c2"],
+    ]);
+    expect(headerKinds(s)).toEqual([
+      "table_cell,table_header,table_header",
+      "table_header,table_cell,table_cell",
+    ]);
+
+    let s2 = inCell(stateWith(filledMatrix(3, 3), para("")), "r1c0");
+    s2 = run(s2, removeColumn);
+    expect(rows(s2)).toEqual([
+      ["", "r0c2"],
+      ["r1c1", "r1c2"],
+      ["r2c1", "r2c2"],
+    ]);
+    expect(headerKinds(s2)).toEqual([
+      "table_cell,table_header",
+      "table_header,table_cell",
+      "table_header,table_cell",
+    ]);
+
+    const min = inCell(stateWith(filledMatrix(2, 2), para("")), "r1c1");
+    expect(removeRow(min)).toBe(false);
+    expect(removeColumn(min)).toBe(false);
+  });
+
+  it("alignment is per-cell on body cells only; new rows/columns stay unaligned", () => {
+    let s = inCell(stateWith(filledMatrix(3, 3), para("")), "r0c1");
+    expect(alignRight(s)).toBe(false);
+    s = inCell(s, "r1c0");
+    expect(alignLeft(s)).toBe(false);
+
+    s = run(inCell(s, "r1c1"), alignRight);
+    expect(aligns(s)).toEqual([
+      [null, null, null],
+      [null, "right", null],
+      [null, null, null],
+    ]);
+
+    s = run(s, insertRowBelow);
+    s = run(inCell(s, "r1c1"), insertColumnRight);
+    expect(aligns(s)[2]).toEqual([null, null, null, null]);
+    expect(aligns(s)[1]).toEqual([null, "right", null, null]);
+
+    // Multi-cell selection spanning header + body aligns only the body cells.
+    s = selectCells(s, "r0c1", "r2c1");
+    s = run(s, alignCenter);
+    expect(aligns(s)).toEqual([
+      [null, null, null, null],
+      [null, "center", null, null],
+      [null, "center", null, null],
+      [null, "center", null, null],
+    ]);
+  });
+
+  it("transpose swaps rows, columns, headers, per-cell alignments and follows the selection", () => {
+    expect(transposeMatrix(inCell(stateWith(filled(2, 2)), "r1c0"))).toBe(false);
+
+    let s = inCell(stateWith(filledMatrix(3, 4), para("")), "r1c2");
+    s = run(s, alignRight);
+    s = run(inCell(s, "r2c1"), alignCenter);
+    // Put caret in "r1c2" (row 1, col 2) with selection inside text.
+    let targetPos = -1;
+    s.doc.descendants((n, p) => {
+      if (n.isText && n.text === "r1c2") targetPos = p + 2;
+      return true;
+    });
+    s = s.apply(s.tr.setSelection(TextSelection.create(s.doc, targetPos)));
+
+    s = run(s, transposeMatrix);
+    expect(isMatrix(s.doc.child(0))).toBe(true);
+    expect(rows(s)).toEqual([
+      ["", "r1c0", "r2c0"],
+      ["r0c1", "r1c1", "r2c1"],
+      ["r0c2", "r1c2", "r2c2"],
+      ["r0c3", "r1c3", "r2c3"],
+    ]);
+    expect(headerKinds(s)).toEqual([
+      "table_cell,table_header,table_header",
+      "table_header,table_cell,table_cell",
+      "table_header,table_cell,table_cell",
+      "table_header,table_cell,table_cell",
+    ]);
+    expect(aligns(s)).toEqual([
+      [null, null, null],
+      [null, null, "center"],
+      [null, "right", null],
+      [null, null, null],
+    ]);
+    expect(cellContext(s)).toMatchObject({ row: 2, col: 1 });
+    expect(s.selection.$from.parent.textContent).toBe("r1c2");
+
+    // Multi-cell selection is transposed as well.
+    let multi = selectCells(s, "r1c1", "r2c2");
+    multi = run(multi, transposeMatrix);
+    expect(multi.selection instanceof CellSelection).toBe(true);
+    expect(selectedRect(multi)).toMatchObject({ top: 1, bottom: 3, left: 1, right: 3 });
+  });
+
+  it("keeps the top-left corner empty and unfocusable by caret", () => {
+    let s = inCell(stateWith(filledMatrix(3, 3), para("")), "r0c1");
+    const ctx = cellContext(s)!;
+    const cornerPos = ctx.tablePos + 1 + ctx.map.map[0] + 2;
+    // Moving caret into (0, 0) from another cell restores the prior selection.
+    s = s.apply(s.tr.setSelection(TextSelection.create(s.doc, cornerPos)));
+    expect(cellContext(s)).toMatchObject({ row: 0, col: 1 });
+
+    // Writing text into (0, 0) clears it back to an empty paragraph.
+    s = s.apply(s.tr.insertText("oops", cornerPos));
+    expect(rows(s)[0][0]).toBe("");
+    expect(cellContext(s)).toMatchObject({ row: 0, col: 1 });
   });
 });

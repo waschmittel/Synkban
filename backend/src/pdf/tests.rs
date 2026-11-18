@@ -1345,6 +1345,160 @@ fn a_row_taller_than_a_page_terminates() {
     assert_in_bounds(&l, false);
 }
 
+#[test]
+fn matrix_leaves_corner_open_centers_headers_and_honours_per_cell_alignment() {
+    let cell = |kind: &str, align: Option<&str>, t: &str| {
+        let content = if t.is_empty() {
+            json!([])
+        } else {
+            json!([para(t)])
+        };
+        json!({"type": kind, "attrs": {"align": align}, "content": content})
+    };
+    let matrix = json!({
+        "type": "table",
+        "attrs": {"matrix": true},
+        "content": [
+            {"type": "table_row", "content": [
+                cell("table_cell", None, "IGNORED"),
+                cell("table_header", Some("right"), "ColA"),
+                cell("table_header", None, "ColB"),
+            ]},
+            {"type": "table_row", "content": [
+                cell("table_header", Some("right"), "Row1"),
+                cell("table_cell", Some("left"), "L"),
+                cell("table_cell", Some("right"), "R"),
+            ]},
+            {"type": "table_row", "content": [
+                cell("table_header", None, "Row2LongLabel"),
+                cell("table_cell", Some("center"), "C"),
+                cell("table_cell", Some("left"), "WideBodyValue"),
+            ]},
+        ]
+    });
+    let (l, pdf) = build(&with_description(vec![matrix]));
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    let ops = &l.pages[0];
+
+    // Corner text is ignored; row 0 and col 0 headers use Face::Bold; body uses Regular.
+    let find_text = |s: &str| {
+        ops.iter().find_map(|op| match op {
+            Op::Text {
+                x, y, face, text, ..
+            } if text == s => Some((*x, *y, *face)),
+            _ => None,
+        })
+    };
+    assert!(
+        find_text("IGNORED").is_none(),
+        "corner cell must stay empty"
+    );
+    let (_, _, f_cola) = find_text("ColA").unwrap();
+    let (x_row1, y_row1, f_row1) = find_text("Row1").unwrap();
+    let (x_row2, _, f_row2) = find_text("Row2LongLabel").unwrap();
+    let (x_l, _, f_l) = find_text("L").unwrap();
+    let (x_c, _, _) = find_text("C").unwrap();
+    let (x_r, _, _) = find_text("R").unwrap();
+    let (x_wide, _, _) = find_text("WideBodyValue").unwrap();
+    assert!(f_cola == Face::Bold && f_row1 == Face::Bold && f_row2 == Face::Bold);
+    assert!(f_l == Face::Regular);
+
+    // Row1 (shorter than Row2LongLabel) is centred in col 0.
+    assert!(
+        x_row1 > x_row2 + 10.0,
+        "row header not centred: {x_row1} vs {x_row2}"
+    );
+    // Body cells keep per-cell alignment in the same column: L < C in col 1, R > WideBodyValue in col 2.
+    assert!(
+        x_l < x_c,
+        "col 1 per-cell alignment failed: L={x_l} C={x_c}"
+    );
+    assert!(
+        x_r > x_wide,
+        "col 2 per-cell alignment failed: R={x_r} wide={x_wide}"
+    );
+
+    // Header background: 4 header cells (ColA, ColB, Row1, Row2LongLabel), NOT the corner.
+    let head_bgs: Vec<(f32, f32, f32, f32)> = ops
+        .iter()
+        .filter_map(|op| match op {
+            Op::Rect { x, y, w, h, color } if *color == HEAD_BG => Some((*x, *y, *w, *h)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(head_bgs.len(), 4);
+    assert!(
+        !head_bgs
+            .iter()
+            .any(|(x, y, _, h)| *x < x_row2 && *y + *h < y_row1),
+        "corner cell must not have header background"
+    );
+
+    // Top rule of row 0 skips col 0; left vertical rule of (0,0) is omitted.
+    let col0_left = head_bgs
+        .iter()
+        .find(|(_, y, _, _)| *y > y_row1 - 20.0)
+        .unwrap()
+        .0;
+    let col1_left = head_bgs
+        .iter()
+        .find(|(x, y, _, _)| *x > col0_left + 10.0 && *y < y_row1 - 10.0)
+        .unwrap()
+        .0;
+    let row0_top = head_bgs
+        .iter()
+        .map(|(_, y, _, _)| *y)
+        .fold(f32::MAX, f32::min);
+    assert!(
+        !ops.iter().any(|op| matches!(
+            op,
+            Op::Rect { x, y, w, h, color }
+                if *color == RULE && *h < 1.0 && (*y - row0_top).abs() < 0.5 && *x < col0_left + 1.0 && *w > 1.0
+        )),
+        "top rule must skip the open corner"
+    );
+    assert!(
+        !ops.iter().any(|op| matches!(
+            op,
+            Op::Rect { x, y, w, h, color }
+                if *color == RULE && *w < 1.0 && (*x - col0_left).abs() < 0.5 && *y < row0_top + 1.0 && *h > 1.0
+        )),
+        "left rule must skip the open corner"
+    );
+    let _ = col1_left;
+}
+
+#[test]
+fn degenerate_matrices_stay_valid_and_in_bounds() {
+    let cell = |kind: &str, t: &str| {
+        let content = if t.is_empty() {
+            json!([])
+        } else {
+            json!([para(t)])
+        };
+        json!({"type": kind, "attrs": {"align": null}, "content": content})
+    };
+    let cases = vec![
+        json!({"type": "table", "attrs": {"matrix": true}, "content": [
+            {"type": "table_row", "content": [cell("table_cell", "")]},
+        ]}),
+        json!({"type": "table", "attrs": {"matrix": true}, "content": [
+            {"type": "table_row", "content": [cell("table_cell", ""), cell("table_header", "OnlyCol")]},
+        ]}),
+        json!({"type": "table", "attrs": {"matrix": true}, "content": [
+            {"type": "table_row", "content": [cell("table_cell", "")]},
+            {"type": "table_row", "content": [cell("table_header", "OnlyRow")]},
+        ]}),
+    ];
+    for m in cases {
+        let (l, pdf) = build(&with_description(vec![m.clone(), para("after matrix")]));
+        assert_pdfa(&pdf);
+        assert_in_bounds(&l, true);
+        assert!(all_text(&l).contains("after matrix"), "{m}");
+    }
+}
+
 // ── corner cases: pagination ─────────────────────────────────────────────
 
 #[test]

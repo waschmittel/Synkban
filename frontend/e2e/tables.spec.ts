@@ -113,9 +113,9 @@ async function menuKey(page: Page, key: string) {
 test("table menu: groups, icons, and every action closes the menu", async ({ page, request }) => {
   await openEditor(page, request, "Tables Menu Look");
 
-  // Outside a table: link, code, text-style groups, then the insert action.
+  // Outside a table: link, code, text-style groups, then the insert actions.
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(page.locator(".table-menu-item").last()).toHaveText(/Insert table/);
+  await expect(page.locator(".table-menu-item").last()).toHaveText(/Insert matrix/);
   await expect(page.locator(".table-menu-sep")).toHaveCount(3);
   await page.keyboard.press("Escape");
 
@@ -142,10 +142,12 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
   await expect(page.locator(".table-menu")).toHaveCount(0);
   await expect(page.locator(".editor-wrapper .ProseMirror tr")).toHaveCount(4);
 
-  // The toolbar button is an icon, not text.
-  const trigger = page.locator(".table-menu-trigger");
-  await expect(trigger.locator("svg")).toHaveCount(1);
-  expect(((await trigger.textContent()) ?? "").trim()).toBe("");
+  // Both insert toolbar buttons are icons, not text.
+  for (const sel of [".insert-table-btn", ".insert-matrix-btn"]) {
+    const btn = page.locator(sel);
+    await expect(btn.locator("svg")).toHaveCount(1);
+    expect(((await btn.textContent()) ?? "").trim()).toBe("");
+  }
 });
 
 test("table menu: move, insert, delete with keys; each action closes the menu", async ({
@@ -218,17 +220,31 @@ test("the first row stays the header", async ({ page, request }) => {
   await page.keyboard.press("Escape");
 });
 
-test("toolbar button opens the same menu, Escape closes it, and tables persist", async ({
+test("toolbar buttons insert table/matrix directly, disable when invalid, Escape closes menu, and tables persist", async ({
   page,
   request,
 }) => {
   await openEditor(page, request, "Tables Persist");
 
-  const trigger = page.locator(".table-menu-trigger");
-  await expect(trigger).toHaveAttribute("title", /^Table \((?:⌘|Ctrl\+)K\)$/);
-  await trigger.click();
-  await expect(page.locator(".table-menu")).toBeVisible();
-  await page.locator(".table-menu-item", { hasText: "Insert table" }).click();
+  const tableBtn = page.locator(".insert-table-btn");
+  const matrixBtn = page.locator(".insert-matrix-btn");
+  await expect(tableBtn).toHaveAttribute("title", "Insert table");
+  await expect(matrixBtn).toHaveAttribute("title", "Insert matrix");
+  await expect(tableBtn).toHaveAttribute("aria-disabled", "false");
+  await expect(matrixBtn).toHaveAttribute("aria-disabled", "false");
+
+  await tableBtn.click();
+  await expect(page.locator(".table-menu")).toHaveCount(0);
+  await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(1);
+
+  // Inside a table, neither a table nor a matrix can be inserted.
+  await expect(tableBtn).toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(tableBtn).toHaveAttribute("aria-disabled", "true");
+  await expect(tableBtn).toBeDisabled();
+  await expect(matrixBtn).toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(matrixBtn).toHaveAttribute("aria-disabled", "true");
+  await expect(matrixBtn).toBeDisabled();
+  await matrixBtn.click({ force: true });
   await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(1);
 
   await fill(page, ["Name", "Qty", "Note"]);
@@ -238,12 +254,22 @@ test("toolbar button opens the same menu, Escape closes it, and tables persist",
   // Escape closed only the menu, not the card modal.
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
+  // Moving outside the table re-enables both buttons; clicking Insert matrix inserts a matrix.
+  await page.locator(".editor-wrapper .ProseMirror > p").last().click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await expect(tableBtn).toHaveAttribute("aria-disabled", "false");
+  await expect(matrixBtn).toHaveAttribute("aria-disabled", "false");
+  await matrixBtn.click();
+  await expect(page.locator(".editor-wrapper .ProseMirror table[data-matrix]")).toHaveCount(1);
+  await expect(tableBtn).toHaveAttribute("aria-disabled", "true");
+  await expect(matrixBtn).toHaveAttribute("aria-disabled", "true");
+
   await page.locator(".modal-save-btn").click();
   await expect(page.locator(".modal-overlay")).toHaveCount(0);
   await page.locator(".card", { hasText: "Table card" }).click();
-  await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(1);
-  expect((await rowsOf(page))[0]).toEqual(["Name", "Qty", "Note"]);
-  await expect(page.locator(".editor-wrapper .ProseMirror th")).toHaveCount(3);
+  await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(2);
+  await expect(page.locator(".editor-wrapper .ProseMirror table[data-matrix]")).toHaveCount(1);
+  expect((await rowsOf(page)).slice(0, 1)).toEqual([["Name", "Qty", "Note"]]);
 });
 
 test("column alignment: menu keys, header always centred, new rows inherit", async ({
@@ -312,4 +338,110 @@ test("multi-cell selection: align column right applies to all selected columns",
   expect(await align(2)).toBe("right");
   expect(await align(4)).toBe("right");
   expect(await align(5)).toBe("right");
+});
+
+test("matrices: open corner, centered row/col headers, per-cell alignment, transpose and persistence", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Matrices");
+  await menuKey(page, "x");
+  const matrix = page.locator(".editor-wrapper .ProseMirror table[data-matrix]");
+  await expect(matrix).toHaveCount(1);
+  await expect(matrix.locator("th")).toHaveCount(4);
+  await expect(matrix.locator("td")).toHaveCount(5);
+
+  const corner = matrix.locator("tr").first().locator("> :first-child");
+  const cornerStyle = await corner.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { top: s.borderTopStyle, left: s.borderLeftStyle, pointer: s.pointerEvents };
+  });
+  expect(cornerStyle).toEqual({ top: "hidden", left: "hidden", pointer: "none" });
+
+  // Caret starts in (0, 1); Tab skips the corner and walks all editable cells.
+  await fill(page, ["Col1", "Col2", "Row1", "a", "b", "Row2", "c", "d"]);
+  expect(await rowsOf(page)).toEqual([
+    ["", "Col1", "Col2"],
+    ["Row1", "a", "b"],
+    ["Row2", "c", "d"],
+  ]);
+
+  // All headers (top row and left column) are centred.
+  for (let i = 0; i < 4; i++) {
+    expect(await matrix.locator("th").nth(i).evaluate((el) => getComputedStyle(el).textAlign)).toBe(
+      "center",
+    );
+  }
+
+  // Shift+Tab from (1, 0) goes back to (0, 2) without ever touching (0, 0).
+  await clickCell(page, ".editor-wrapper .ProseMirror table[data-matrix] tr:nth-child(2) th", 0);
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.type("Col2b");
+  expect((await rowsOf(page))[0]).toEqual(["", "Col1", "Col2b"]);
+
+  // Menu items adapt to matrices; header cells cannot be aligned.
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu-item", { hasText: "Transpose" })).toBeVisible();
+  await expect(page.locator(".table-menu-item", { hasText: "Align cell left" })).toBeDisabled();
+  await expect(page.locator(".table-menu-item", { hasText: "Delete matrix" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Align body cell (1, 1) ("a") right without affecting (2, 1) ("c") or (1, 2) ("b").
+  const bodyCell = (r: number, c: number) =>
+    matrix.locator("tr").nth(r).locator("td").nth(c - 1);
+  const cellAlign = (r: number, c: number) =>
+    bodyCell(r, c).evaluate((el) => getComputedStyle(el).textAlign);
+
+  await bodyCell(1, 1).click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await menuKey(page, "3");
+  expect(await cellAlign(1, 1)).toBe("right");
+  expect(await cellAlign(2, 1)).toBe("start");
+  expect(await cellAlign(1, 2)).toBe("start");
+
+  // Align (1, 2) ("b") center, add a row below (2, 2), and fill it to make a 4×3 matrix.
+  await bodyCell(1, 2).click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await menuKey(page, "2");
+  expect(await cellAlign(1, 2)).toBe("center");
+
+  await bodyCell(2, 2).click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await page.keyboard.press("Tab");
+  await fill(page, ["Row3", "e", "f"]);
+  expect(await rowsOf(page)).toEqual([
+    ["", "Col1", "Col2b"],
+    ["Row1", "a", "b"],
+    ["Row2", "c", "d"],
+    ["Row3", "e", "f"],
+  ]);
+
+  // Transpose from (1, 2) ("b"): 4×3 becomes 3×4, alignments follow cells, caret stays in "b".
+  await bodyCell(1, 2).click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await menuKey(page, "x");
+  expect(await rowsOf(page)).toEqual([
+    ["", "Row1", "Row2", "Row3"],
+    ["Col1", "a", "c", "e"],
+    ["Col2b", "b", "d", "f"],
+  ]);
+  expect(await cellAlign(1, 1)).toBe("right");
+  expect(await cellAlign(2, 1)).toBe("center");
+  expect(await cellAlign(1, 2)).toBe("start");
+  await page.keyboard.press("End");
+  await page.keyboard.type("!");
+  expect((await rowsOf(page))[2][1]).toBe("b!");
+
+  // Save and reopen: matrix, headers and per-cell alignments persist.
+  await page.locator(".modal-save-btn").click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "Table card" }).click();
+  await expect(matrix).toHaveCount(1);
+  expect(await rowsOf(page)).toEqual([
+    ["", "Row1", "Row2", "Row3"],
+    ["Col1", "a", "c", "e"],
+    ["Col2b", "b!", "d", "f"],
+  ]);
+  expect(await cellAlign(1, 1)).toBe("right");
+  expect(await cellAlign(2, 1)).toBe("center");
 });
