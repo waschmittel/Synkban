@@ -189,7 +189,8 @@ test("notes: long titles in the list stop after three lines", async ({ page, req
   // The kanban board still shows the whole title.
   await page.keyboard.press("v");
   const full = page.locator(".lists-container .card-title").first();
-  expect((await full.boundingBox())!.height).toBeGreaterThan(3 * lh + 1);
+  await expect(full).toBeVisible();
+  await expect.poll(async () => (await full.boundingBox())!.height).toBeGreaterThan(3 * lh + 1);
 });
 
 // Shortcut help: opens on the tab for where the user is.

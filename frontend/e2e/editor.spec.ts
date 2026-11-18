@@ -27,6 +27,7 @@ async function linkedDocs(page: Page) {
   await page.keyboard.press("Shift+ArrowLeft");
   await page.keyboard.press("Shift+ArrowLeft");
   await page.keyboard.press("Shift+ArrowLeft");
+  await settle(page);
   await page.locator('[title="Add or edit link"]').click();
   await page.locator(".link-dialog-input").fill("https://example.com");
   await page.keyboard.press("Enter");
@@ -293,6 +294,7 @@ test("attached images can be inserted, previewed and vanish from the text when d
   await img.click();
   await expect(page.locator(".image-preview-overlay")).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(page.locator(".image-preview-overlay")).toHaveCount(0);
 
   // Saved description holds the reference, not a URL.
   await page.locator(".modal-save-btn").click();
@@ -392,7 +394,10 @@ test("attachments show whether the description uses them; deleting asks first", 
 
   // Removing the picture from the text clears the badge; deleting then needs no question.
   await editor(page).locator("img.editor-image").click(); // opens the preview…
+  await expect(page.locator(".image-preview-overlay")).toBeVisible();
   await page.keyboard.press("Escape"); // …leaving the image selected
+  await expect(page.locator(".image-preview-overlay")).toHaveCount(0);
+  await settle(page);
   await page.keyboard.press("Backspace");
   await expect(page.locator(".attachment-ref")).toHaveCount(0);
   await page.locator(".attachment-delete").click();
@@ -476,7 +481,10 @@ test("copying an inline image to another card copies the attachment", async ({ p
   await page.locator(".attachment-insert").click();
   await expect(editor(page).locator("img.editor-image")).toHaveCount(1);
   await editor(page).locator("img.editor-image").click(); // selects it, opens the preview
+  await expect(page.locator(".image-preview-overlay")).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(page.locator(".image-preview-overlay")).toHaveCount(0);
+  await settle(page);
   await page.keyboard.press("ControlOrMeta+c");
   await page.locator(".modal-close").click();
   const discard = page.locator(".unsaved-dialog .btn", { hasText: /Discard/ });
@@ -485,6 +493,7 @@ test("copying an inline image to another card copies the attachment", async ({ p
   await page.locator(".card", { hasText: "Target" }).click();
   await expect(page.locator(".attachment-item")).toHaveCount(0);
   await editor(page).click();
+  await settle(page);
   await page.keyboard.press("ControlOrMeta+v");
   await expect(page.locator(".attachment-item")).toHaveCount(1);
   const img = editor(page).locator("img.editor-image");

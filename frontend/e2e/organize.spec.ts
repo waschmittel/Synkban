@@ -216,7 +216,9 @@ test("lists collapse to a strip and back; Add list is the same strip; counts in 
   await expect(page.locator(".add-list-wrapper .add-form input")).toBeFocused();
   expect((await page.locator(".lists-container > .add-list-wrapper").boundingBox())!.width).toBeGreaterThan(250);
   await page.keyboard.press("Escape");
-  expect((await page.locator(".lists-container > .add-list-wrapper").boundingBox())!.width).toBe(strip.width);
+  await expect
+    .poll(async () => (await page.locator(".lists-container > .add-list-wrapper").boundingBox())!.width)
+    .toBe(strip.width);
 
   // Keyboard: ←/→ go through the strip; Shift+→ moves a card onto it (end of list).
   await list(page, "Alpha").locator(".card", { hasText: "A2" }).focus();
