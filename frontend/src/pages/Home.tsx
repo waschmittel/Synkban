@@ -5,7 +5,6 @@ import {
   clearActionError,
   errorMessage,
   isNetworkError,
-  onReconnect,
   reportActionError,
 } from "../api";
 import { toIso } from "../dueDate";
@@ -281,11 +280,6 @@ export default function Home() {
     clearActionError();
     refreshArchived();
     refreshWarnings();
-    const stopReconnect = onReconnect(() => {
-      if (boards.error) refetch();
-      refreshWarnings();
-      refreshArchived();
-    });
 
     // Reorder flush refetches when it drains; skipping the tick (without
     // consuming the mtime) lets the next poll pick the change up.
@@ -386,7 +380,6 @@ export default function Home() {
     const handleToggleShortcuts = () => setShowHelp((v) => !v);
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     onCleanup(() => {
-      stopReconnect();
       stopPoller();
       dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);

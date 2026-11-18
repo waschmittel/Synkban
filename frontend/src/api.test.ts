@@ -491,4 +491,32 @@ describe("network and error classification", () => {
     clearActionError();
     expect(actionError()).toBeNull();
   });
+
+  it("ignores stale responses from requests started before a newer network failure", async () => {
+    let resolveStale!: (r: Partial<Response>) => void;
+    const stalePromise = new Promise<Partial<Response>>((r) => {
+      resolveStale = r;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(stalePromise)
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    globalThis.fetch = fetchMock;
+
+    const staleReq = api.listBoards();
+    await expect(api.createCard("list-1", "Offline")).rejects.toThrow(NETWORK_ERROR_MESSAGE);
+    reportActionError(new ApiError(NETWORK_ERROR_MESSAGE, 0, { network: true }), "Could not add card");
+    expect(serverUnreachable()).toBe(true);
+
+    resolveStale({ ok: true, status: 200, json: () => Promise.resolve([]) });
+    await staleReq;
+
+    expect(serverUnreachable()).toBe(true);
+    expect(actionError()).toBe(`Could not add card: ${NETWORK_ERROR_MESSAGE}`);
+
+    await api.listBoards();
+    expect(serverUnreachable()).toBe(false);
+    expect(actionError()).toBeNull();
+  });
 });

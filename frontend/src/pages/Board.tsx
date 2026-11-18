@@ -17,7 +17,6 @@ import {
   errorMessage,
   isNetworkError,
   isNotFoundError,
-  onReconnect,
   reportActionError,
 } from "../api";
 import type { Board, BoardDetail, BoardMode, Card as CardType, ChecklistItem, Draft } from "../types";
@@ -426,11 +425,6 @@ export default function BoardPage() {
   onMount(() => {
     clearActionError();
     const stopTracking = trackBoardView(pageEl, shownId);
-    const stopReconnect = onReconnect(() => {
-      if (board.error) refetch();
-      if (allBoards.error || !allBoards()) refetchBoards();
-      refreshWarnings();
-    });
     header.setIsOnBoard(true);
     const loadedBoard = () => (board.error ? undefined : board());
     header.setControls({
@@ -733,7 +727,6 @@ export default function BoardPage() {
       header.setRenaming(false);
       header.setControls(null);
       drawer.close();
-      stopReconnect();
       stopPoller();
       stopTracking();
       dispose();

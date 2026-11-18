@@ -40,6 +40,8 @@ export function errorMessage(err: unknown, fallback = "Request failed"): string 
 const [serverUnreachable, setServerUnreachable] = createSignal(false);
 const [actionError, setActionError] = createSignal<string | null>(null);
 let actionErrorIsNetwork = false;
+let requestSeq = 0;
+let lastFailureSeq = 0;
 const reconnectListeners = new Set<() => void>();
 
 export { serverUnreachable, actionError };
@@ -53,8 +55,8 @@ export function triggerReconnect(): void {
   for (const fn of reconnectListeners) fn();
 }
 
-function markReachable(keepalive?: boolean): void {
-  if (keepalive) return;
+function markReachable(seq: number, keepalive?: boolean): void {
+  if (keepalive || seq <= lastFailureSeq) return;
   if (serverUnreachable()) {
     setServerUnreachable(false);
     if (actionErrorIsNetwork) {
@@ -65,15 +67,20 @@ function markReachable(keepalive?: boolean): void {
   }
 }
 
-function markUnreachable(keepalive?: boolean): void {
-  if (!keepalive) setServerUnreachable(true);
+function markUnreachable(seq: number, keepalive?: boolean): void {
+  if (keepalive) return;
+  if (seq > lastFailureSeq) lastFailureSeq = seq;
+  setServerUnreachable(true);
 }
 
 export function reportActionError(err: unknown, prefix?: string): void {
   const detail = errorMessage(err);
   const msg = prefix ? `${prefix}: ${detail}` : detail;
   actionErrorIsNetwork = isNetworkError(err);
-  if (actionErrorIsNetwork) setServerUnreachable(true);
+  if (actionErrorIsNetwork) {
+    lastFailureSeq = ++requestSeq;
+    setServerUnreachable(true);
+  }
   setActionError(msg);
 }
 
@@ -83,21 +90,26 @@ export function clearActionError(): void {
 }
 
 export function resetNetworkState(): void {
+  requestSeq = 0;
+  lastFailureSeq = 0;
   setServerUnreachable(false);
   clearActionError();
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("offline", () => setServerUnreachable(true));
+  window.addEventListener("offline", () => {
+    lastFailureSeq = ++requestSeq;
+    setServerUnreachable(true);
+  });
   window.addEventListener("online", () => triggerReconnect());
 }
 
-async function fetchResponse(url: string, init: RequestInit): Promise<Response> {
+async function fetchResponse(url: string, init: RequestInit, seq: number): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(url, init);
   } catch (cause) {
-    markUnreachable(init.keepalive);
+    markUnreachable(seq, init.keepalive);
     throw new ApiError(NETWORK_ERROR_MESSAGE, 0, { network: true, cause });
   }
   if (!res.ok) {
@@ -113,32 +125,37 @@ async function fetchResponse(url: string, init: RequestInit): Promise<Response> 
       res.status === 503 ||
       res.status === 504 ||
       (res.status >= 500 && !bodyError && !res.statusText);
-    if (isGatewayOrDeadProxy) markUnreachable(init.keepalive);
-    else markReachable(init.keepalive);
+    if (isGatewayOrDeadProxy) markUnreachable(seq, init.keepalive);
+    else markReachable(seq, init.keepalive);
     const message = bodyError || res.statusText || NETWORK_ERROR_MESSAGE;
     throw new ApiError(message, res.status, { network: isGatewayOrDeadProxy });
   }
-  markReachable(init.keepalive);
   return res;
 }
 
-async function parseJson<T>(res: Response, keepalive?: boolean): Promise<T> {
+async function parseJson<T>(res: Response, seq: number, keepalive?: boolean): Promise<T> {
   try {
-    return await res.json();
+    const data = await res.json();
+    markReachable(seq, keepalive);
+    return data;
   } catch (cause) {
-    markUnreachable(keepalive);
+    markUnreachable(seq, keepalive);
     throw new ApiError(NETWORK_ERROR_MESSAGE, 0, { network: true, cause });
   }
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const seq = ++requestSeq;
   const init: RequestInit = {
     headers: { "Content-Type": "application/json" },
     ...options,
   };
-  const res = await fetchResponse(`${BASE}${path}`, init);
-  if (res.status === 204) return undefined as T;
-  return parseJson<T>(res, init.keepalive);
+  const res = await fetchResponse(`${BASE}${path}`, init, seq);
+  if (res.status === 204) {
+    markReachable(seq, init.keepalive);
+    return undefined as T;
+  }
+  return parseJson<T>(res, seq, init.keepalive);
 }
 
 export const api = {
@@ -286,6 +303,7 @@ export const api = {
     request<void>(`/labels/${id}`, { method: "DELETE" }),
 
   uploadAttachment: async (cardId: string, file: File): Promise<Attachment> => {
+    const seq = ++requestSeq;
     const res = await fetchResponse(
       `${BASE}/cards/${cardId}/attachments?filename=${encodeURIComponent(file.name)}`,
       {
@@ -293,8 +311,9 @@ export const api = {
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
       },
+      seq,
     );
-    return parseJson<Attachment>(res);
+    return parseJson<Attachment>(res, seq);
   },
 
   /// The single crash-safety draft (ADR-0024), or null.

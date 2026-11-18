@@ -1534,7 +1534,9 @@ test("home page network error shows server-unreachable state with retry, not emp
   page,
   request,
 }) => {
-  await request.post("/api/boards", { data: { title: "Home Network Board" } });
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Home Network Board" } })
+  ).json();
 
   let fail = true;
   await page.route("**/api/boards*", (route) =>
@@ -1547,7 +1549,7 @@ test("home page network error shows server-unreachable state with retry, not emp
 
   fail = false;
   await page.locator(".home-error .board-error-retry").click();
-  await expect(page.locator(".board-card", { hasText: "Home Network Board" })).toBeVisible();
+  await expect(page.locator(`.board-card[data-board-id="${board.id}"]`)).toBeVisible();
   await expect(page.locator(".home-error")).toHaveCount(0);
 });
 
@@ -1565,6 +1567,7 @@ test("loaded board survives network drop, preserves add-card draft and dirty mod
 
   await page.goto(`/board/${board.id}`);
   await expect(page.locator(".card", { hasText: "Existing card" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
 
   let failApi = true;
   await page.route("**/api/**", (route) =>
