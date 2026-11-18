@@ -10,6 +10,6 @@ One class keeps the stylesheet DRY: a single dark block at the bottom of `app.cs
 
 - **Flash-free:** an inline script in `index.html` sets the class from the OS before first paint; `index.tsx::bootstrap` then applies the persisted choice (corrects only a forced light/dark).
 - Board background mixes the board colour **toward black** in dark mode (`color-mix(var(--board-color) 42%, #0d0f14)`) instead of toward white (50%).
-- Primary blue `#0079bf` is intentionally untokenised (fine as a fill and as rings); a few accent texts brighten to `#6cb0ec` in the dark block.
+- Primary/accent colors (`--color-primary`, `--color-primary-hover`, `--color-accent`, `--ring`) derive from `--board-color` via lightness-clamped `oklch(from …)`: `--color-primary` stays mid-dark (`0.38–0.52` light, `0.42–0.54` dark) for white button text, while `--color-accent` brightens (`0.68–0.78`) in dark mode for outlines, focus rings, and accent text.
 - Settings radios preview live; every discard path reverts via `revertThemePreview()`.
 - Covered by `e2e/settings.spec.ts`.
