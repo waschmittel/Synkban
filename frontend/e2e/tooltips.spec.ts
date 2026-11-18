@@ -118,7 +118,6 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
     [".attachment-upload", new RegExp(`${A("O")}\\)$`)],
     [".attachment-delete", /\(Del\)$/],
     [".modal-save-btn", new RegExp(`${A("S")}\\)$`)],
-    [".modal-footer .btn-cancel", /\(Esc\)$/],
     [".modal-export-btn", new RegExp(`${A("P")}\\)$`)],
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],
   ]);

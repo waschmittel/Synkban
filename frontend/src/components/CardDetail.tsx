@@ -593,7 +593,7 @@ export default function CardDetail(props: Props) {
 
   return (
     <div
-      class={pane ? "notes-detail" : "modal-overlay"}
+      class={pane ? "notes-detail" : "dialog-overlay modal-overlay"}
       ref={(el) => !pane && onCleanup(focusTrap(el))}
       classList={{ "modal-overlay--drop-active": draggingFile() }}
       onClick={pane ? undefined : handleOverlayClick}
@@ -638,7 +638,7 @@ export default function CardDetail(props: Props) {
             title={tip("Edit title", accel("E"))}
           />
           <Show when={!pane}>
-            <button class="modal-close" onClick={guardedClose} title="Close (Esc)">
+            <button class="btn-close modal-close" onClick={guardedClose} title="Close (Esc)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -752,13 +752,21 @@ export default function CardDetail(props: Props) {
             onClick={handleSave}
             title={tip(dirty() ? "Save" : "Save (no changes)", accel("S"))}
           >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
             Save
           </button>
-          <Show
-            when={pane}
-            fallback={<button class="btn btn-cancel" onClick={guardedClose} title={tip("Cancel", "Esc")}>Cancel</button>}
-          >
-            <button class="btn btn-cancel" onClick={revert} disabled={!dirty()} title="Revert to the saved card">Revert</button>
+          <Show when={pane}>
+            <button class="btn btn-cancel" onClick={revert} disabled={!dirty()} title="Revert to the saved card">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+              Revert
+            </button>
           </Show>
           {dirty() && (
             <span class="unsaved-indicator">
@@ -768,21 +776,29 @@ export default function CardDetail(props: Props) {
           <Show when={pane && !dirty() && savedAt()}>
             {(at) => <span class="saved-indicator">Saved {at()}</span>}
           </Show>
-          <button class="btn modal-export-btn" title={tip("Export PDF", accel("P"))} onClick={startExport}>
+          <button
+            class="btn btn-icon modal-export-btn"
+            title={tip("Export PDF", accel("P"))}
+            aria-label="Export PDF"
+            onClick={startExport}
+          >
             <svg class="pdf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
               <text x="12" y="18.5" text-anchor="middle" font-size="7" font-weight="800" fill="currentColor" stroke="none" font-family="system-ui, sans-serif">PDF</text>
             </svg>
-            Export PDF
           </button>
-          <button class="btn modal-history-btn" title={tip("History", accel("J"))} onClick={() => setShowHistory(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button
+            class="btn btn-icon modal-history-btn"
+            title={tip("History", accel("J"))}
+            aria-label="History"
+            onClick={() => setShowHistory(true)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
               <polyline points="3 3 3 8 8 8" />
               <polyline points="12 7 12 12 15 14" />
             </svg>
-            History
           </button>
         </div>
       </div>

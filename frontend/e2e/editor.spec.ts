@@ -478,7 +478,7 @@ test("copying an inline image to another card copies the attachment", async ({ p
   await editor(page).locator("img.editor-image").click(); // selects it, opens the preview
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+c");
-  await page.locator(".modal-footer .btn-cancel").click();
+  await page.locator(".modal-close").click();
   const discard = page.locator(".unsaved-dialog .btn", { hasText: /Discard/ });
   if (await discard.isVisible()) await discard.click();
 
