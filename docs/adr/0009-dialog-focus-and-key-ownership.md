@@ -14,7 +14,7 @@ Without them, focus escaped dialogs to `<body>`, dialogs auto-focusing on the ne
 
 ## Also
 
-- Board's global Escape dispatches `request-card-close` so closing routes through the unsaved guard.
+- Board's global Escape dispatches `request-card-close` so closing routes through the unsaved guard; with no overlay open in Kanban view, Escape closes the label drawer if open and leaves focus on the current card (rather than blurring it to `.board-page`).
 - `ConfirmDialog`/`ArchivePanel` keep a catch-all element-level `stopPropagation()` to shield page shortcuts.
 - Dialogs auto-focus their default button; Enter runs the focused button.
 - Covered by `e2e/focus.spec.ts` (including a stubbed-`requestAnimationFrame` regression).

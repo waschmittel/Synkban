@@ -621,10 +621,6 @@ export default function BoardPage() {
         key: "Escape",
         handler: () => {
           drawer.close();
-          const focused = document.activeElement as HTMLElement | null;
-          if (focused?.classList.contains("card")) {
-            (document.querySelector(".board-page") as HTMLElement | null)?.focus();
-          }
         },
       },
     ];

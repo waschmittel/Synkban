@@ -125,6 +125,10 @@ test("ArrowRight/ArrowLeft remembers vertical row across shorter and empty lists
   await expect(page.locator(".card", { hasText: "B0" })).toBeFocused();
   await page.keyboard.press("ArrowLeft");
   await expect(page.locator(".card", { hasText: "A0" })).toBeFocused();
+
+  // Pressing Escape with no overlay open keeps focus on the card.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".card", { hasText: "A0" })).toBeFocused();
 });
 
 test("create board from home page and open it", async ({ page }) => {
