@@ -11,7 +11,7 @@ interface Props {
   list: ListWithCards;
   labels: Label[];
   renamingListId: string | null;
-  onAddCard: (listId: string, title: string) => void;
+  onAddCard: (listId: string, title: string) => void | Promise<void>;
   onArchiveCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
   onCardClick: (card: CardType, byKey?: boolean) => void;

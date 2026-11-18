@@ -4,7 +4,7 @@ import { EditorState } from "prosemirror-state";
 import type { Attachment, Card, ChecklistItem, Draft, DraftContent, Label } from "../types";
 import { checklistOf, contentOf, labelsOf, normLabels, sameContent, serializeChecklist, serializeDoc } from "../cardContent";
 import { timeAgo } from "../timeAgo";
-import { api } from "../api";
+import { actionError, api, errorMessage, isNetworkError, onReconnect, reportActionError } from "../api";
 import { createCardEditor, docFromDescription, insertImage, removeImages } from "../proseEditor";
 import { pastedImageFiles } from "../pasteImages";
 import { imageRefIds, stripImageRefs } from "../imageRefs";
@@ -104,11 +104,14 @@ export default function CardDetail(props: Props) {
   const boardId = props.boardId;
   let draftTimer: ReturnType<typeof setTimeout> | undefined;
   let draftStored = !!draft;
+  let unmounted = false;
   const storeDraft = (keepalive = false) => {
     if (!boardId) return;
-    draftStored = true;
     api
       .saveDraft({ card_id: cardId, board_id: boardId, base: base(), draft: current(), saved_at: Date.now() }, keepalive)
+      .then(() => {
+        if (!unmounted) draftStored = true;
+      })
       .catch(() => {});
   };
   const dropDraft = () => {
@@ -132,7 +135,12 @@ export default function CardDetail(props: Props) {
     storeDraft(true);
   };
   window.addEventListener("pagehide", onPageHide);
+  const stopDraftReconnect = onReconnect(() => {
+    if (!unmounted && dirty()) storeDraft();
+  });
   onCleanup(() => {
+    unmounted = true;
+    stopDraftReconnect();
     window.removeEventListener("pagehide", onPageHide);
     clearTimeout(draftTimer);
     dropDraft();
@@ -149,6 +157,7 @@ export default function CardDetail(props: Props) {
   const [conflict, setConflict] = createSignal<Card | null>(null);
   /// Pane: brief confirmation after a save, since nothing closes.
   const [savedAt, setSavedAt] = createSignal<string | null>(null);
+  const [detailError, setDetailError] = createSignal<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = createSignal(false);
   const [showHistory, setShowHistory] = createSignal(false);
   const [showExport, setShowExport] = createSignal(false);
@@ -177,8 +186,11 @@ export default function CardDetail(props: Props) {
           setAttachments((prev) => [...prev.filter((a) => a.id !== att.id), att]);
           props.onAttachmentsChanged?.();
           return att;
-        } catch {
-          return undefined; // the reference is dropped (source gone)
+        } catch (err) {
+          if (isNetworkError(err)) {
+            setDetailError(`Could not copy pasted image: ${errorMessage(err)}`);
+          }
+          return undefined; // the reference is dropped (source gone or offline)
         }
       },
       onImageClick: (id) => {
@@ -216,6 +228,7 @@ export default function CardDetail(props: Props) {
     setChecklistOpen(false);
     setEditorDoc(card.description);
     setConflict(null);
+    setDetailError(null);
   };
 
   /// Back to the saved state (the stored card, with any newer stored version).
@@ -262,12 +275,8 @@ export default function CardDetail(props: Props) {
     return new Promise((r) => (resolveLeave = r));
   }
   const leaveSave = async () => {
-    try {
-      await handleSave();
-    } catch {
-      return settleLeave(false);
-    }
-    settleLeave(!dirty());
+    const ok = await runSave();
+    settleLeave(ok && !dirty());
   };
   const leaveDiscard = () => {
     revert();
@@ -293,13 +302,20 @@ export default function CardDetail(props: Props) {
   };
 
   const createLabel = async (name: string) => {
-    const label = await props.onCreateLabel(name);
-    setSelectedLabelIds((ids) => (ids.includes(label.id) ? ids : [...ids, label.id]));
+    try {
+      setDetailError(null);
+      const label = await props.onCreateLabel(name);
+      setSelectedLabelIds((ids) => (ids.includes(label.id) ? ids : [...ids, label.id]));
+    } catch (err) {
+      setDetailError(`Could not create label: ${errorMessage(err)}`);
+      throw err;
+    }
   };
 
   // --- Attachments ---
 
   const uploadFile = async (file: File): Promise<Attachment | undefined> => {
+    setDetailError(null);
     setUploads((n) => n + 1);
     try {
       const att = await api.uploadAttachment(props.card.id, file);
@@ -307,7 +323,8 @@ export default function CardDetail(props: Props) {
       props.onAttachmentsChanged?.();
       return att;
     } catch (err) {
-      alert(`Upload failed: ${(err as Error).message}`);
+      setDetailError(`Upload failed: ${errorMessage(err)}`);
+      reportActionError(err, "Upload failed");
     } finally {
       setUploads((n) => n - 1);
     }
@@ -353,11 +370,17 @@ export default function CardDetail(props: Props) {
   // The server drops the references from the stored description too, so the
   // saved baseline loses them as well (unsaved edits stay unsaved).
   const handleDeleteAttachment = async (attId: string) => {
-    await api.deleteAttachment(props.card.id, attId);
-    setBase((b) => ({ ...b, description: stripImageRefs(b.description, attId) }));
-    if (view) removeImages(view, attId);
-    setAttachments((prev) => prev.filter((a) => a.id !== attId));
-    props.onAttachmentsChanged?.();
+    try {
+      setDetailError(null);
+      await api.deleteAttachment(props.card.id, attId);
+      setBase((b) => ({ ...b, description: stripImageRefs(b.description, attId) }));
+      if (view) removeImages(view, attId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attId));
+      props.onAttachmentsChanged?.();
+    } catch (err) {
+      setDetailError(`Could not remove attachment: ${errorMessage(err)}`);
+      reportActionError(err, "Could not remove attachment");
+    }
   };
 
   // --- Checklist ---
@@ -439,12 +462,25 @@ export default function CardDetail(props: Props) {
 
   // --- Save / close ---
 
-  const handleSave = async () => {
-    if (!view) return;
+  const runSave = async (): Promise<boolean> => {
+    if (!view) return false;
+    setDetailError(null);
     const desc = serializeDoc(view.state.doc);
     const dd = dueDate().trim();
-    if (!pane) return props.onSave(props.card.id, title(), desc, selectedLabelIds(), dd || null, checklist());
-    if (props.removed && !(await props.onRestore?.())) return;
+    if (!pane) {
+      try {
+        await props.onSave(props.card.id, title(), desc, selectedLabelIds(), dd || null, checklist());
+        return true;
+      } catch (err) {
+        setDetailError(`Could not save card: ${errorMessage(err)}`);
+        reportActionError(err, "Could not save card");
+        return false;
+      }
+    }
+    if (props.removed && !(await props.onRestore?.())) {
+      setDetailError(actionError() ?? "Could not restore card.");
+      return false;
+    }
     const snapshot = { ...current(), description: desc };
     saving = snapshot;
     try {
@@ -452,10 +488,17 @@ export default function CardDetail(props: Props) {
       setBase(snapshot);
       setConflict(null);
       setSavedAt(new Date().toTimeString().slice(0, 5));
+      return true;
+    } catch (err) {
+      setDetailError(`Could not save card: ${errorMessage(err)}`);
+      reportActionError(err, "Could not save card");
+      return false;
     } finally {
       saving = null;
     }
   };
+
+  const handleSave = () => { void runSave(); };
 
   // The "Saved" note goes as soon as the card is edited again.
   createEffect(on(dirty, (d) => d && setSavedAt(null), { defer: true }));
@@ -472,8 +515,9 @@ export default function CardDetail(props: Props) {
 
   const exportAfterSave = async () => {
     const id = props.card.id;
-    await handleSave();
-    api.downloadCardPdf(id);
+    const ok = await runSave();
+    setShowExport(false);
+    if (ok) api.downloadCardPdf(id);
   };
 
   const exportSaved = () => {
@@ -647,6 +691,14 @@ export default function CardDetail(props: Props) {
           </Show>
         </div>
         <div class="modal-body">
+          <Show when={detailError()}>
+            {(msg) => (
+              <div class="pane-banner pane-banner--removed detail-error-banner" role="alert">
+                <span>{msg()}</span>
+                <button type="button" class="btn btn-sm" onClick={() => setDetailError(null)}>Dismiss</button>
+              </div>
+            )}
+          </Show>
           <Show when={pane && props.removed}>
             <div class="pane-banner pane-banner--removed" role="status">
               <span>This card was archived or deleted elsewhere. Your unsaved edits are kept until you leave it.</span>
@@ -808,7 +860,10 @@ export default function CardDetail(props: Props) {
           when={pane}
           fallback={
             <UnsavedDialog
-              onSave={handleSave}
+              onSave={async () => {
+                const ok = await runSave();
+                if (!ok) setShowUnsavedDialog(false);
+              }}
               onDiscard={props.onClose}
               onCancel={() => setShowUnsavedDialog(false)}
             />

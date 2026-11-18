@@ -1,11 +1,19 @@
 import { createSignal, createResource, createEffect, untrack, For, Show, onMount, onCleanup } from "solid-js";
 import { A } from "@solidjs/router";
-import { api } from "../api";
+import {
+  api,
+  clearActionError,
+  errorMessage,
+  isNetworkError,
+  onReconnect,
+  reportActionError,
+} from "../api";
 import { toIso } from "../dueDate";
 import { timeAgo } from "../timeAgo";
 import type { Board } from "../types";
 import ShortcutHelp from "../components/ShortcutHelp";
 import ArchivePanel from "../components/ArchivePanel";
+import NetworkBanner from "../components/NetworkBanner";
 import WarningBanner from "../components/WarningBanner";
 import { startChangePoller } from "../changePoller";
 import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
@@ -24,14 +32,37 @@ const focusBoard = (id: string) =>
   (document.querySelector(`[data-board-id="${id}"]`) as HTMLElement | null)?.focus();
 
 export default function Home() {
-  const [boards, { refetch, mutate }] = createResource(() => api.listBoards(toIso(new Date())));
+  let hasLoadedBoards = false;
+  const [boards, { refetch, mutate }] = createResource<Board[]>(
+    async (_, { value }) => {
+      try {
+        const res = await api.listBoards(toIso(new Date()));
+        hasLoadedBoards = true;
+        return res;
+      } catch (err) {
+        if (value !== undefined && hasLoadedBoards && isNetworkError(err)) return value;
+        if (!isNetworkError(err)) hasLoadedBoards = false;
+        throw err;
+      }
+    }
+  );
+  const boardList = () => (boards.error ? undefined : boards());
   const [archivedBoards, setArchivedBoards] = createSignal<Board[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
+  const [archiveError, setArchiveError] = createSignal<string | null>(null);
   const [showHelp, setShowHelp] = createSignal(false);
   const [showArchive, setShowArchive] = createSignal(false);
   const [warnings, setWarnings] = createSignal<string[]>([]);
   const refreshWarnings = () =>
     api.getWarnings().then((r) => setWarnings(r.warnings)).catch(() => {});
+  const refreshArchived = () =>
+    api.listArchivedBoards().then((b) => setArchivedBoards(b)).catch(() => {});
+  const retryHome = () => {
+    clearActionError();
+    refetch();
+    refreshWarnings();
+    refreshArchived();
+  };
   const confirm = createConfirm();
   const [pendingFocusBoardId, setPendingFocusBoardId] = createSignal<string | null>(null);
 
@@ -82,7 +113,9 @@ export default function Home() {
         queuedReorderIds = null;
         try {
           await api.reorderBoards(ids);
-        } catch { /* refetch below restores server truth */ }
+        } catch (err) {
+          reportActionError(err, "Could not reorder boards");
+        }
       }
     } finally {
       reorderInFlight = false;
@@ -92,7 +125,7 @@ export default function Home() {
 
   const reorderBoardByKey = (key: string) => {
     const boardId = focusedBoardId();
-    const list = boards();
+    const list = boardList();
     if (!boardId || !list) return false;
     const idx = list.findIndex((b) => b.id === boardId);
     if (idx < 0) return false;
@@ -217,7 +250,7 @@ export default function Home() {
   // end when null). Shares the optimistic mutate + serialized PUT queue with
   // the keyboard path so rapid drag/key mixes never race the backend.
   const reorderBoardByDrop = (boardId: string, beforeId: string | null) => {
-    const list = boards();
+    const list = boardList();
     if (!list) return;
     const moved = list.find((b) => b.id === boardId);
     if (!moved) return;
@@ -232,18 +265,27 @@ export default function Home() {
   };
 
   const openArchive = async () => {
+    setArchiveError(null);
     setArchiveLoading(true);
     setShowArchive(true);
     try {
       setArchivedBoards(await api.listArchivedBoards());
+    } catch (err) {
+      setArchiveError(errorMessage(err, "Could not load archived boards."));
     } finally {
       setArchiveLoading(false);
     }
   };
 
   onMount(() => {
-    api.listArchivedBoards().then(boards => setArchivedBoards(boards));
+    clearActionError();
+    refreshArchived();
     refreshWarnings();
+    const stopReconnect = onReconnect(() => {
+      if (boards.error) refetch();
+      refreshWarnings();
+      refreshArchived();
+    });
 
     // Reorder flush refetches when it drains; skipping the tick (without
     // consuming the mtime) lets the next poll pick the change up.
@@ -258,9 +300,7 @@ export default function Home() {
         if (focused) setPendingFocusBoardId(focused);
         refetch();
         refreshWarnings();
-        if (showArchive()) {
-          setArchivedBoards(await api.listArchivedBoards());
-        }
+        if (showArchive()) refreshArchived();
       },
     });
 
@@ -346,6 +386,7 @@ export default function Home() {
     const handleToggleShortcuts = () => setShowHelp((v) => !v);
     document.addEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
     onCleanup(() => {
+      stopReconnect();
       stopPoller();
       dispose();
       document.removeEventListener("toggle-shortcuts", handleToggleShortcuts as EventListener);
@@ -364,9 +405,13 @@ export default function Home() {
     e.preventDefault();
     const title = newTitle().trim();
     if (!title) return;
-    await api.createBoard(title);
-    close();
-    refetch();
+    try {
+      await api.createBoard(title);
+      close();
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not create board");
+    }
   };
 
   const handleArchive = async (id: string) => {
@@ -376,21 +421,38 @@ export default function Home() {
       confirmLabel: "Archive",
     });
     if (!ok) return;
-    await api.archiveBoard(id);
-    refetch();
-    const boards = await api.listArchivedBoards();
-    setArchivedBoards(boards);
+    try {
+      await api.archiveBoard(id);
+      refetch();
+      refreshArchived();
+    } catch (err) {
+      reportActionError(err, "Could not archive board");
+    }
   };
 
   const handleRestore = async (id: string) => {
-    await api.restoreBoard(id);
-    setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
-    refetch();
+    try {
+      setArchiveError(null);
+      await api.restoreBoard(id);
+      setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
+      refetch();
+    } catch (err) {
+      const msg = `Restore failed: ${errorMessage(err)}`;
+      setArchiveError(msg);
+      reportActionError(err, "Restore failed");
+    }
   };
 
   const handleDeleteArchived = async (id: string) => {
-    await api.deleteBoard(id);
-    setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
+    try {
+      setArchiveError(null);
+      await api.deleteBoard(id);
+      setArchivedBoards((prev) => prev.filter((b) => b.id !== id));
+    } catch (err) {
+      const msg = `Delete failed: ${errorMessage(err)}`;
+      setArchiveError(msg);
+      reportActionError(err, "Delete failed");
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -398,12 +460,13 @@ export default function Home() {
   };
 
   const getBoardTitle = (id: string): string => {
-    const b = boards()?.find(b => b.id === id);
+    const b = boardList()?.find(b => b.id === id);
     return b?.title ?? "this board";
   };
 
   return (
     <div class="home">
+      <NetworkBanner onRetry={retryHome} suppressWhen={!!boards.error} />
       <WarningBanner warnings={warnings()} />
       <div class="home-header">
         <h2>Your Boards</h2>
@@ -424,38 +487,57 @@ export default function Home() {
         </button>
       </div>
       <Show
-        when={boards() && (boards()!.length > 0 || adding())}
+        when={!boards.error}
         fallback={
-          <div class="empty-state">
-            <div class="empty-state-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
+          <div class="board-error home-error" role="alert">
+            <h2>{isNetworkError(boards.error) ? "Cannot reach the server" : "Could not load boards"}</h2>
+            <p>
+              {isNetworkError(boards.error)
+                ? "Could not load your boards. Check your connection and that Synkban is running."
+                : errorMessage(boards.error, "Could not load your boards.")}
+            </p>
+            <div class="board-error-actions">
+              <button type="button" class="btn btn-primary board-error-retry" onClick={retryHome}>
+                Retry
+              </button>
             </div>
-            <p>No boards yet</p>
-            <button class="btn btn-primary" onClick={() => setAdding(true)} title={tip("Create board", "N")}>
-              Create your first board
-            </button>
           </div>
         }
       >
-        <div class="board-grid" onDragOver={handleGridDragOver} onDrop={handleGridDrop}>
-          <Show when={dropLine()}>
-            {(line) => (
-              <div
-                class="board-drop-line"
-                style={{
-                  left: `${line().left}px`,
-                  top: `${line().top}px`,
-                  width: `${line().width}px`,
-                }}
-              />
-            )}
-          </Show>
-          <For each={boards()}>
+        <Show when={boardList() !== undefined} fallback={<div class="loading">Loading...</div>}>
+          <Show
+            when={boardList()!.length > 0 || adding()}
+            fallback={
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                </div>
+                <p>No boards yet</p>
+                <button class="btn btn-primary" onClick={() => setAdding(true)} title={tip("Create board", "N")}>
+                  Create your first board
+                </button>
+              </div>
+            }
+          >
+            <div class="board-grid" onDragOver={handleGridDragOver} onDrop={handleGridDrop}>
+              <Show when={dropLine()}>
+                {(line) => (
+                  <div
+                    class="board-drop-line"
+                    style={{
+                      left: `${line().left}px`,
+                      top: `${line().top}px`,
+                      width: `${line().width}px`,
+                    }}
+                  />
+                )}
+              </Show>
+              <For each={boardList()}>
             {(board) => (
               <A
                 href={`/board/${board.id}`}
@@ -529,6 +611,8 @@ export default function Home() {
             </form>
           </Show>
         </div>
+          </Show>
+        </Show>
       </Show>
 
       <confirm.Render />
@@ -539,6 +623,8 @@ export default function Home() {
           title="Archived Boards"
           items={archivedBoards()}
           loading={archiveLoading()}
+          error={archiveError()}
+          onRetry={openArchive}
           emptyText="No archived boards"
           itemClass="archive-board-item"
           renderItem={(board) => (

@@ -50,8 +50,8 @@ After any change:
 ### Frontend (`frontend/src/`)
 
 - **SolidJS, not React**: `createSignal`/`createResource`/`Show`/`For`; never `useState`/`useEffect`; don't destructure props; `createMemo` for derived values. Router `@solidjs/router` (`index.tsx`, `pages/`).
-- `api.ts` is the only backend access; `types.ts` mirrors `models.rs` (keep in sync). All styles in `styles/app.css` (no modules/Tailwind/CSS-in-JS).
-- `pages/` `Home`, `Board` (coordinator; Kanban or Notes mode, ADR-0022: `NotesView` reuses `List`/`Card` as master and `CardDetail variant="pane"` as detail); `components/` leaf and section components (cards, lists, CardDetail sections, dialogs, drawers); shared utilities at `src/` root, notably `platform.ts`, `shortcutRouter.ts`, `boardInput.ts` (`isInInput`), `focusTrap.ts`/`dialogKeys.ts`/`overlayLayers.ts` (ADR-0009), `focusRestoration.ts`/`changePoller.ts` (ADR-0010), `boardView.ts` (ADR-0021), `notesView.ts` (Notes mode selection rules, ADR-0022), `positions.ts`, `touchDrag.ts` (ADR-0011), `settings.ts`/`theme.ts` (ADR-0002/0013), `diff.ts` (ADR-0005), `dueDate.ts` (due-date wording, typed entry, calendar grid; ADR-0023), `quickAdd.ts` (`#label`/`due:` tokens, `labelKey`; ADR-0025), `cardContent.ts` (normalised card content, draft check; ADR-0024), `listFocus.ts`, `timeAgo.ts`, `filter.ts` (text/label/due filter), and the editor modules `schema.ts`, `proseEditor.ts`, `links.ts`, `autolink.ts`, `editorMenu.ts`, `tables.ts`, `tableIcons.ts` (ADR-0015–0017).
+- `api.ts` is the only backend access (`ApiError`, `isNetworkError`, `isNotFoundError`, `serverUnreachable`, `onReconnect`, `reportActionError`; ADR-0026); `types.ts` mirrors `models.rs` (keep in sync). All styles in `styles/app.css` (no modules/Tailwind/CSS-in-JS).
+- `pages/` `Home`, `Board` (coordinator; Kanban or Notes mode, ADR-0022: `NotesView` reuses `List`/`Card` as master and `CardDetail variant="pane"` as detail); `components/` leaf and section components (cards, lists, CardDetail sections, dialogs, drawers, `NetworkBanner`, `WarningBanner`); shared utilities at `src/` root, notably `platform.ts`, `shortcutRouter.ts`, `boardInput.ts` (`isInInput`), `focusTrap.ts`/`dialogKeys.ts`/`overlayLayers.ts` (ADR-0009), `focusRestoration.ts`/`changePoller.ts` (ADR-0010/0026), `boardView.ts` (ADR-0021), `notesView.ts` (Notes mode selection rules, ADR-0022), `positions.ts`, `touchDrag.ts` (ADR-0011), `settings.ts`/`theme.ts` (ADR-0002/0013), `diff.ts` (ADR-0005), `dueDate.ts` (due-date wording, typed entry, calendar grid; ADR-0023), `quickAdd.ts` (`#label`/`due:` tokens, `labelKey`; ADR-0025), `cardContent.ts` (normalised card content, draft check; ADR-0024), `listFocus.ts`, `timeAgo.ts`, `filter.ts` (text/label/due filter), and the editor modules `schema.ts`, `proseEditor.ts`, `links.ts`, `autolink.ts`, `editorMenu.ts`, `tables.ts`, `tableIcons.ts` (ADR-0015–0017).
 - Contexts: `LabelDrawerContext` (`useLabelDrawer`), `BoardHeaderContext` (`useBoardHeader`), wrapped in `App.tsx`.
 - Inputs auto-focus with `ref={(el) => requestAnimationFrame(() => el.focus())}`, not `autofocus`. Focus styles use `:focus`, not `:focus-visible` (Safari/WebView).
 - Card/label titles support `**bold**`/`*italic*` via `renderTitle()` (`innerHTML`; stored as markdown) and `handleMarkdownShortcut` on plain inputs.
@@ -86,6 +86,7 @@ After any change:
 | 0023 | Due dates: wording, keyboard-first picker |
 | 0024 | Crash safety: the open card's draft |
 | 0025 | Quick-add tokens, collapsed lists, due filter |
+| 0026 | Network and server error handling |
 
 ## Data model (summary)
 
@@ -158,7 +159,7 @@ DELETE /api/cards/:cid/attachments/:att_id    → 204 (also strips inline refere
 
 ## Common pitfalls
 
-- Reading an errored SolidJS resource throws; guard it in effects (ADR-0010).
+- Reading an errored SolidJS resource throws; guard it in effects (ADR-0010) and distinguish `isNotFoundError` from `isNetworkError` rather than falling back to empty/not-found states (ADR-0026).
 - Position gaps are fine; don't normalise.
 - A card/list lookup scans directories (no index).
 - Code that rewrites a card must use `read_card` (keeps history, ADR-0005).

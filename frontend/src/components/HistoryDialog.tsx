@@ -61,7 +61,7 @@ function Field(props: { name: string; lines: DiffLine[]; empty: string }) {
 /// (removed = only in the previous version, added = only in the selected one).
 /// The oldest version has no predecessor, so all its content shows as added.
 export default function HistoryDialog(props: Props) {
-  const [history] = createResource(() => props.cardId, (id) => api.getCardHistory(id));
+  const [history, { refetch: refetchHistory }] = createResource(() => props.cardId, (id) => api.getCardHistory(id));
   const [picked, setPicked] = createSignal<number | null>(null);
   let listRef: HTMLDivElement | undefined;
 
@@ -160,7 +160,14 @@ export default function HistoryDialog(props: Props) {
         <Show when={!history.loading} fallback={<div class="history-message">Loading…</div>}>
           <Show
             when={!history.error}
-            fallback={<div class="history-message">Could not load history.</div>}
+            fallback={
+              <div class="history-message" role="alert">
+                <p>Could not load history.</p>
+                <button type="button" class="btn btn-sm" onClick={() => refetchHistory()}>
+                  Retry
+                </button>
+              </div>
+            }
           >
             <Show
               when={entries().length > 0}

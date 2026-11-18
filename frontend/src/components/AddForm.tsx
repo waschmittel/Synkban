@@ -4,7 +4,7 @@ import { tip } from "../platform";
 interface Props {
   placeholder: string;
   buttonText: string;
-  onAdd: (value: string) => void;
+  onAdd: (value: string) => void | Promise<void>;
   draftKey?: string;
   /// Key that opens this form; advertised in the trigger's tooltip.
   shortcut?: string;
@@ -77,13 +77,18 @@ export default function AddForm(props: Props) {
     });
   }
 
-  const handleSubmit = (e: Event) => {
+  const handleSubmit = async (e: Event) => {
     e.preventDefault();
     const v = value().trim();
     if (!v || props.valid?.(v) === false) return;
-    props.onAdd(v);
     updateValue("");
     close();
+    try {
+      await props.onAdd(v);
+    } catch {
+      updateValue(v);
+      open();
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {

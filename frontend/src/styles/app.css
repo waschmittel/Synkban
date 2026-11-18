@@ -1857,6 +1857,19 @@ html.theme-dark .list-collapse:hover {
   margin-bottom: 20px;
 }
 
+.board-error-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.board-error-retry {
+  padding: 8px 16px;
+  font-weight: 600;
+}
+
 .board-error-home {
   display: inline-block;
   padding: 8px 16px;
@@ -1869,6 +1882,75 @@ html.theme-dark .list-collapse:hover {
 
 .board-error-home:hover {
   background: var(--color-primary-hover);
+}
+
+.home-error {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.home-error p {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.home-error .board-error-retry {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.home-error .board-error-retry:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.network-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px;
+  padding: 10px 14px;
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-left: 4px solid #e53e3e;
+  border-radius: 6px;
+  color: #742a2a;
+  font-size: 13px;
+}
+
+.network-banner-icon {
+  flex-shrink: 0;
+  color: #e53e3e;
+}
+
+.network-banner-body {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.network-banner-retry {
+  flex-shrink: 0;
+  background: rgba(229, 62, 62, 0.12);
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  color: #742a2a;
+}
+
+.network-banner-retry:hover {
+  background: rgba(229, 62, 62, 0.2);
+}
+
+.network-banner-close {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #742a2a;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.network-banner-close:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .warning-banner {
@@ -3150,6 +3232,8 @@ html.theme-dark .modal-history-btn:hover {
 .history-message {
   flex: 1;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted);
@@ -3432,6 +3516,25 @@ html.theme-dark .history-line--added .history-line-sign {
   color: var(--color-text-subtle);
   font-style: italic;
   padding: 16px 0;
+}
+
+.archive-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.archive-error .archive-empty {
+  font-style: normal;
+  color: var(--color-danger);
+  padding: 4px 0;
+}
+
+.archive-inline-error {
+  margin-bottom: 10px;
 }
 
 /* ═══ Attachments: tile grid ═══ */
@@ -4481,6 +4584,13 @@ html.theme-dark .filter-due-chip:hover:not(.filter-due-chip--active) {
   font-size: 12.5px;
 }
 
+.settings-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
 .settings-footer {
   display: flex;
   justify-content: flex-end;
@@ -4744,6 +4854,35 @@ html.theme-dark .warning-banner-close {
 }
 
 html.theme-dark .warning-banner-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html.theme-dark .network-banner {
+  background: rgba(248, 113, 104, 0.14);
+  border-color: rgba(248, 113, 104, 0.38);
+  border-left-color: #f87168;
+  color: #f4b0aa;
+}
+
+html.theme-dark .network-banner-icon {
+  color: #f87168;
+}
+
+html.theme-dark .network-banner-retry {
+  background: rgba(248, 113, 104, 0.18);
+  border-color: rgba(248, 113, 104, 0.4);
+  color: #f4b0aa;
+}
+
+html.theme-dark .network-banner-retry:hover {
+  background: rgba(248, 113, 104, 0.28);
+}
+
+html.theme-dark .network-banner-close {
+  color: #f4b0aa;
+}
+
+html.theme-dark .network-banner-close:hover {
   background: rgba(255, 255, 255, 0.1);
 }
 

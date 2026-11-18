@@ -1,5 +1,5 @@
 import { createResource, createSignal, onCleanup, Show } from "solid-js";
-import { api } from "../api";
+import { api, errorMessage } from "../api";
 import type { Theme, UpdateSettingsPayload } from "../types";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
@@ -16,7 +16,8 @@ interface Props {
 /// desktop relaunches the whole app (the backend reads its dir at spawn).
 export default function SettingsDialog(props: Props) {
   const desktop = desktopBridge();
-  const [settings] = createResource(() => api.getSettings());
+  const [settings, { refetch: refetchSettings }] = createResource(() => api.getSettings());
+  const loaded = () => (settings.error ? undefined : settings());
 
   // Staged edits: null = untouched, otherwise the pending value.
   const [stagedStartup, setStagedStartup] = createSignal<"overview" | "last" | null>(null);
@@ -26,8 +27,8 @@ export default function SettingsDialog(props: Props) {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
-  const startupView = () => stagedStartup() ?? settings()?.startup_view ?? "overview";
-  const theme = () => stagedTheme() ?? settings()?.theme ?? "system";
+  const startupView = () => stagedStartup() ?? loaded()?.startup_view ?? "overview";
+  const theme = () => stagedTheme() ?? loaded()?.theme ?? "system";
 
   // Theme is previewed live (applied to <html> on selection), so a discarded
   // dialog must roll the preview back to the persisted value.
@@ -36,21 +37,21 @@ export default function SettingsDialog(props: Props) {
     applyTheme(t);
   };
   const revertThemePreview = () => {
-    const s = settings();
+    const s = loaded();
     if (s && stagedTheme() !== null && stagedTheme() !== s.theme) applyTheme(s.theme);
   };
   const dataDir = () => {
-    const s = settings();
+    const s = loaded();
     if (!s) return "";
     const staged = stagedDataDir();
     if (staged === undefined) return s.data_dir;
     return staged ?? s.default_data_dir;
   };
-  const dataDirChanged = () => settings() !== undefined && dataDir() !== settings()!.data_dir;
+  const dataDirChanged = () => loaded() !== undefined && dataDir() !== loaded()!.data_dir;
   const dirty = () =>
-    settings() !== undefined &&
-    (startupView() !== settings()!.startup_view ||
-      theme() !== settings()!.theme ||
+    loaded() !== undefined &&
+    (startupView() !== loaded()!.startup_view ||
+      theme() !== loaded()!.theme ||
       dataDirChanged());
 
   // All close paths (Cancel, X, overlay click, Escape) discard staged edits.
@@ -66,7 +67,7 @@ export default function SettingsDialog(props: Props) {
   };
 
   const save = async () => {
-    const s = settings();
+    const s = loaded();
     if (!s || saving()) return;
     if (!dirty()) {
       props.onClose();
@@ -88,7 +89,7 @@ export default function SettingsDialog(props: Props) {
       }
       props.onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Saving failed");
+      setError(errorMessage(e, "Saving failed"));
       setSaving(false);
     }
   };
@@ -165,7 +166,20 @@ export default function SettingsDialog(props: Props) {
         </div>
 
         <div class="settings-body">
-          <Show when={settings()} fallback={<p class="settings-hint">Loading…</p>}>
+          <Show
+            when={!settings.error}
+            fallback={
+              <div class="settings-load-error" role="alert">
+                <p class="settings-error">{errorMessage(settings.error, "Could not load settings.")}</p>
+                <button type="button" class="btn btn-outline settings-btn" onClick={() => refetchSettings()}>
+                  Retry
+                </button>
+              </div>
+            }
+          >
+          <Show when={loaded()} fallback={<p class="settings-hint">Loading…</p>}>
+            {(s) => (
+              <>
             <section class="settings-section">
               <h4 class="settings-section-title">Appearance</h4>
               <div class="settings-choices">
@@ -213,7 +227,7 @@ export default function SettingsDialog(props: Props) {
                     <code>DATA_DIR</code> environment variable, or{" "}
                     <code>~/.config/synkban/synkban.toml</code>. Currently:
                     <span class="settings-path settings-path--inline">
-                      <code>{settings()!.data_dir}</code>
+                      <code>{s().data_dir}</code>
                     </span>
                   </p>
                 }
@@ -228,7 +242,7 @@ export default function SettingsDialog(props: Props) {
                   <button class="btn btn-outline settings-btn" onClick={browse}>
                     Browse…
                   </button>
-                  <Show when={dataDir() !== settings()!.default_data_dir}>
+                  <Show when={dataDir() !== s().default_data_dir}>
                     <button class="btn btn-outline settings-btn" onClick={() => setStagedDataDir(null)}>
                       Use default
                     </button>
@@ -246,6 +260,9 @@ export default function SettingsDialog(props: Props) {
             <Show when={error()}>
               <p class="settings-error">{error()}</p>
             </Show>
+              </>
+            )}
+          </Show>
           </Show>
         </div>
 
@@ -256,7 +273,7 @@ export default function SettingsDialog(props: Props) {
           <button
             class="btn btn-primary"
             onClick={save}
-            disabled={saving() || !settings()}
+            disabled={saving() || !loaded()}
           >
             {saving() ? "Saving…" : dataDirChanged() ? "Save & Restart" : "Save"}
           </button>

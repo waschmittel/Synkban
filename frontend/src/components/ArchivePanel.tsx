@@ -8,6 +8,8 @@ interface Props<T extends { id: string }> {
   title: string;
   items: T[];
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   emptyText: string;
   /// Item row class — also the e2e/CSS selector (`archive-card-item`,
   /// `archive-board-item`) and the ↑↓ navigation target.
@@ -85,7 +87,22 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
           <Show when={props.loading}>
             <p class="archive-empty">Loading…</p>
           </Show>
-          <Show when={!props.loading && props.items.length === 0}>
+          <Show when={!props.loading && props.error && props.items.length === 0}>
+            <div class="archive-error" role="alert">
+              <p class="archive-empty">{props.error}</p>
+              <Show when={props.onRetry}>
+                <button type="button" class="btn btn-sm" onClick={props.onRetry}>
+                  Retry
+                </button>
+              </Show>
+            </div>
+          </Show>
+          <Show when={!props.loading && props.error && props.items.length > 0}>
+            <div class="pane-banner pane-banner--removed archive-inline-error" role="alert">
+              <span>{props.error}</span>
+            </div>
+          </Show>
+          <Show when={!props.loading && !props.error && props.items.length === 0}>
             <p class="archive-empty">{props.emptyText}</p>
           </Show>
           <For each={props.items}>

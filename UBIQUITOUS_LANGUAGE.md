@@ -28,6 +28,7 @@
 | **Dirty** | The card modal has unsaved edits; closing goes through the unsaved guard; marked by a dot on the detail's card icon | Modified |
 | **Draft** | The open card's unsaved edits — one per machine, in the config dir — so a crash loses nothing; app start reopens it only if the card is unchanged since (ADR-0024) | Autosave, backup, kept edits |
 | **Warning** | A data-integrity notice for a corrupt/unreadable file the walkers skipped (`/api/warnings`) | Error banner |
+| **Network Banner** | Non-blocking alert (`NetworkBanner`) shown when the server is unreachable or a write fails, keeping loaded views intact (ADR-0026) | Warning |
 | **Data Directory** | Root of all board files; resolved `--data-dir` > `DATA_DIR` > config > default (ADR-0002) | Storage folder |
 | **Settings** | User preferences in `synkban.toml` (`startup_view`, `last_board_id`, `theme`, `data_dir`), served by the backend | Preferences, config (for UI choices) |
 

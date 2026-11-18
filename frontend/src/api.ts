@@ -1,18 +1,144 @@
+import { createSignal } from "solid-js";
 import type { Attachment, Board, BoardDetail, BoardMode, Card, CardHistory, ChecklistItem, Draft, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
 
 const BASE = "/api";
 
+export const NETWORK_ERROR_MESSAGE =
+  "Could not reach the server. Check your connection and try again.";
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly network: boolean;
+
+  constructor(
+    message: string,
+    status: number,
+    options?: { network?: boolean; cause?: unknown },
+  ) {
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = "ApiError";
+    this.status = status;
+    this.network =
+      options?.network ??
+      (status === 0 || status === 502 || status === 503 || status === 504);
+  }
+}
+
+export function isNetworkError(err: unknown): boolean {
+  return (err instanceof ApiError && err.network) || err instanceof TypeError;
+}
+
+export function isNotFoundError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 404;
+}
+
+export function errorMessage(err: unknown, fallback = "Request failed"): string {
+  if (isNetworkError(err)) return NETWORK_ERROR_MESSAGE;
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+const [serverUnreachable, setServerUnreachable] = createSignal(false);
+const [actionError, setActionError] = createSignal<string | null>(null);
+let actionErrorIsNetwork = false;
+const reconnectListeners = new Set<() => void>();
+
+export { serverUnreachable, actionError };
+
+export function onReconnect(fn: () => void): () => void {
+  reconnectListeners.add(fn);
+  return () => reconnectListeners.delete(fn);
+}
+
+export function triggerReconnect(): void {
+  for (const fn of reconnectListeners) fn();
+}
+
+function markReachable(keepalive?: boolean): void {
+  if (keepalive) return;
+  if (serverUnreachable()) {
+    setServerUnreachable(false);
+    if (actionErrorIsNetwork) {
+      actionErrorIsNetwork = false;
+      setActionError(null);
+    }
+    triggerReconnect();
+  }
+}
+
+function markUnreachable(keepalive?: boolean): void {
+  if (!keepalive) setServerUnreachable(true);
+}
+
+export function reportActionError(err: unknown, prefix?: string): void {
+  const detail = errorMessage(err);
+  const msg = prefix ? `${prefix}: ${detail}` : detail;
+  actionErrorIsNetwork = isNetworkError(err);
+  if (actionErrorIsNetwork) setServerUnreachable(true);
+  setActionError(msg);
+}
+
+export function clearActionError(): void {
+  actionErrorIsNetwork = false;
+  setActionError(null);
+}
+
+export function resetNetworkState(): void {
+  setServerUnreachable(false);
+  clearActionError();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("offline", () => setServerUnreachable(true));
+  window.addEventListener("online", () => triggerReconnect());
+}
+
+async function fetchResponse(url: string, init: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (cause) {
+    markUnreachable(init.keepalive);
+    throw new ApiError(NETWORK_ERROR_MESSAGE, 0, { network: true, cause });
+  }
+  if (!res.ok) {
+    let bodyError: string | undefined;
+    try {
+      const data = await res.json();
+      if (data && typeof data.error === "string" && data.error) bodyError = data.error;
+    } catch {
+      /* non-JSON error body */
+    }
+    const isGatewayOrDeadProxy =
+      res.status === 502 ||
+      res.status === 503 ||
+      res.status === 504 ||
+      (res.status >= 500 && !bodyError && !res.statusText);
+    if (isGatewayOrDeadProxy) markUnreachable(init.keepalive);
+    else markReachable(init.keepalive);
+    const message = bodyError || res.statusText || NETWORK_ERROR_MESSAGE;
+    throw new ApiError(message, res.status, { network: isGatewayOrDeadProxy });
+  }
+  markReachable(init.keepalive);
+  return res;
+}
+
+async function parseJson<T>(res: Response, keepalive?: boolean): Promise<T> {
+  try {
+    return await res.json();
+  } catch (cause) {
+    markUnreachable(keepalive);
+    throw new ApiError(NETWORK_ERROR_MESSAGE, 0, { network: true, cause });
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const init: RequestInit = {
     headers: { "Content-Type": "application/json" },
     ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || res.statusText);
-  }
+  };
+  const res = await fetchResponse(`${BASE}${path}`, init);
   if (res.status === 204) return undefined as T;
-  return res.json();
+  return parseJson<T>(res, init.keepalive);
 }
 
 export const api = {
@@ -160,19 +286,15 @@ export const api = {
     request<void>(`/labels/${id}`, { method: "DELETE" }),
 
   uploadAttachment: async (cardId: string, file: File): Promise<Attachment> => {
-    const res = await fetch(
+    const res = await fetchResponse(
       `${BASE}/cards/${cardId}/attachments?filename=${encodeURIComponent(file.name)}`,
       {
         method: "POST",
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
-      }
+      },
     );
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || res.statusText);
-    }
-    return res.json();
+    return parseJson<Attachment>(res);
   },
 
   /// The single crash-safety draft (ADR-0024), or null.

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { startChangePoller } from "./changePoller";
 import { api } from "./api";
@@ -93,5 +94,43 @@ describe("startChangePoller", () => {
     stop();
     await vi.advanceTimersByTimeAsync(500);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("calls onChange when recovering from a poll error even if mtime did not advance", async () => {
+    const check = respond(4);
+    const onChange = vi.fn();
+    const stop = startChangePoller({ onChange, intervalMs: 100 });
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    // Server goes offline on the next tick.
+    check.mockRejectedValueOnce(new Error("offline"));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    // Server returns with the exact same mtime — recovery still triggers onChange.
+    check.mockResolvedValue({ mtime: 4, boards: {} });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it("polls immediately on window online event and cleans up listener on stop", async () => {
+    const check = respond(2);
+    const onChange = vi.fn();
+    const stop = startChangePoller({ onChange, intervalMs: 1000 });
+
+    window.dispatchEvent(new Event("online"));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    check.mockResolvedValue({ mtime: 3, boards: {} });
+    stop();
+    window.dispatchEvent(new Event("online"));
+    await Promise.resolve();
+    expect(check).toHaveBeenCalledTimes(1);
   });
 });

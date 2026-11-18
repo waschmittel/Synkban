@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { api } from "./api";
+import {
+  actionError,
+  api,
+  ApiError,
+  clearActionError,
+  errorMessage,
+  isNetworkError,
+  isNotFoundError,
+  NETWORK_ERROR_MESSAGE,
+  onReconnect,
+  reportActionError,
+  resetNetworkState,
+  serverUnreachable,
+} from "./api";
 
 function mockFetch(response: Partial<Response>) {
   const fn = vi.fn().mockResolvedValue({
@@ -14,6 +27,7 @@ function mockFetch(response: Partial<Response>) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  resetNetworkState();
 });
 
 describe("URL builders", () => {
@@ -385,5 +399,96 @@ describe("attachment operations", () => {
     });
     const file = new File(["x"], "f.txt", { type: "text/plain" });
     await expect(api.uploadAttachment("card-1", file)).rejects.toThrow("Internal Server Error");
+  });
+});
+
+describe("network and error classification", () => {
+  it("classifies fetch rejection as network ApiError and marks server unreachable", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    let caught: unknown;
+    try {
+      await api.getBoard("b1");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(0);
+    expect((caught as ApiError).network).toBe(true);
+    expect((caught as ApiError).message).toBe(NETWORK_ERROR_MESSAGE);
+    expect(isNetworkError(caught)).toBe(true);
+    expect(isNotFoundError(caught)).toBe(false);
+    expect(serverUnreachable()).toBe(true);
+  });
+
+  it("classifies 404 as not-found and not a network error", async () => {
+    mockFetch({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () => Promise.resolve({ error: "Board not found" }),
+    });
+    let caught: unknown;
+    try {
+      await api.getBoard("missing");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ApiError);
+    expect((caught as ApiError).status).toBe(404);
+    expect((caught as ApiError).network).toBe(false);
+    expect(isNotFoundError(caught)).toBe(true);
+    expect(isNetworkError(caught)).toBe(false);
+    expect(serverUnreachable()).toBe(false);
+  });
+
+  it("classifies 502, 503, 504 as network errors", async () => {
+    for (const status of [502, 503, 504]) {
+      resetNetworkState();
+      mockFetch({
+        ok: false,
+        status,
+        statusText: "Gateway Error",
+        json: () => Promise.reject(new Error("html body")),
+      });
+      let caught: unknown;
+      try {
+        await api.listBoards();
+      } catch (e) {
+        caught = e;
+      }
+      expect(isNetworkError(caught)).toBe(true);
+      expect(serverUnreachable()).toBe(true);
+    }
+  });
+
+  it("clears serverUnreachable and fires onReconnect on subsequent success", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError("NetworkError"));
+    await expect(api.listBoards()).rejects.toThrow(NETWORK_ERROR_MESSAGE);
+    expect(serverUnreachable()).toBe(true);
+
+    reportActionError(new ApiError(NETWORK_ERROR_MESSAGE, 0, { network: true }), "Could not save");
+    expect(actionError()).toBe(`Could not save: ${NETWORK_ERROR_MESSAGE}`);
+
+    const reconnected = vi.fn();
+    const unsub = onReconnect(reconnected);
+    mockFetch({ json: () => Promise.resolve([]) });
+    await api.listBoards();
+
+    expect(serverUnreachable()).toBe(false);
+    expect(actionError()).toBeNull();
+    expect(reconnected).toHaveBeenCalledTimes(1);
+    unsub();
+  });
+
+  it("formats errors cleanly with errorMessage and clearActionError", () => {
+    expect(errorMessage(new TypeError("Failed to fetch"))).toBe(NETWORK_ERROR_MESSAGE);
+    expect(errorMessage(new Error("Validation failed"))).toBe("Validation failed");
+    expect(errorMessage("raw", "Fallback")).toBe("Fallback");
+
+    reportActionError(new Error("Validation failed"), "Save failed");
+    expect(actionError()).toBe("Save failed: Validation failed");
+    expect(serverUnreachable()).toBe(false);
+    clearActionError();
+    expect(actionError()).toBeNull();
   });
 });

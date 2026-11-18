@@ -11,8 +11,16 @@ import {
   onCleanup,
 } from "solid-js";
 import { useParams, useNavigate, useBeforeLeave, A } from "@solidjs/router";
-import { api } from "../api";
-import type { BoardMode, Card as CardType, ChecklistItem, Draft } from "../types";
+import {
+  api,
+  clearActionError,
+  errorMessage,
+  isNetworkError,
+  isNotFoundError,
+  onReconnect,
+  reportActionError,
+} from "../api";
+import type { Board, BoardDetail, BoardMode, Card as CardType, ChecklistItem, Draft } from "../types";
 import List from "../components/List";
 import AddForm from "../components/AddForm";
 import CardDetail, { type CardDetailControl } from "../components/CardDetail";
@@ -21,6 +29,7 @@ import type { SideKey } from "../components/Card";
 import ShortcutHelp, { helpContextOf, type HelpContext } from "../components/ShortcutHelp";
 import LabelDrawer from "../components/LabelDrawer";
 import ArchivePanel from "../components/ArchivePanel";
+import NetworkBanner from "../components/NetworkBanner";
 import WarningBanner from "../components/WarningBanner";
 import { renderTitle } from "../components/Card";
 import FilterBar from "../components/FilterBar";
@@ -58,17 +67,43 @@ export default function BoardPage() {
   const header = useBoardHeader();
   const drawer = useLabelDrawer();
 
-  const [board, { refetch }] = createResource(
+  let lastValidBoardId: string | null = null;
+  const [board, { refetch }] = createResource<BoardDetail, string>(
     () => params.id,
-    (id) => api.getBoard(id)
+    async (id, { value }) => {
+      try {
+        const res = await api.getBoard(id);
+        lastValidBoardId = id;
+        return res;
+      } catch (err) {
+        if (value && value.id === id && lastValidBoardId === id && isNetworkError(err)) {
+          return value;
+        }
+        if (!isNetworkError(err)) lastValidBoardId = null;
+        throw err;
+      }
+    }
   );
   const focus = createFocusRestoration(board);
   const confirm = createConfirm();
 
   // All active boards in Home-screen order (position ASC) — drives the bottom
   // dock and Ctrl+Arrow board cycling.
-  const [allBoards, { refetch: refetchBoards }] = createResource(() => api.listBoards());
-  const boardList = () => allBoards() ?? [];
+  let hasLoadedBoards = false;
+  const [allBoards, { refetch: refetchBoards }] = createResource<Board[]>(
+    async (_, { value }) => {
+      try {
+        const res = await api.listBoards();
+        hasLoadedBoards = true;
+        return res;
+      } catch (err) {
+        if (value && hasLoadedBoards && isNetworkError(err)) return value;
+        if (!isNetworkError(err)) hasLoadedBoards = false;
+        throw err;
+      }
+    }
+  );
+  const boardList = () => (allBoards.error ? [] : allBoards() ?? []);
   const cycleBoard = (dir: 1 | -1) => {
     const list = boardList();
     if (list.length < 2) return;
@@ -98,6 +133,15 @@ export default function BoardPage() {
   const [showArchive, setShowArchive] = createSignal(false);
   const [archivedCards, setArchivedCards] = createSignal<CardType[]>([]);
   const [archiveLoading, setArchiveLoading] = createSignal(false);
+  const [archiveError, setArchiveError] = createSignal<string | null>(null);
+
+  const retryBoard = () => {
+    clearActionError();
+    focus.capturePending();
+    refetch();
+    refetchBoards();
+    refreshWarnings();
+  };
 
   // Filter state
   const [showFilterBar, setShowFilterBar] = createSignal(false);
@@ -172,7 +216,7 @@ export default function BoardPage() {
       enterNotes();
       requestAnimationFrame(() => focusMasterCard(notesCardId()));
     } else if (cardId) focus.preserve(cardId);
-    api.updateBoard(b.id, { mode: next }).catch((err) => alert(`Could not save the view mode: ${(err as Error).message}`));
+    api.updateBoard(b.id, { mode: next }).catch((err) => reportActionError(err, "Could not save view mode"));
   };
 
   /// Enter (`focusDescription`) goes on to the description; a click keeps the
@@ -225,8 +269,12 @@ export default function BoardPage() {
     const target = allLists().find((l) => l.id === listId);
     if (!target || target.cards.some((c) => c.id === cardId)) return;
     const last = target.cards[target.cards.length - 1];
-    await api.updateCard(cardId, { list_id: listId, position: last ? moveToBottom(last.position) : 1 });
-    refetch();
+    try {
+      await api.updateCard(cardId, { list_id: listId, position: last ? moveToBottom(last.position) : 1 });
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not move card");
+    }
   };
 
   // Keep the selection valid across refetches (moves, archives, deletions,
@@ -268,9 +316,8 @@ export default function BoardPage() {
   });
 
   createEffect(() => {
-    if (board.error) return;
-    const b = board();
-    if (b) header.setTitle(b.title);
+    const b = board.error ? undefined : board();
+    header.setTitle(b && b.id === params.id ? b.title : "");
   });
 
   // Remember each board's active card and scroll offsets while switching
@@ -354,7 +401,7 @@ export default function BoardPage() {
   });
   // Forget views of boards that are gone.
   createEffect(() => {
-    const list = allBoards();
+    const list = allBoards.error ? undefined : allBoards();
     if (list) forgetBoardViews(list.map((b) => b.id));
   });
 
@@ -377,7 +424,13 @@ export default function BoardPage() {
   });
 
   onMount(() => {
+    clearActionError();
     const stopTracking = trackBoardView(pageEl, shownId);
+    const stopReconnect = onReconnect(() => {
+      if (board.error) refetch();
+      if (allBoards.error || !allBoards()) refetchBoards();
+      refreshWarnings();
+    });
     header.setIsOnBoard(true);
     const loadedBoard = () => (board.error ? undefined : board());
     header.setControls({
@@ -465,6 +518,7 @@ export default function BoardPage() {
       onChange: () => {
         focus.capturePending();
         refetch();
+        if (allBoards.error || !allBoards()) refetchBoards();
         refreshWarnings();
       },
     });
@@ -677,6 +731,7 @@ export default function BoardPage() {
       header.setRenaming(false);
       header.setControls(null);
       drawer.close();
+      stopReconnect();
       stopPoller();
       stopTracking();
       dispose();
@@ -693,9 +748,13 @@ export default function BoardPage() {
     const b = board();
     header.setRenaming(false);
     if (name && b && name !== b.title) {
-      await api.updateBoard(b.id, { title: name });
-      refetch();
-      refetchBoards();
+      try {
+        await api.updateBoard(b.id, { title: name });
+        refetch();
+        refetchBoards();
+      } catch (err) {
+        reportActionError(err, "Could not rename board");
+      }
     }
   };
 
@@ -715,21 +774,28 @@ export default function BoardPage() {
       }
       neighborId = sibling?.dataset.cardId ?? null;
     }
-    await api.archiveCard(cardId);
-    if (neighborId) {
-      focus.setLastFocused(neighborId);
-      focus.preserve(neighborId);
-    } else {
-      focus.setLastFocused(null);
+    try {
+      await api.archiveCard(cardId);
+      if (neighborId) {
+        focus.setLastFocused(neighborId);
+        focus.preserve(neighborId);
+      } else {
+        focus.setLastFocused(null);
+      }
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not archive card");
     }
-    refetch();
   };
 
   const openArchive = async () => {
+    setArchiveError(null);
     setArchiveLoading(true);
     setShowArchive(true);
     try {
       setArchivedCards(await api.getArchivedCards(params.id));
+    } catch (err) {
+      setArchiveError(errorMessage(err, "Could not load archived cards."));
     } finally {
       setArchiveLoading(false);
     }
@@ -742,13 +808,18 @@ export default function BoardPage() {
     // sending list_id for in-place cards would move them.
     const orphaned = !lists.some((l) => l.id === card?.list_id);
     if (orphaned && lists.length === 0) {
-      alert("Cannot restore: this board has no lists. Create a list first.");
+      const msg = "Cannot restore: this board has no lists. Create a list first.";
+      setArchiveError(msg);
+      reportActionError(new Error(msg));
       return;
     }
     try {
+      setArchiveError(null);
       await api.restoreCard(cardId, orphaned ? lists[0].id : undefined);
     } catch (err) {
-      alert(`Restore failed: ${(err as Error).message}`);
+      const msg = `Restore failed: ${errorMessage(err)}`;
+      setArchiveError(msg);
+      reportActionError(err, "Restore failed");
       return;
     }
     setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
@@ -756,16 +827,28 @@ export default function BoardPage() {
   };
 
   const handleDeleteArchivedCard = async (cardId: string) => {
-    await api.deleteCard(cardId);
-    setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
+    try {
+      setArchiveError(null);
+      await api.deleteCard(cardId);
+      setArchivedCards((prev) => prev.filter((c) => c.id !== cardId));
+    } catch (err) {
+      const msg = `Delete failed: ${errorMessage(err)}`;
+      setArchiveError(msg);
+      reportActionError(err, "Delete failed");
+    }
   };
 
   // --- List / Card actions ---
 
   const handleAddList = async (title: string) => {
-    const list = await api.createList(params.id, title);
-    try { await refetch(); } catch { /* board error surfaces via resource */ }
-    if (notes()) selectNotesList(list.id);
+    try {
+      const list = await api.createList(params.id, title);
+      try { await refetch(); } catch { /* board error surfaces via resource */ }
+      if (notes()) selectNotesList(list.id);
+    } catch (err) {
+      reportActionError(err, "Could not add list");
+      throw err;
+    }
   };
 
   /// `refocus` (Notes, Enter in the tab): the keyboard goes back to the selected
@@ -777,15 +860,23 @@ export default function BoardPage() {
     const list = b?.lists.find((l) => l.id === listId);
     const trimmed = title.trim();
     if (!list || !trimmed || trimmed === list.title) return;
-    await api.updateList(listId, { title: trimmed });
-    const cardId = notesCardId();
-    if (refocus && cardId && document.activeElement?.closest(".notes-master")) focus.preserve(cardId);
-    refetch();
+    try {
+      await api.updateList(listId, { title: trimmed });
+      const cardId = notesCardId();
+      if (refocus && cardId && document.activeElement?.closest(".notes-master")) focus.preserve(cardId);
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not rename list");
+    }
   };
 
   const handleMoveList = async (listId: string, position: number) => {
-    await api.updateList(listId, { position });
-    refetch();
+    try {
+      await api.updateList(listId, { position });
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not move list");
+    }
   };
 
   // From the data, not the DOM: in Notes mode only one list is rendered.
@@ -804,27 +895,36 @@ export default function BoardPage() {
   /// server reuses a same-named one, ADR-0014).
   const handleAddCard = async (listId: string, text: string) => {
     const q = parseQuickAdd(text, board()?.labels ?? []);
-    const created = await Promise.all(q.newLabels.map((n) => api.createLabel(params.id, n)));
-    const label_ids = [...new Set([...q.labels, ...created].map((l) => l.id))];
-    const card = await api.createCard(listId, q.title || text, { label_ids, due_date: q.due });
-    if (!notes()) {
-      focus.preserve(card.id);
-      refetch();
-      return;
+    try {
+      const created = await Promise.all(q.newLabels.map((n) => api.createLabel(params.id, n)));
+      const label_ids = [...new Set([...q.labels, ...created].map((l) => l.id))];
+      const card = await api.createCard(listId, q.title || text, { label_ids, due_date: q.due });
+      if (!notes()) {
+        focus.preserve(card.id);
+        refetch();
+        return;
+      }
+      // Notes: straight on to the new card's description.
+      try { await refetch(); } catch { /* board error surfaces via resource */ }
+      selectNotesCard(card, true);
+    } catch (err) {
+      reportActionError(err, "Could not add card");
+      throw err;
     }
-    // Notes: straight on to the new card's description.
-    try { await refetch(); } catch { /* board error surfaces via resource */ }
-    selectNotesCard(card, true);
   };
 
   /// Board view: a list as a narrow strip. Focus stays on the toggled list.
   const handleToggleCollapse = async (listId: string, collapsed: boolean) => {
-    await api.updateList(listId, { collapsed });
-    try { await refetch(); } catch { /* surfaces via resource */ }
-    requestAnimationFrame(() => {
-      const list = document.querySelector(`.lists-container .list[data-list-id="${listId}"]`);
-      list?.querySelector<HTMLElement>(collapsed ? ".list-expand" : ".list-title")?.focus();
-    });
+    try {
+      await api.updateList(listId, { collapsed });
+      try { await refetch(); } catch { /* surfaces via resource */ }
+      requestAnimationFrame(() => {
+        const list = document.querySelector(`.lists-container .list[data-list-id="${listId}"]`);
+        list?.querySelector<HTMLElement>(collapsed ? ".list-expand" : ".list-title")?.focus();
+      });
+    } catch (err) {
+      reportActionError(err, "Could not update list");
+    }
   };
 
   const handleDeleteList = async (listId: string) => {
@@ -838,19 +938,31 @@ export default function BoardPage() {
       });
       if (!ok) return;
     }
-    await api.deleteList(listId);
-    refetch();
+    try {
+      await api.deleteList(listId);
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not delete list");
+    }
   };
 
   const handleDropCard = async (cardId: string, targetListId: string, position: number) => {
-    await api.updateCard(cardId, { list_id: targetListId, position });
-    refetch();
+    try {
+      await api.updateCard(cardId, { list_id: targetListId, position });
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not move card");
+    }
   };
 
   const handleMoveCard = async (cardId: string, targetListId: string, position: number) => {
     focus.preserve(cardId);
-    await api.updateCard(cardId, { list_id: targetListId, position });
-    refetch();
+    try {
+      await api.updateCard(cardId, { list_id: targetListId, position });
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not move card");
+    }
   };
 
   const handleCardClick = (card: CardType) => {
@@ -897,7 +1009,7 @@ export default function BoardPage() {
       await api.restoreCard(id, activeListId() ?? undefined);
       return true;
     } catch (err) {
-      alert(`Restore failed: ${(err as Error).message}`);
+      reportActionError(err, "Restore failed");
       return false;
     }
   };
@@ -977,8 +1089,12 @@ export default function BoardPage() {
     );
     const position = listDropPosition(positions, insertIndex);
 
-    await api.updateList(listId, { position });
-    refetch();
+    try {
+      await api.updateList(listId, { position });
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not move list");
+    }
   };
 
   // --- Board color ---
@@ -986,28 +1102,47 @@ export default function BoardPage() {
   const handleSetBoardColor = async (color: string | null) => {
     const b = board();
     if (!b) return;
-    await api.updateBoard(b.id, { color });
-    refetch();
-    refetchBoards();
-    setShowColorPicker(false);
+    try {
+      await api.updateBoard(b.id, { color });
+      refetch();
+      refetchBoards();
+      setShowColorPicker(false);
+    } catch (err) {
+      document.documentElement.style.setProperty("--board-color", b.color ?? "#0079bf");
+      reportActionError(err, "Could not change board color");
+    }
   };
 
   // --- Label management ---
 
   const handleCreateLabel = async (name: string) => {
-    const label = await api.createLabel(params.id, name);
-    refetch();
-    return label;
+    try {
+      const label = await api.createLabel(params.id, name);
+      refetch();
+      return label;
+    } catch (err) {
+      reportActionError(err, "Could not create label");
+      throw err;
+    }
   };
 
   const handleDeleteLabel = async (labelId: string) => {
-    await api.deleteLabel(labelId);
-    refetch();
+    try {
+      await api.deleteLabel(labelId);
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Could not delete label");
+    }
   };
 
   const handleReorderLabels = async (ids: string[]) => {
-    await api.reorderLabels(params.id, ids);
-    await refetch();
+    try {
+      await api.reorderLabels(params.id, ids);
+      await refetch();
+    } catch (err) {
+      reportActionError(err, "Could not reorder labels");
+      throw err;
+    }
   };
 
   /// Renaming onto another label's name (case, spaces, dashes aside) merges
@@ -1030,10 +1165,10 @@ export default function BoardPage() {
     try {
       // The server merges only with the flag (409 for a clash we didn't see).
       await api.updateLabel(labelId, name, !!(from && into));
+      refetch();
     } catch (err) {
-      alert(`Rename failed: ${(err as Error).message}`);
+      reportActionError(err, "Rename failed");
     }
-    refetch();
   };
 
   // --- Filter ---
@@ -1077,15 +1212,36 @@ export default function BoardPage() {
         }
       }}
     >
+      <NetworkBanner onRetry={retryBoard} suppressWhen={!!board.error} />
       <WarningBanner warnings={warnings()} />
       <Show
         when={!board.error}
         fallback={
-          <div class="board-error">
-            <h2>Board not found</h2>
-            <p>This board may have been deleted, or the link is no longer valid.</p>
-            <A href="/" class="board-error-home">Back to boards</A>
-          </div>
+          <Show
+            when={isNotFoundError(board.error)}
+            fallback={
+              <div class="board-error" role="alert">
+                <h2>{isNetworkError(board.error) ? "Cannot reach the server" : "Could not load board"}</h2>
+                <p>
+                  {isNetworkError(board.error)
+                    ? "Could not load this board. Check your connection and that Synkban is running."
+                    : errorMessage(board.error, "Could not load this board.")}
+                </p>
+                <div class="board-error-actions">
+                  <button type="button" class="btn btn-primary board-error-retry" onClick={retryBoard}>
+                    Retry
+                  </button>
+                  <A href="/" class="board-error-home">Back to boards</A>
+                </div>
+              </div>
+            }
+          >
+            <div class="board-error">
+              <h2>Board not found</h2>
+              <p>This board may have been deleted, or the link is no longer valid.</p>
+              <A href="/" class="board-error-home">Back to boards</A>
+            </div>
+          </Show>
         }
       >
       <Show when={board()} fallback={<div class="loading">Loading...</div>}>
@@ -1221,7 +1377,7 @@ export default function BoardPage() {
             card={card()}
             boardId={params.id}
             draft={takeDraft(card().id)}
-            boardLabels={board()?.labels ?? []}
+            boardLabels={(board.error ? undefined : board()?.labels) ?? []}
             onCreateLabel={handleCreateLabel}
             onSave={handleCardSave}
             onClose={handleModalClose}
@@ -1237,6 +1393,8 @@ export default function BoardPage() {
           title="Archived Cards"
           items={archivedCards()}
           loading={archiveLoading()}
+          error={archiveError()}
+          onRetry={openArchive}
           emptyText="No archived cards."
           itemClass="archive-card-item"
           restoreClass="btn btn-primary btn-sm"

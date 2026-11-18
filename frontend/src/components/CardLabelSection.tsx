@@ -110,6 +110,8 @@ export default function CardLabelSection(props: Props) {
     try {
       await props.onCreateLabel(name);
       closeCreate(true);
+    } catch {
+      /* error reported by CardDetail; keep input open */
     } finally {
       setCreating(false);
     }

@@ -8,7 +8,7 @@ interface Props {
   open: boolean;
   labels: Label[];
   onClose: () => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => void | Promise<unknown>;
   onRename: (labelId: string, name: string) => void;
   onDelete: (labelId: string) => void;
   /// Persist a new label order (full list of ids). Resolves once the board refetched.
@@ -60,8 +60,12 @@ export default function LabelDrawer(props: Props) {
     }
     ids.splice(to, 0, id);
     if (ids.every((v, i) => v === props.labels[i].id)) return;
-    await props.onReorder(ids);
-    focusRow(id);
+    try {
+      await props.onReorder(ids);
+      focusRow(id);
+    } catch {
+      /* error reported by Board */
+    }
   };
 
   const endDrag = () => {
@@ -69,12 +73,16 @@ export default function LabelDrawer(props: Props) {
     setDropTarget(null);
   };
 
-  const submitNew = (e: Event) => {
+  const submitNew = async (e: Event) => {
     e.preventDefault();
     const name = newName().trim();
     if (!name) return;
-    props.onCreate(name);
-    setNewName("");
+    try {
+      await props.onCreate(name);
+      setNewName("");
+    } catch {
+      /* error reported by Board; keep input */
+    }
   };
 
   return (

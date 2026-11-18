@@ -22,18 +22,27 @@ export interface ChangePollerOptions {
 /// Returns a stop function — call it on cleanup.
 export function startChangePoller(opts: ChangePollerOptions): () => void {
   let last = 0;
-  const id = setInterval(async () => {
+  let hadError = false;
+  const tick = async () => {
     if (opts.shouldSkip?.()) return;
     try {
       const res = await api.checkChanges();
       const mtime = opts.select?.(res) ?? res.mtime;
-      if (mtime !== last) {
+      if (mtime !== last || hadError) {
         last = mtime;
+        hadError = false;
         await opts.onChange();
       }
     } catch {
+      hadError = true;
       // Poll errors are expected (offline, server mid-restart) — retry next tick.
     }
-  }, opts.intervalMs ?? 15000);
-  return () => clearInterval(id);
+  };
+  const id = setInterval(tick, opts.intervalMs ?? 15000);
+  const onOnline = () => void tick();
+  if (typeof window !== "undefined") window.addEventListener("online", onOnline);
+  return () => {
+    clearInterval(id);
+    if (typeof window !== "undefined") window.removeEventListener("online", onOnline);
+  };
 }

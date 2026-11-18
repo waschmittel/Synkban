@@ -24,8 +24,8 @@ interface Props {
   onCardFocus: (card: CardType) => void;
   onSideKey: (card: CardType, dir: -1 | 1, kind: SideKey) => void;
   onDropOnList: (cardId: string, listId: string) => void;
-  onAddList: (title: string) => void;
-  onAddCard: (listId: string, title: string) => void;
+  onAddList: (title: string) => void | Promise<void>;
+  onAddCard: (listId: string, title: string) => void | Promise<void>;
   onArchiveCard: (cardId: string) => void;
   onDeleteList: (listId: string) => void;
   onDropCard: (cardId: string, targetListId: string, position: number) => void;

@@ -64,6 +64,7 @@ async function bootstrap() {
   // settings on "/". The theme (not render-blocking) is applied afterwards
   // from the same response, reusing it when available.
   let pending: ReturnType<typeof api.getSettings> | null = null;
+  let settingsFailed = false;
   const atStart = window.location.pathname === "/";
   if (atStart) {
     try {
@@ -77,10 +78,11 @@ async function bootstrap() {
         );
       }
     } catch {
+      settingsFailed = true;
       /* settings unreachable — start on the overview, keep OS-default theme */
     }
   }
-  if (atStart) await openCrashDraftBoard();
+  if (atStart && !settingsFailed) await openCrashDraftBoard();
 
   render(
     () => (
@@ -94,11 +96,13 @@ async function bootstrap() {
 
   // Correct the OS-default theme set by index.html with the persisted
   // preference. Not render-blocking, so it may resolve after first paint.
-  (pending ?? api.getSettings())
-    .then((s) => applyTheme(s.theme))
-    .catch(() => {
-      /* keep the OS-default theme applied inline in index.html */
-    });
+  if (!settingsFailed) {
+    (pending ?? api.getSettings())
+      .then((s) => applyTheme(s.theme))
+      .catch(() => {
+        /* keep the OS-default theme applied inline in index.html */
+      });
+  }
 }
 
 bootstrap();

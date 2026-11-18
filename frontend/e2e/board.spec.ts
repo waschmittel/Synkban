@@ -1448,3 +1448,97 @@ test("active and primary colors derive from board color with safe contrast", asy
   const chipColor = await page.locator(".filter-due-chip--active").evaluate((el) => getComputedStyle(el).color);
   expect(relLum(chipColor)).toBeGreaterThan(0.25);
 });
+
+test("board network error shows server-unreachable state with retry, not board-not-found", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Network Retry Board" } })
+  ).json();
+
+  let fail = true;
+  await page.route(`**/api/boards/${board.id}`, (route) =>
+    fail ? route.abort("failed") : route.continue()
+  );
+
+  await page.goto(`/board/${board.id}`);
+  await expect(page.locator(".board-error h2")).toHaveText("Cannot reach the server");
+  await expect(page.locator(".board-error")).not.toContainText("Board not found");
+  await expect(page.locator(".loading")).toHaveCount(0);
+
+  fail = false;
+  await page.locator(".board-error-retry").click();
+  await expect(page.locator(".app-logo--board")).toHaveText("Network Retry Board");
+  await expect(page.locator(".board-error")).toHaveCount(0);
+});
+
+test("home page network error shows server-unreachable state with retry, not empty state", async ({
+  page,
+  request,
+}) => {
+  await request.post("/api/boards", { data: { title: "Home Network Board" } });
+
+  let fail = true;
+  await page.route("**/api/boards*", (route) =>
+    fail ? route.abort("failed") : route.continue()
+  );
+
+  await page.goto("/");
+  await expect(page.locator(".home-error h2")).toHaveText("Cannot reach the server");
+  await expect(page.locator(".empty-state")).toHaveCount(0);
+
+  fail = false;
+  await page.locator(".home-error .board-error-retry").click();
+  await expect(page.locator(".board-card", { hasText: "Home Network Board" })).toBeVisible();
+  await expect(page.locator(".home-error")).toHaveCount(0);
+});
+
+test("loaded board survives network drop, preserves add-card draft and dirty modal edits on failed save", async ({
+  page,
+  request,
+}) => {
+  const board = await (
+    await request.post("/api/boards", { data: { title: "Offline Resilient Board" } })
+  ).json();
+  const list = await (
+    await request.post(`/api/boards/${board.id}/lists`, { data: { title: "Todo" } })
+  ).json();
+  await request.post(`/api/lists/${list.id}/cards`, { data: { title: "Existing card" } });
+
+  await page.goto(`/board/${board.id}`);
+  await expect(page.locator(".card", { hasText: "Existing card" })).toBeVisible();
+
+  let failApi = true;
+  await page.route("**/api/**", (route) =>
+    failApi ? route.abort("failed") : route.continue()
+  );
+
+  // Failed card creation keeps the board mounted, shows NetworkBanner, and keeps the typed draft.
+  await page.locator(".list .add-trigger").first().click();
+  await page.locator(".list .add-form input").first().fill("Offline card");
+  await page.locator(".list .add-form input").first().press("Enter");
+
+  await expect(page.locator(".network-banner")).toContainText("Cannot reach the server");
+  await expect(page.locator(".board-error")).toHaveCount(0);
+  await expect(page.locator(".list .add-form input").first()).toHaveValue("Offline card");
+
+  // Dismiss AddForm, open card modal, and try saving while offline.
+  await page.locator(".list .add-form input").first().press("Escape");
+  await page.locator(".card", { hasText: "Existing card" }).click();
+  await page.locator(".modal-title-input").fill("Edited offline");
+  await page.locator(".modal-save-btn").click();
+
+  await expect(page.locator(".modal-overlay")).toHaveCount(1);
+  await expect(page.locator(".detail-error-banner")).toContainText("Could not save card");
+  await expect(page.locator(".modal-title-input")).toHaveValue("Edited offline");
+  await expect(page.locator(".modal-header-icon .dirty-dot")).toBeVisible();
+
+  // Connectivity returns: saving succeeds, modal closes, and NetworkBanner clears.
+  failApi = false;
+  await page.locator(".modal-save-btn").click();
+
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await expect(page.locator(".network-banner")).toHaveCount(0);
+  await expect(page.locator(".card", { hasText: "Edited offline" })).toBeVisible();
+});
