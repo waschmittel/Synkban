@@ -31,4 +31,5 @@ pub use labels::{
     update_label_by_id,
 };
 pub use lists::{create_list, delete_list, update_list};
+pub use paths::is_valid_iso_date;
 pub use walk::collect_warnings;

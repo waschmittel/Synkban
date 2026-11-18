@@ -8,7 +8,12 @@ No half-saved cards, no mutation queues, no per-field endpoints. Attachments are
 
 ## Rules
 
-- `UpdateCard` uses double-Option for nullable fields (`due_date`: null clears, absent keeps) and `Option<Vec>` for `checklist` (Some replaces the whole list). Due dates are `YYYY-MM-DD`, validated server-side (400). Checklist item IDs are minted client-side (`crypto.randomUUID()`); the backend stores the array as-is.
+- `UpdateCard` uses double-Option for nullable fields (`due_date`: null clears, absent keeps — just like `UpdateBoard.color`, which validates `#RRGGBB` or clears on `null`) and `Option<Vec>` for `checklist` (Some replaces the whole list).
+- **Input validation (frontend + backend, 400 on violation):**
+  - Board, list, card, and label titles/names must be non-empty after trimming. In `CardDetail`, the Save button stays enabled when the title is cleared so clicking Save (as well as `Accel+S` or Save in `UnsavedDialog`) surfaces the `"Card title cannot be empty."` banner and focuses the title input.
+  - `description` must be `""` or a valid ProseMirror `doc` conforming to `frontend/src/schema.json` (ADR-0015).
+  - `due_date` (and `?today=` on `GET /api/boards`) is calendar-validated (`YYYY-MM-DD`, checking real month lengths and leap years, matching `dueDate.ts::parseIso`).
+  - `checklist` item IDs are minted client-side (`crypto.randomUUID()`); the backend validates that every item has a unique non-empty `id` and non-empty `text`.
 - **The Notes pane (ADR-0022) saves without closing** and rebases its dirty baseline on every save; leaving a dirty card there goes through the same Save / Discard / Cancel dialog.
 - **Save is `Accel+S`, never `Ctrl+Enter`** — ProseMirror turns that into a hard break and would corrupt the description just before saving.
 - `Board.handleCardSave` and `handleModalClose` `await refetch()` **before** unmounting the modal, so an immediate re-open never snapshots a stale card.

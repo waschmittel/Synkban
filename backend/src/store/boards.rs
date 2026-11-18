@@ -48,6 +48,7 @@ impl From<BoardFile> for Board {
 }
 
 pub(crate) fn read_board_file(data_dir: &Path, board_id: &str) -> Result<BoardFile, AppError> {
+    check_id(board_id)?;
     let path = board_dir(data_dir, board_id).join("board.json");
     if !path.exists() {
         return Err(AppError::NotFound("Board not found".into()));
@@ -76,6 +77,13 @@ pub fn list_boards_with_stats(
     data_dir: &Path,
     today: Option<&str>,
 ) -> Result<Vec<Board>, AppError> {
+    if let Some(t) = today {
+        if !is_valid_iso_date(t) {
+            return Err(AppError::BadRequest(
+                "today must be in YYYY-MM-DD format".into(),
+            ));
+        }
+    }
     let mut boards = list_boards(data_dir)?;
     let mtimes = crate::store::io::get_per_board_mtimes(data_dir)?;
     for b in &mut boards {
@@ -119,6 +127,9 @@ fn scan_boards(data_dir: &Path, want_archived: bool) -> Result<Vec<Board>, AppEr
 }
 
 pub fn create_board(data_dir: &Path, title: &str) -> Result<Board, AppError> {
+    if title.trim().is_empty() {
+        return Err(AppError::BadRequest("board title must not be empty".into()));
+    }
     let id = uuid::Uuid::new_v4().to_string();
     let dir = board_dir(data_dir, &id);
     fs::create_dir_all(dir.join("lists"))?;
@@ -152,6 +163,7 @@ fn max_position(data_dir: &Path) -> Result<f64, AppError> {
 pub fn reorder_boards(data_dir: &Path, ids: &[String]) -> Result<(), AppError> {
     let mut pos = 1.0f64;
     for id in ids {
+        check_id(id)?;
         let board_json = board_dir(data_dir, id).join("board.json");
         if !board_json.exists() {
             continue;
@@ -186,7 +198,11 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
         for c in &mut cards {
             c.attachments = crate::store::attachments::load_attachments(data_dir, board_id, &c.id);
         }
-        cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+        cards.sort_by(|a, b| {
+            a.position
+                .partial_cmp(&b.position)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         lists_with_cards.push(ListWithCards {
             id: list.id,
             board_id: list.board_id,
@@ -197,7 +213,11 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
             cards,
         });
     }
-    lists_with_cards.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+    lists_with_cards.sort_by(|a, b| {
+        a.position
+            .partial_cmp(&b.position)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     Ok(BoardDetail {
         id: bf.id,
@@ -210,20 +230,37 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
     })
 }
 
+fn is_valid_hex_color(c: &str) -> bool {
+    c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
 pub fn update_board(
     data_dir: &Path,
     board_id: &str,
     title: Option<&str>,
-    color: Option<&str>,
+    color: Option<Option<&str>>,
     archived: Option<bool>,
     mode: Option<BoardMode>,
 ) -> Result<Board, AppError> {
     let mut bf = read_board_file(data_dir, board_id)?;
     if let Some(t) = title {
+        if t.trim().is_empty() {
+            return Err(AppError::BadRequest("board title must not be empty".into()));
+        }
         bf.title = t.to_string();
     }
     if let Some(c) = color {
-        bf.color = Some(c.to_string());
+        match c {
+            Some(hex) => {
+                if !is_valid_hex_color(hex) {
+                    return Err(AppError::BadRequest(
+                        "color must be in #RRGGBB format".into(),
+                    ));
+                }
+                bf.color = Some(hex.to_string());
+            }
+            None => bf.color = None,
+        }
     }
     if let Some(a) = archived {
         if a && !bf.archived {
@@ -372,8 +409,12 @@ mod tests {
     fn update_board_color() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let updated = update_board(d.path(), &b.id, None, Some("#ff0000"), None, None).unwrap();
+        let updated =
+            update_board(d.path(), &b.id, None, Some(Some("#ff0000")), None, None).unwrap();
         assert_eq!(updated.color, Some("#ff0000".into()));
+        let cleared = update_board(d.path(), &b.id, None, Some(None), None, None).unwrap();
+        assert!(cleared.color.is_none());
+        assert!(update_board(d.path(), &b.id, None, Some(Some("red")), None, None).is_err());
     }
 
     #[test]

@@ -154,8 +154,12 @@ test("entering Notes opens the focused card's list and card; leaving focuses it 
 
 test("the master reuses the board's card rendering; the tab is its title", async ({ page, request }) => {
   const s = await seed(request, [{ title: "Inbox", cards: ["Badged"] }]);
+  const desc = JSON.stringify({
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "text", text: "text" }] }],
+  });
   await request.put(`/api/cards/${s.lists[0].cards[0]}`, {
-    data: { due_date: "2099-01-01", checklist: [{ id: "x", text: "Step", done: true }], description: "text" },
+    data: { due_date: "2099-01-01", checklist: [{ id: "x", text: "Step", done: true }], description: desc },
   });
   await page.goto(`/board/${s.boardId}`);
   const card = master(page, "Badged");

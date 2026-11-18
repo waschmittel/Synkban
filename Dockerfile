@@ -11,6 +11,7 @@ WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 COPY backend/src ./src
 COPY backend/fonts ./fonts
+COPY --from=frontend-build /app/frontend/src/schema.json /app/frontend/src/schema.json
 COPY --from=frontend-build /app/frontend/dist ./static
 RUN cargo build --release
 

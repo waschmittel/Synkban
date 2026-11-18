@@ -82,7 +82,9 @@ fn prune_label_ids(data_dir: &Path, board_id: &str, card: &mut Card) {
     if let Ok(bf) = crate::store::boards::read_board_file(data_dir, board_id) {
         let valid: std::collections::HashSet<&str> =
             bf.labels.iter().map(|l| l.id.as_str()).collect();
-        card.label_ids.retain(|id| valid.contains(id.as_str()));
+        let mut seen = std::collections::HashSet::new();
+        card.label_ids
+            .retain(|id| valid.contains(id.as_str()) && seen.insert(id.clone()));
     }
 }
 
@@ -267,6 +269,14 @@ pub fn create_card_with(
     label_ids: &[String],
     due_date: Option<&str>,
 ) -> Result<Card, AppError> {
+    if title.trim().is_empty() {
+        return Err(AppError::BadRequest("card title must not be empty".into()));
+    }
+    if due_date.is_some_and(|d| !is_valid_iso_date(d)) {
+        return Err(AppError::BadRequest(
+            "due_date must be in YYYY-MM-DD format".into(),
+        ));
+    }
     let board_id = find_board_for_list(data_dir, list_id)?;
     let id = uuid::Uuid::new_v4().to_string();
     let max_pos = max_position(data_dir, &board_id, list_id)?;
@@ -290,6 +300,7 @@ pub fn create_card_with(
         checklist: Vec::new(),
         history: Vec::new(),
     };
+    prune_label_ids(data_dir, &board_id, &mut card);
     write_card(&dir.join(format!("{id}.json")), &mut card)?;
     card_index::record(
         &id,
@@ -347,9 +358,13 @@ fn update_card_with_history(
     let before = content_of(&card, attachments.clone());
 
     if let Some(t) = title {
+        if t.trim().is_empty() {
+            return Err(AppError::BadRequest("card title must not be empty".into()));
+        }
         card.title = t.to_string();
     }
     if let Some(d) = description {
+        crate::schema::validate_description(d)?;
         card.description = d.to_string();
         if let Some(pruned) = image_refs::prune_image_refs(
             &card.description,
@@ -360,6 +375,11 @@ fn update_card_with_history(
         refresh_description_text(&mut card);
     }
     if let Some(p) = position {
+        if !p.is_finite() {
+            return Err(AppError::BadRequest(
+                "position must be a finite number".into(),
+            ));
+        }
         card.position = p;
     }
     if let Some(ids) = label_ids {
@@ -374,9 +394,24 @@ fn update_card_with_history(
         card.archived = a;
     }
     if let Some(dd) = due_date {
+        if let Some(d) = dd {
+            if !is_valid_iso_date(d) {
+                return Err(AppError::BadRequest(
+                    "due_date must be in YYYY-MM-DD format".into(),
+                ));
+            }
+        }
         card.due_date = dd.map(|s| s.to_string());
     }
     if let Some(items) = checklist {
+        let mut seen = std::collections::HashSet::with_capacity(items.len());
+        for item in &items {
+            if item.id.trim().is_empty() || item.text.trim().is_empty() || !seen.insert(&item.id) {
+                return Err(AppError::BadRequest(
+                    "checklist items must have unique non-empty ids and non-empty text".into(),
+                ));
+            }
+        }
         card.checklist = items;
     }
 
@@ -496,6 +531,7 @@ pub fn delete_card(data_dir: &Path, card_id: &str) -> Result<(), AppError> {
 /// Returns all archived cards on the board — both archived-in-place (still in
 /// their list directory with `archived=true`) and orphaned (in `archived_cards/`).
 pub fn get_archived_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card>, AppError> {
+    check_id(board_id)?;
     let board_json = board_dir(data_dir, board_id).join("board.json");
     if !board_json.exists() {
         return Err(AppError::NotFound("Board not found".into()));
@@ -614,16 +650,17 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
+        let doc = r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"desc"}]}]}"#;
         let updated = update_card(
             d.path(),
             &c.id,
             CardPatch {
-                description: Some("desc"),
+                description: Some(doc),
                 ..Default::default()
             },
         )
         .unwrap();
-        assert_eq!(updated.description, "desc");
+        assert_eq!(updated.description, doc);
     }
 
     #[test]
@@ -1246,11 +1283,12 @@ mod tests {
     #[test]
     fn history_tracks_labels_due_date_checklist_description() {
         let (d, id) = card_with_list();
+        let doc = r#"{"type":"doc","content":[{"type":"paragraph"}]}"#;
         update_card(
             d.path(),
             &id,
             CardPatch {
-                description: Some("{}"),
+                description: Some(doc),
                 due_date: Some(Some("2030-01-02")),
                 checklist: Some(vec![ChecklistItem {
                     id: "i".into(),

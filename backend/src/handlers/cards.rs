@@ -3,9 +3,34 @@ use std::path::PathBuf;
 
 use crate::errors::AppError;
 use crate::models::*;
-use crate::store;
+use crate::store::{self, is_valid_iso_date};
 
 const MAX_ATTACHMENT_SIZE: usize = 50 * 1024 * 1024; // 50 MB
+
+fn content_disposition(filename: &str) -> String {
+    let ascii: String = filename
+        .chars()
+        .filter(|c| !c.is_control())
+        .map(|c| {
+            if c.is_ascii() && c != '"' && c != '\\' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let encoded: String = filename
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect();
+    format!("attachment; filename=\"{ascii}\"; filename*=UTF-8''{encoded}")
+}
 
 pub async fn create_card(
     data_dir: web::Data<PathBuf>,
@@ -41,29 +66,6 @@ pub async fn create_card(
         },
     )?;
     Ok(HttpResponse::Created().json(card))
-}
-
-fn is_valid_iso_date(s: &str) -> bool {
-    if s.len() != 10 {
-        return false;
-    }
-    let b = s.as_bytes();
-    if b[4] != b'-' || b[7] != b'-' {
-        return false;
-    }
-    let Ok(y) = s[0..4].parse::<u32>() else {
-        return false;
-    };
-    let Ok(m) = s[5..7].parse::<u32>() else {
-        return false;
-    };
-    let Ok(d) = s[8..10].parse::<u32>() else {
-        return false;
-    };
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || y < 1 {
-        return false;
-    }
-    true
 }
 
 pub async fn update_card(
@@ -257,7 +259,7 @@ pub async fn download_attachment(
 ) -> Result<HttpResponse, AppError> {
     let (card_id, att_id) = path.into_inner();
     let (att, data) = store::get_attachment_data(&data_dir, &card_id, &att_id)?;
-    let disposition = format!("attachment; filename=\"{}\"", att.filename);
+    let disposition = content_disposition(&att.filename);
     Ok(HttpResponse::Ok()
         .content_type(att.content_type)
         .append_header(("Content-Disposition", disposition))
@@ -346,5 +348,15 @@ mod tests {
     #[test]
     fn invalid_year_zero() {
         assert!(!is_valid_iso_date("0000-01-01"));
+    }
+
+    #[test]
+    fn invalid_calendar_days_and_non_leap_feb_29() {
+        assert!(!is_valid_iso_date("2025-02-29"));
+        assert!(!is_valid_iso_date("2026-02-30"));
+        assert!(!is_valid_iso_date("2026-04-31"));
+        assert!(!is_valid_iso_date("1900-02-29"));
+        assert!(is_valid_iso_date("2024-02-29"));
+        assert!(is_valid_iso_date("2000-02-29"));
     }
 }

@@ -94,6 +94,7 @@ export default function CardDetail(props: Props) {
     checklist: serializeChecklist(checklist()),
   });
   const dirty = createMemo(() => !sameContent(current(), base()));
+  const titleValid = () => title().trim().length > 0;
   // Captured: on unmount the prop getter may read a <Show> that already closed.
   const onDirtyChange = props.onDirtyChange;
   createEffect(() => onDirtyChange?.(dirty()));
@@ -276,6 +277,7 @@ export default function CardDetail(props: Props) {
   }
   const leaveSave = async () => {
     const ok = await runSave();
+    if (!ok && !titleValid()) focusBeforeLeave = titleInputRef;
     settleLeave(ok && !dirty());
   };
   const leaveDiscard = () => {
@@ -464,6 +466,11 @@ export default function CardDetail(props: Props) {
 
   const runSave = async (): Promise<boolean> => {
     if (!view) return false;
+    if (!titleValid()) {
+      setDetailError("Card title cannot be empty.");
+      titleInputRef?.focus();
+      return false;
+    }
     setDetailError(null);
     const desc = serializeDoc(view.state.doc);
     const dd = dueDate().trim();
@@ -674,7 +681,11 @@ export default function CardDetail(props: Props) {
             class="modal-title-input"
             type="text"
             value={title()}
-            onInput={(e) => setTitle(e.currentTarget.value)}
+            onInput={(e) => {
+              const v = e.currentTarget.value;
+              setTitle(v);
+              if (v.trim() && detailError() === "Card title cannot be empty.") setDetailError(null);
+            }}
             onKeyDown={handleTitleKeyDown}
             // Back to the start, so the ellipsis cuts the end, not the beginning.
             onBlur={(e) => (e.currentTarget.scrollLeft = 0)}

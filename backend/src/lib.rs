@@ -4,6 +4,7 @@ pub mod errors;
 pub mod handlers;
 pub mod models;
 pub mod pdf;
+pub mod schema;
 pub mod store;
 
 use actix_cors::Cors;

@@ -1,6 +1,6 @@
 # Descriptions are ProseMirror JSON with a restricted schema; links are allow-listed and edited whole
 
-The card description is rich text in ProseMirror (`schema.ts`): basic nodes, nested lists and tables, and an inline `image` that references an *attachment* (ADR-0020, never a URL); **no `horizontal_rule`**; marks bold, italic, inline code, link. It is stored as `JSON.stringify(doc)` in `description` (empty string = empty); never HTML. A description that fails to parse as a node is shown as plain text.
+The card description is rich text in ProseMirror (`schema.json` / `schema.ts`): basic nodes, nested lists and tables, and an inline `image` that references an *attachment* (ADR-0020, never a URL); **no `horizontal_rule`**; marks bold, italic, inline code, link. It is stored as `JSON.stringify(doc)` in `description` (empty string = empty); never HTML. A stored description on disk that fails to validate as a `doc` is shown as plain text.
 
 ## Why
 
@@ -8,8 +8,9 @@ A tight schema keeps the stored format, the server-side text extraction (`descri
 
 ## Document rules
 
+- **Single shared schema (`frontend/src/schema.json`):** both `frontend/src/schema.ts` (which constructs the ProseMirror `Schema`) and `backend/src/schema.rs` (which embeds `schema.json` via `include_str!` and validates `description` on `PUT /api/cards/:id`, rejecting violations with `400 Bad Request`) read the same specification so they cannot diverge.
 - `list_item` is `paragraph block*` (arbitrary nesting); table cells are `paragraph+`.
-- New node types are a data-format change: update backend text extraction, `pdf.rs` (+ corner cases), `diff.ts`, and the compatibility note in ADR-0017.
+- New node types are a data-format change: update `schema.json`, backend text extraction, `pdf.rs` (+ corner cases), `diff.ts`, and the compatibility note in ADR-0017.
 - The sticky-note tint (`#fffbe6`, dark variant in ADR-0013) distinguishes the description from the rest of the modal.
 - `Tab`/`Shift+Tab` indent/outdent list items (`Mod-]`/`Mod-[` also work). Inside a list they always belong to the editor: an item that can't move (the first has nothing to nest under) is a no-op, never a focus jump out of the description; outside lists and tables `Tab` moves focus on. Ctrl/Cmd+B/I toggle marks.
 

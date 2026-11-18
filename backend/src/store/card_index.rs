@@ -38,6 +38,7 @@ fn card_path(data_dir: &Path, card_id: &str, loc: &CardLocation) -> PathBuf {
 /// Cached lookup. Verifies the cached path still exists before returning it
 /// (so external sync moving the file invalidates the entry transparently).
 pub fn locate(data_dir: &Path, card_id: &str) -> Result<CardLocation, AppError> {
+    check_id(card_id)?;
     if let Ok(guard) = index().read() {
         if let Some(loc) = guard.get(card_id) {
             if card_path(data_dir, card_id, loc).exists() {

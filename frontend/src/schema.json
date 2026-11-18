@@ -1,0 +1,99 @@
+{
+  "topNode": "doc",
+  "allowedLinkProtocols": ["http:", "https:", "mailto:"],
+  "allowedAlignments": ["left", "center", "right"],
+  "nodes": {
+    "doc": {
+      "content": "block+"
+    },
+    "paragraph": {
+      "content": "inline*",
+      "group": "block"
+    },
+    "blockquote": {
+      "content": "block+",
+      "group": "block"
+    },
+    "heading": {
+      "content": "inline*",
+      "group": "block",
+      "attrs": {
+        "level": { "default": 1, "type": "number" }
+      }
+    },
+    "code_block": {
+      "content": "text*",
+      "group": "block",
+      "marks": "",
+      "code": true
+    },
+    "text": {
+      "group": "inline"
+    },
+    "hard_break": {
+      "group": "inline",
+      "inline": true
+    },
+    "ordered_list": {
+      "content": "list_item+",
+      "group": "block",
+      "attrs": {
+        "order": { "default": 1, "type": "number" }
+      }
+    },
+    "bullet_list": {
+      "content": "list_item+",
+      "group": "block"
+    },
+    "list_item": {
+      "content": "paragraph block*"
+    },
+    "table": {
+      "content": "table_row+",
+      "group": "block",
+      "attrs": {
+        "matrix": { "default": false, "type": "boolean" }
+      }
+    },
+    "table_row": {
+      "content": "(table_cell | table_header)*"
+    },
+    "table_cell": {
+      "content": "paragraph+",
+      "attrs": {
+        "colspan": { "default": 1, "type": "number" },
+        "rowspan": { "default": 1, "type": "number" },
+        "colwidth": { "default": null, "type": "colwidth" },
+        "align": { "default": null, "type": "align" }
+      }
+    },
+    "table_header": {
+      "content": "paragraph+",
+      "attrs": {
+        "colspan": { "default": 1, "type": "number" },
+        "rowspan": { "default": 1, "type": "number" },
+        "colwidth": { "default": null, "type": "colwidth" },
+        "align": { "default": null, "type": "align" }
+      }
+    },
+    "image": {
+      "group": "inline",
+      "inline": true,
+      "attrs": {
+        "att": { "type": "non_empty_string" },
+        "alt": { "default": "", "type": "string" }
+      }
+    }
+  },
+  "marks": {
+    "link": {
+      "attrs": {
+        "href": { "type": "link_href" },
+        "title": { "default": null, "type": "string|null" }
+      }
+    },
+    "em": {},
+    "strong": {},
+    "code": {}
+  }
+}

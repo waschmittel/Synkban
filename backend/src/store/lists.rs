@@ -11,6 +11,7 @@ use crate::store::io::{now_timestamp, read_json, remove_dir_if_empty, track, wri
 use crate::store::paths::*;
 
 pub(crate) fn find_board_for_list(data_dir: &Path, list_id: &str) -> Result<String, AppError> {
+    check_id(list_id)?;
     for board_id in crate::store::walk::board_ids(data_dir)? {
         if list_dir(data_dir, &board_id, list_id)
             .join("list.json")
@@ -23,6 +24,10 @@ pub(crate) fn find_board_for_list(data_dir: &Path, list_id: &str) -> Result<Stri
 }
 
 pub fn create_list(data_dir: &Path, board_id: &str, title: &str) -> Result<List, AppError> {
+    check_id(board_id)?;
+    if title.trim().is_empty() {
+        return Err(AppError::BadRequest("list title must not be empty".into()));
+    }
     let board_path = board_dir(data_dir, board_id).join("board.json");
     if !board_path.exists() {
         return Err(AppError::NotFound("Board not found".into()));
@@ -65,9 +70,17 @@ pub fn update_list(
     let mut list: List = read_json(&list_json)?;
 
     if let Some(t) = title {
+        if t.trim().is_empty() {
+            return Err(AppError::BadRequest("list title must not be empty".into()));
+        }
         list.title = t.to_string();
     }
     if let Some(p) = position {
+        if !p.is_finite() {
+            return Err(AppError::BadRequest(
+                "position must be a finite number".into(),
+            ));
+        }
         list.position = p;
     }
     if let Some(c) = collapsed {

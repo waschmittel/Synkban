@@ -5,7 +5,7 @@
 ## Rules
 
 - **Array order is the display order everywhere** (card chips, CardDetail row, FilterBar iterate `board.labels`, never `card.label_ids`); `store::reorder_labels` reorders it (`PUT /api/boards/:bid/labels/order`; unlisted ids keep relative order at the end, unknown ids ignored).
-- **Dead IDs self-heal:** `delete_label` doesn't rewrite cards; the UI filters chips to existing labels and `cards::prune_label_ids` drops dangling IDs on every `update_card`.
+- **Dead IDs self-heal:** `delete_label` doesn't rewrite cards; the UI filters chips to existing labels and `cards::prune_label_ids` drops dangling IDs (and deduplicates) on every `create_card_with` and `update_card`.
 - **Same name, same label:** names compare by `label_key` (case, whitespace and dashes ignored). Creating a same-named label returns the existing one (200, not 201). **Renaming onto another label's name merges** them — destructive, so confirmed twice over: the UI asks first (danger dialog, Cancel focused so `Enter` doesn't merge, "can't be undone"), and the server refuses a merging rename without `merge: true` (409), so no client merges by accident. Then the other label survives (its id, colour, position) with the new name, the renamed one is removed, and every card of the board carrying it — archived ones too — gets the survivor instead, once (`update_card`: a history entry each). Quick-add `#tokens` use the same match (ADR-0025).
 - Names support `**bold**`/`*italic*` (`renderTitle`, `mdInput.ts` for Ctrl+B/I in plain inputs).
 - **Drawer:** right-side slide-out (`LabelDrawer`, always rendered, `--open` toggles `translateX(0)`); rows reorder by drag, or `Shift+↑↓` with a row focused; focus restored after refetch.

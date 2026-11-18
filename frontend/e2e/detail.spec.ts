@@ -113,7 +113,55 @@ for (const mode of ["kanban", "notes"] as const) {
     await expect(page.locator(".dirty-dot")).toHaveCount(0);
     if (mode === "notes") await expect(save).toHaveClass(/btn-quiet/);
   });
+
+  test(`${mode}: empty card title cannot be saved`, async ({ page, request }) => {
+    const s = await seed(request, mode, ["Needs title"]);
+    const root = await open(page, mode, s.boardId);
+    const titleInput = root.locator(".modal-title-input");
+    const save = root.locator(".modal-save-btn");
+
+    await titleInput.fill("   ");
+    await expect(save).toBeEnabled();
+
+    // Clicking Save shows the error banner and focuses the title input.
+    await save.click();
+    await expect(root.locator(".detail-error-banner")).toContainText("Card title cannot be empty.");
+    await expect(titleInput).toBeFocused();
+
+    // Dismissing the banner and pressing Accel+S also shows the error and focuses the title input.
+    await root.locator(".detail-error-banner button").click();
+    await expect(root.locator(".detail-error-banner")).toHaveCount(0);
+    await root.locator(".editor-wrapper .ProseMirror").click();
+    await page.keyboard.press("ControlOrMeta+s");
+    await expect(root.locator(".detail-error-banner")).toContainText("Card title cannot be empty.");
+    await expect(titleInput).toBeFocused();
+
+    // Attempting to leave via Escape and choosing Save in the unsaved dialog also blocks.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".unsaved-dialog")).toBeVisible();
+    await page.locator(".unsaved-dialog .btn-primary").click();
+    await expect(page.locator(".unsaved-dialog")).toHaveCount(0);
+    await expect(root.locator(".detail-error-banner")).toContainText("Card title cannot be empty.");
+    await expect(titleInput).toBeFocused();
+
+    // Typing a valid title clears the error and allows saving.
+    await titleInput.fill("Restored title");
+    await expect(root.locator(".detail-error-banner")).toHaveCount(0);
+    await save.click();
+    const board = await (await request.get(`/api/boards/${s.boardId}`)).json();
+    expect(board.lists[0].cards[0].title).toBe("Restored title");
+  });
 }
+
+test("board color can be set and reset to default", async ({ page, request }) => {
+  const s = await seed(request, "kanban");
+  await request.put(`/api/boards/${s.boardId}`, { data: { color: "#cc3366" } });
+  await page.goto(`/board/${s.boardId}`);
+  await page.locator(".board-color-btn").click();
+  await page.locator(".board-color-reset").click();
+  const board = await (await request.get(`/api/boards/${s.boardId}`)).json();
+  expect(board.color).toBeUndefined();
+});
 
 test("notes: keys in the due-date picker stay there", async ({ page, request }) => {
   const s = await seed(request, "notes");

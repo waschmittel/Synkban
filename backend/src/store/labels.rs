@@ -9,7 +9,7 @@ use crate::models::{CardPatch, Label};
 use crate::store::boards::{read_board_file, write_board_file, BoardFile};
 use crate::store::cards::update_card;
 use crate::store::io::read_json;
-use crate::store::paths::{board_dir, boards_dir};
+use crate::store::paths::{board_dir, boards_dir, check_id};
 use crate::store::walk;
 
 /// Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
@@ -56,6 +56,9 @@ pub fn create_label(
     board_id: &str,
     name: &str,
 ) -> Result<(Label, bool), AppError> {
+    if name.trim().is_empty() {
+        return Err(AppError::BadRequest("label name must not be empty".into()));
+    }
     let mut bf = read_board_file(data_dir, board_id)?;
     if let Some(existing) = same_label(&bf.labels, name, "") {
         return Ok((existing.clone(), false));
@@ -78,6 +81,10 @@ pub fn update_label(
     name: &str,
     merge: bool,
 ) -> Result<Label, AppError> {
+    check_id(label_id)?;
+    if name.trim().is_empty() {
+        return Err(AppError::BadRequest("label name must not be empty".into()));
+    }
     let mut bf = read_board_file(data_dir, board_id)?;
     if !bf.labels.iter().any(|l| l.id == label_id) {
         return Err(AppError::NotFound("Label not found".into()));
@@ -151,6 +158,7 @@ pub fn reorder_labels(data_dir: &Path, board_id: &str, ids: &[String]) -> Result
 }
 
 pub fn delete_label(data_dir: &Path, board_id: &str, label_id: &str) -> Result<(), AppError> {
+    check_id(label_id)?;
     let mut bf = read_board_file(data_dir, board_id)?;
     let before = bf.labels.len();
     bf.labels.retain(|l| l.id != label_id);
@@ -163,6 +171,7 @@ pub fn delete_label(data_dir: &Path, board_id: &str, label_id: &str) -> Result<(
 
 /// Find the board_id that owns the given label_id (scans all boards).
 fn find_board_for_label(data_dir: &Path, label_id: &str) -> Result<String, AppError> {
+    check_id(label_id)?;
     let dir = boards_dir(data_dir);
     if dir.exists() {
         for entry in fs::read_dir(&dir)? {

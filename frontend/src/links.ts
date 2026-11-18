@@ -6,6 +6,7 @@ import { EditorState, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import type { Mark as PmMark, MarkType } from "prosemirror-model";
 import { registerOverlay } from "./overlayLayers";
+import schemaSpec from "./schema.json";
 
 export function markActive(state: EditorState, type: MarkType) {
   const { from, $from, to, empty } = state.selection;
@@ -13,7 +14,22 @@ export function markActive(state: EditorState, type: MarkType) {
   return state.doc.rangeHasMark(from, to, type);
 }
 
-const ALLOWED_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
+const ALLOWED_LINK_PROTOCOLS: readonly string[] = schemaSpec.allowedLinkProtocols;
+
+export function isValidLinkHref(href: string): boolean {
+  if (!href || /\s/.test(href)) return false;
+  const okPrefix = ALLOWED_LINK_PROTOCOLS.some((p) => {
+    const prefix = p === "http:" || p === "https:" ? `${p}//` : p;
+    return href.length > prefix.length && href.slice(0, prefix.length).toLowerCase() === prefix;
+  });
+  if (!okPrefix) return false;
+  try {
+    const url = new URL(href);
+    return ALLOWED_LINK_PROTOCOLS.includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
 
 /// Returns a normalized safe href, or null if the URL is relative or uses a
 /// disallowed scheme (e.g. javascript:, data:). The URL constructor strips
@@ -21,13 +37,7 @@ const ALLOWED_LINK_PROTOCOLS = ["http:", "https:", "mailto:"];
 /// like " JaVaScRiPt:" are caught too.
 export function sanitizeLinkHref(raw: string): string | null {
   const candidate = /^www\./i.test(raw) ? `https://${raw}` : raw;
-  let url: URL;
-  try {
-    url = new URL(candidate);
-  } catch {
-    return null;
-  }
-  return ALLOWED_LINK_PROTOCOLS.includes(url.protocol) ? candidate : null;
+  return isValidLinkHref(candidate) ? candidate : null;
 }
 
 /// Finds the contiguous range of `markType` (a link) surrounding document

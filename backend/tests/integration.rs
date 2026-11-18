@@ -737,3 +737,257 @@ async fn board_list_carries_stats_measured_against_the_client_date() {
     );
     assert!(board.get("stats").is_none());
 }
+
+// -- Description ProseMirror schema validation (400 path) --
+
+#[actix_web::test]
+async fn update_card_validates_description_schema() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (_, _, cid) = seed_board_list_card!(app);
+
+    for invalid in [
+        "raw plain text".to_string(),
+        json!({ "type": "doc" }).to_string(),
+        json!({ "type": "doc", "content": [{ "type": "horizontal_rule" }] }).to_string(),
+        json!({
+            "type": "doc",
+            "content": [{
+                "type": "paragraph",
+                "content": [{
+                    "type": "text",
+                    "marks": [{ "type": "link", "attrs": { "href": "javascript:alert(1)" } }],
+                    "text": "xss"
+                }]
+            }]
+        })
+        .to_string(),
+    ] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/cards/{cid}"))
+            .set_json(json!({ "description": invalid }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{invalid}");
+    }
+
+    let valid = json!({
+        "type": "doc",
+        "content": [{
+            "type": "paragraph",
+            "content": [{
+                "type": "text",
+                "marks": [{ "type": "link", "attrs": { "href": "https://example.com" } }],
+                "text": "ok"
+            }]
+        }]
+    })
+    .to_string();
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{cid}"))
+        .set_json(json!({ "description": valid }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = read_json_body(test::read_body(resp).await);
+    assert_eq!(body["description_text"], "ok");
+
+    // Empty string clears the description.
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/cards/{cid}"))
+        .set_json(json!({ "description": "" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
+async fn rejects_empty_titles_invalid_colors_dates_checklists_filenames_and_ids() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, lid, cid) = seed_board_list_card!(app);
+    let label: Value = post_json!(
+        app,
+        &format!("/api/boards/{bid}/labels"),
+        json!({ "name": "Valid" })
+    );
+    let label_id = label["id"].as_str().unwrap();
+
+    // Empty / whitespace-only titles and names -> 400.
+    for empty in ["", "   "] {
+        for (method, uri, body) in [
+            ("POST", "/api/boards".to_string(), json!({ "title": empty })),
+            (
+                "PUT",
+                format!("/api/boards/{bid}"),
+                json!({ "title": empty }),
+            ),
+            (
+                "POST",
+                format!("/api/boards/{bid}/lists"),
+                json!({ "title": empty }),
+            ),
+            (
+                "PUT",
+                format!("/api/lists/{lid}"),
+                json!({ "title": empty }),
+            ),
+            (
+                "POST",
+                format!("/api/lists/{lid}/cards"),
+                json!({ "title": empty }),
+            ),
+            (
+                "PUT",
+                format!("/api/cards/{cid}"),
+                json!({ "title": empty }),
+            ),
+            (
+                "POST",
+                format!("/api/boards/{bid}/labels"),
+                json!({ "name": empty }),
+            ),
+            (
+                "PUT",
+                format!("/api/labels/{label_id}"),
+                json!({ "name": empty }),
+            ),
+        ] {
+            let req = match method {
+                "POST" => test::TestRequest::post().uri(&uri).set_json(body),
+                _ => test::TestRequest::put().uri(&uri).set_json(body),
+            }
+            .to_request();
+            let resp = test::call_service(&app, req).await;
+            assert_eq!(
+                resp.status(),
+                StatusCode::BAD_REQUEST,
+                "{method} {uri} {empty:?}"
+            );
+        }
+    }
+
+    // Board color validation + null reset.
+    for bad_color in ["red", "#12345", "#1234567", "#gggggg", ""] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/boards/{bid}"))
+            .set_json(json!({ "color": bad_color }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST,
+            "{bad_color}"
+        );
+    }
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/boards/{bid}"))
+        .set_json(json!({ "color": "#112233" }))
+        .to_request();
+    let updated = read_json_body(test::read_body(test::call_service(&app, req).await).await);
+    assert_eq!(updated["color"], "#112233");
+
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/boards/{bid}"))
+        .set_json(json!({ "color": null }))
+        .to_request();
+    let cleared = read_json_body(test::read_body(test::call_service(&app, req).await).await);
+    assert!(cleared.get("color").is_none());
+
+    // Calendar date validation on due_date and ?today=.
+    for bad_date in ["2025-02-29", "2026-02-30", "2026-04-31"] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/cards/{cid}"))
+            .set_json(json!({ "due_date": bad_date }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+        let req = test::TestRequest::get()
+            .uri(&format!("/api/boards?today={bad_date}"))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    // Card creation prunes unknown label_ids and deduplicates valid ones.
+    let created: Value = post_json!(
+        app,
+        &format!("/api/lists/{lid}/cards"),
+        json!({ "title": "Pruned", "label_ids": [label_id, "unknown-id", label_id] })
+    );
+    assert_eq!(created["label_ids"], json!([label_id]));
+
+    // Checklist validation (empty id/text or duplicate ids).
+    for bad_checklist in [
+        json!([{ "id": "", "text": "step", "done": false }]),
+        json!([{ "id": "1", "text": "   ", "done": false }]),
+        json!([
+            { "id": "dup", "text": "a", "done": false },
+            { "id": "dup", "text": "b", "done": true }
+        ]),
+    ] {
+        let req = test::TestRequest::put()
+            .uri(&format!("/api/cards/{cid}"))
+            .set_json(json!({ "checklist": bad_checklist }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    // Attachment filename validation and safe Content-Disposition.
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/cards/{cid}/attachments?filename=%20%20"))
+        .set_payload(b"x".to_vec())
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    let req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/cards/{cid}/attachments?filename=sub/quote%22file.txt"
+        ))
+        .insert_header(("content-type", "text/plain"))
+        .set_payload(b"x".to_vec())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let att = read_json_body(test::read_body(resp).await);
+    assert_eq!(att["filename"], "quote\"file.txt");
+    let att_id = att["id"].as_str().unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/cards/{cid}/attachments/{att_id}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cd = resp
+        .headers()
+        .get("content-disposition")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(cd.contains("filename=\"quote_file.txt\""));
+    assert!(cd.contains("filename*=UTF-8''quote%22file.txt"));
+
+    // Unsafe IDs rejected with 400.
+    for uri in [
+        "/api/boards/bad.id".to_string(),
+        format!("/api/cards/{cid}/attachments/bad.id"),
+    ] {
+        let req = test::TestRequest::get().uri(&uri).to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST,
+            "{uri}"
+        );
+    }
+}

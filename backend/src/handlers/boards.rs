@@ -55,6 +55,7 @@ pub async fn update_board(
     body: web::Json<UpdateBoard>,
 ) -> Result<HttpResponse, AppError> {
     let board_id = path.into_inner();
+    let color = body.color.as_ref().map(|c| c.as_deref());
     let board = store::audit_op(
         &data_dir,
         |dd| {
@@ -62,7 +63,7 @@ pub async fn update_board(
                 dd,
                 &board_id,
                 body.title.as_deref(),
-                body.color.as_deref(),
+                color,
                 body.archived,
                 body.mode,
             )

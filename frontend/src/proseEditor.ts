@@ -15,7 +15,7 @@ import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
 import { insertMatrix, insertTable, tablePlugins } from "./tables";
-import { schema, TEXT_STYLES } from "./schema";
+import { schema, TEXT_STYLES, validateDescription } from "./schema";
 import { api } from "./api";
 import { pastedImageFiles } from "./pasteImages";
 import { resolvePastedImages } from "./pastedRefs";
@@ -28,7 +28,7 @@ import {
   removeImages,
   type EditorHooks,
 } from "./imagePicker";
-export { schema, insertImage, removeImages };
+export { schema, validateDescription, insertImage, removeImages };
 export type { EditorHooks };
 import { openEditorMenu } from "./editorMenu";
 import {
@@ -64,8 +64,7 @@ export function docFromDescription(description: string): PmNode {
     return schema.node("doc", null, [schema.node("paragraph")]);
   }
   try {
-    const json = JSON.parse(description);
-    return PmNode.fromJSON(schema, json);
+    return validateDescription(description)!;
   } catch {
     const el = document.createElement("div");
     el.textContent = description;

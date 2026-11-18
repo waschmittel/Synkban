@@ -42,16 +42,16 @@ After any change:
 
 ### Backend (`backend/src/`)
 
-- **`store/`** is the only data I/O (ADR-0001): `paths.rs` (pure), `io.rs` (JSON, file-op tracking, warnings), `boards.rs`, `labels.rs`, `lists.rs`, `cards.rs` (`CardLocation`, history), `card_index.rs`, `attachments.rs`, `gc.rs`, `walk.rs` (the only `read_dir` walker). `mod.rs` re-exports a flat API.
+- **`store/`** is the only data I/O (ADR-0001): `paths.rs` (pure path helpers + `check_id` / `is_valid_iso_date`), `io.rs` (JSON, file-op tracking, warnings), `boards.rs`, `labels.rs`, `lists.rs`, `cards.rs` (`CardLocation`, history), `card_index.rs`, `attachments.rs`, `gc.rs`, `walk.rs` (the only `read_dir` walker). `mod.rs` re-exports a flat API.
 - **Handlers** are thin: extract, call store, return JSON; mutating ones log action + file list.
-- `models.rs` all types/DTOs; `errors.rs` `AppError` (`NotFound`, `Io`, `TooLarge` 413, `BadRequest` 400, `Conflict` 409); `config.rs` settings file (ADR-0002); `drafts.rs` the crash draft of the open card in the config dir (ADR-0024; `SYNKBAN_DRAFTS=0` turns it off for shared e2e servers); `pdf.rs` PDF/A export (ADR-0012); static files via `include_dir!("$CARGO_MANIFEST_DIR/static")`.
+- `models.rs` all types/DTOs; `errors.rs` `AppError` (`NotFound`, `Io`, `TooLarge` 413, `BadRequest` 400, `Conflict` 409); `config.rs` settings file (ADR-0002); `drafts.rs` the crash draft of the open card in the config dir (ADR-0024; `SYNKBAN_DRAFTS=0` turns it off for shared e2e servers); `schema.rs` ProseMirror description validator driven by `frontend/src/schema.json` (ADR-0015); `pdf.rs` PDF/A export (ADR-0012); static files via `include_dir!("$CARGO_MANIFEST_DIR/static")`.
 - `lib.rs` exposes `run_server` and `run_desktop_server` (token + random port, ADR-0003); `main.rs` is a thin entry; `build.rs` is a no-op. `log_timestamp()` gives UTC `HH:MM:SS`.
 
 ### Frontend (`frontend/src/`)
 
 - **SolidJS, not React**: `createSignal`/`createResource`/`Show`/`For`; never `useState`/`useEffect`; don't destructure props; `createMemo` for derived values. Router `@solidjs/router` (`index.tsx`, `pages/`).
 - `api.ts` is the only backend access (`ApiError`, `isNetworkError`, `isNotFoundError`, `serverUnreachable`, `onReconnect`, `reportActionError`; ADR-0026); `types.ts` mirrors `models.rs` (keep in sync). All styles in `styles/app.css` (no modules/Tailwind/CSS-in-JS).
-- `pages/` `Home`, `Board` (coordinator; Kanban or Notes mode, ADR-0022: `NotesView` reuses `List`/`Card` as master and `CardDetail variant="pane"` as detail); `components/` leaf and section components (cards, lists, CardDetail sections, dialogs, drawers, `NetworkBanner`, `WarningBanner`); shared utilities at `src/` root, notably `platform.ts`, `shortcutRouter.ts`, `boardInput.ts` (`isInInput`), `focusTrap.ts`/`dialogKeys.ts`/`overlayLayers.ts` (ADR-0009), `focusRestoration.ts`/`changePoller.ts` (ADR-0010/0026), `boardView.ts` (ADR-0021), `notesView.ts` (Notes mode selection rules, ADR-0022), `positions.ts`, `touchDrag.ts` (ADR-0011), `settings.ts`/`theme.ts` (ADR-0002/0013), `diff.ts` (ADR-0005), `dueDate.ts` (due-date wording, typed entry, calendar grid; ADR-0023), `quickAdd.ts` (`#label`/`due:` tokens, `labelKey`; ADR-0025), `cardContent.ts` (normalised card content, draft check; ADR-0024), `listFocus.ts`, `timeAgo.ts`, `filter.ts` (text/label/due filter), and the editor modules `schema.ts`, `proseEditor.ts`, `links.ts`, `autolink.ts`, `editorMenu.ts`, `tables.ts`, `tableIcons.ts` (ADR-0015–0017).
+- `pages/` `Home`, `Board` (coordinator; Kanban or Notes mode, ADR-0022: `NotesView` reuses `List`/`Card` as master and `CardDetail variant="pane"` as detail); `components/` leaf and section components (cards, lists, CardDetail sections, dialogs, drawers, `NetworkBanner`, `WarningBanner`); shared utilities at `src/` root, notably `platform.ts`, `shortcutRouter.ts`, `boardInput.ts` (`isInInput`), `focusTrap.ts`/`dialogKeys.ts`/`overlayLayers.ts` (ADR-0009), `focusRestoration.ts`/`changePoller.ts` (ADR-0010/0026), `boardView.ts` (ADR-0021), `notesView.ts` (Notes mode selection rules, ADR-0022), `positions.ts`, `touchDrag.ts` (ADR-0011), `settings.ts`/`theme.ts` (ADR-0002/0013), `diff.ts` (ADR-0005), `dueDate.ts` (due-date wording, typed entry, calendar grid; ADR-0023), `quickAdd.ts` (`#label`/`due:` tokens, `labelKey`; ADR-0025), `cardContent.ts` (normalised card content, draft check; ADR-0024), `listFocus.ts`, `timeAgo.ts`, `filter.ts` (text/label/due filter), and the editor modules `schema.json`/`schema.ts`, `proseEditor.ts`, `links.ts`, `autolink.ts`, `editorMenu.ts`, `tables.ts`, `tableIcons.ts` (ADR-0015–0017).
 - Contexts: `LabelDrawerContext` (`useLabelDrawer`), `BoardHeaderContext` (`useBoardHeader`), wrapped in `App.tsx`.
 - Inputs auto-focus with `ref={(el) => requestAnimationFrame(() => el.focus())}`, not `autofocus`. Focus styles use `:focus`, not `:focus-visible` (Safari/WebView).
 - Card/label titles support `**bold**`/`*italic*` via `renderTitle()` (`innerHTML`; stored as markdown) and `handleMarkdownShortcut` on plain inputs.
@@ -111,11 +111,11 @@ GET    /api/settings                          → SettingsResponse (startup_view
 PUT    /api/settings  {startup_view?, theme?, last_board_id??, data_dir??}  → SettingsResponse — writes ~/.config/synkban/synkban.toml; theme ∈ {system,light,dark} (validated, 400 otherwise); double-Option fields (last_board_id/data_dir): null clears/reverts, absent leaves unchanged. data_dir change needs a restart to take effect.
 GET    /api/changes                          → { mtime: u64 } (newest file mtime, for poll efficiency)
 GET    /api/warnings                          → { warnings: string[] } (data-integrity warnings: corrupt/unreadable files the walker skipped)
-GET    /api/boards?today=YYYY-MM-DD          → Board[] (non-archived only) with stats {cards, overdue (due < today), edited_at (newest mtime, ms)}
+GET    /api/boards?today=YYYY-MM-DD          → Board[] (non-archived only) with stats {cards, overdue (due < today), edited_at (newest mtime, ms)} (today calendar-validated, 400 otherwise)
 GET    /api/boards/archive                   → Board[] (archived boards only)
-POST   /api/boards          {title}          → Board (201)
+POST   /api/boards          {title}          → Board (201; non-empty title required across board/list/card/label create & update, 400 otherwise)
 GET    /api/boards/:id                       → BoardDetail (nested lists + cards + labels)
-PUT    /api/boards/:id       {title?,color?,archived?,mode?} → Board — mode ∈ {kanban,notes} (400 otherwise)
+PUT    /api/boards/:id       {title?,color??,archived?,mode?} → Board — color #RRGGBB or null to clear; mode ∈ {kanban,notes} (400 otherwise)
 PUT    /api/boards/order     {ids: string[]} → 204 — renumber active boards 1.0, 2.0, … in given order
 DELETE /api/boards/:id                       → 204 (must be archived first, else 400)
 
@@ -130,8 +130,8 @@ DELETE /api/lists/:id                        → 204
 
 GET    /api/boards/:bid/archive              → Card[] (archived cards, sorted by archival date desc)
 
-POST   /api/lists/:lid/cards {title, label_ids?, due_date?} → Card (201)
-PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?,archived?,due_date?,checklist?} → Card
+POST   /api/lists/:lid/cards {title, label_ids?, due_date?} → Card (201; due_date calendar-validated, unknown/duplicate label_ids pruned)
+PUT    /api/cards/:id  {title?,desc?,pos?,list_id?,label_ids?,archived?,due_date?,checklist?} → Card (desc validated against schema.json, due_date calendar-validated, checklist items require unique non-empty id + non-empty text; 400 otherwise)
 DELETE /api/cards/:id                        → 204
 
 GET    /api/draft                             → Draft | null (the one crash draft, config dir, ADR-0024)
@@ -141,8 +141,8 @@ DELETE /api/draft/:card_id                    → 204 — only if it is that car
 GET    /api/cards/:id/history                 → { current: CardContent, entries: HistoryEntry[] } (newest first, ≤100)
 GET    /api/cards/:id/pdf                     → application/pdf (PDF/A-2u, Content-Disposition: attachment, filename from the card title)
 
-POST   /api/cards/:cid/attachments?filename=… → Attachment (201) — raw body bytes, Content-Type header
-GET    /api/cards/:cid/attachments/:att_id    → binary (Content-Disposition: attachment)
+POST   /api/cards/:cid/attachments?filename=… → Attachment (201) — raw body bytes, Content-Type header (filename sanitized to non-empty basename, 400 otherwise)
+GET    /api/cards/:cid/attachments/:att_id    → binary (RFC 5987 Content-Disposition: attachment)
 GET    /api/cards/:cid/attachments/:att_id/thumb → JPEG thumbnail (404 if not image)
 POST   /api/cards/:cid/attachments/copy {from_card, att_id} → Attachment (201) — copies an attachment of another card
 DELETE /api/cards/:cid/attachments/:att_id    → 204 (also strips inline references from the description)

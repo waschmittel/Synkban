@@ -80,6 +80,19 @@ pub fn create_attachment(
     content_type: &str,
     data: &[u8],
 ) -> Result<Attachment, AppError> {
+    let clean_name: String = Path::new(filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    let clean_name = clean_name.trim();
+    if clean_name.is_empty() || clean_name == "." || clean_name == ".." {
+        return Err(AppError::BadRequest(
+            "attachment filename must not be empty".into(),
+        ));
+    }
     let _lock = card_write_lock();
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let before = crate::store::cards::content_snapshot(data_dir, card_id)?;
@@ -98,7 +111,7 @@ pub fn create_attachment(
     // before this leaves only the binary, which `store::gc` reclaims.
     let att = Attachment {
         id: att_id.clone(),
-        filename: filename.to_string(),
+        filename: clean_name.to_string(),
         size: data.len() as u64,
         content_type: content_type.to_string(),
         created_at: now_timestamp(),
@@ -125,6 +138,7 @@ pub fn get_attachment_data(
     card_id: &str,
     att_id: &str,
 ) -> Result<(Attachment, Vec<u8>), AppError> {
+    check_id(att_id)?;
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let sidecar = sidecar_path(data_dir, &board_id, card_id, att_id);
     if !sidecar.exists() {
@@ -136,6 +150,7 @@ pub fn get_attachment_data(
 }
 
 pub fn delete_attachment(data_dir: &Path, card_id: &str, att_id: &str) -> Result<(), AppError> {
+    check_id(att_id)?;
     let _lock = card_write_lock();
     let (board_id, _list_id) = find_board_and_list(data_dir, card_id)?;
     let att_dir = attachment_dir(data_dir, &board_id, card_id);
@@ -184,6 +199,7 @@ pub fn get_thumbnail_data(
     card_id: &str,
     att_id: &str,
 ) -> Result<Vec<u8>, AppError> {
+    check_id(att_id)?;
     let (board_id, _) = find_board_and_list(data_dir, card_id)?;
     let thumb_path = attachment_dir(data_dir, &board_id, card_id).join(format!("{att_id}_thumb"));
     if !thumb_path.exists() {

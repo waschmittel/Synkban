@@ -8,7 +8,7 @@ The app is local-first and syncable with plain file tools (rsync, git, Syncthing
 
 ## Rules that follow
 
-- **IDs** are server-generated UUIDv4; `position: f64` uses fractional indexing (new = `max + 1.0`, reorder = midpoint; gaps are fine, never normalised). Timestamps are `YYYY-MM-DD HH:MM:SS` UTC from `store/io.rs` (no chrono).
+- **IDs** are server-generated UUIDv4; `store/paths.rs::check_id` validates every incoming ID (`1..=64` ASCII alphanumeric, `-`, `_`, 400 otherwise) so path parameters can never traverse directories. `position: f64` uses fractional indexing (new = `max + 1.0`, reorder = midpoint, finite `f64` required on update; gaps are fine, never normalised). Timestamps are `YYYY-MM-DD HH:MM:SS` UTC from `store/io.rs` (no chrono).
 - **Corrupt files are skipped, not fatal.** Every walker tolerates one unreadable JSON file (partial sync, manual edit) and records a warning (`io::warn_skip`, drained by `collect_warnings`, served at `GET /api/warnings`, shown as a dismissible `WarningBanner`). Skipped data stays on disk, hidden until readable. Single-item reads that own their record still error for that op.
 - **Writes are atomic:** `write_json` writes a `.{name}.{uuid}.tmp` beside the file and renames it over (walkers only read `*.json`). Card read-modify-writes (`update_card`, attachment add/remove with their history entry) hold `io::card_write_lock()`: parallel uploads used to interleave `fs::write`s and leave the card file unparseable.
 - **Audit trail:** `io::track` records every write/delete; mutating handlers drain it (`store::drain_file_ops`) and log the action plus an explicit file list.

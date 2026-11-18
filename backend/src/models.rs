@@ -202,7 +202,8 @@ pub struct CreateBoard {
 #[derive(Debug, Deserialize)]
 pub struct UpdateBoard {
     pub title: Option<String>,
-    pub color: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    pub color: Option<Option<String>>,
     pub archived: Option<bool>,
     pub mode: Option<BoardMode>,
 }
