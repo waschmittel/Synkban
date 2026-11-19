@@ -4,25 +4,25 @@ A **local-first, keyboard-driven, syncable** (via any third party file sync) kan
 
 ![demo](demo.gif)
 
+➡️ **[Read the User Guide](docs/user-guide.md)** — full walkthrough of features, Kanban & Notes modes, syncing, crash safety, and keyboard shortcuts.
+
 Can be run in two ways:
 
-* Standalone Electron app
-* Web Server for deployment behind an authenticating proxy
+* Standalone **Desktop Mode** app (macOS, Linux, Windows)
+* **Web Mode** server / Docker container (installable as a PWA) for local use or behind an authenticating proxy
 
 ## Features
 
-- **Boards** — create, rename, recolor, archive/restore, reorder
-- **Lists** — add to boards, reorder via drag-and-drop or keyboard, delete (archives any cards)
-- **Cards** — drag within/across lists, archive/restore, permanent delete
-- **Card detail** — modal with title (markdown bold/italic), rich text description (ProseMirror), labels, due date, checklist, file attachments (≤50 MB) with image thumbnails + preview
-- **Labels** — per-board colored tags; auto-assigned palette; filter cards by label
-- **Filter** — search cards by text + label inside a board
-- **Archive** — soft-delete for boards and cards (separate undo flows)
-- **Keyboard-first** — full keyboard navigation; press `?` for in-app help
-- **Drag-and-drop** — HTML5 native drag API, fractional indexing for position (no bulk reorder updates)
-- **File-based storage** — nested JSON files, no database required
-- **Single binary** — frontend assets embedded at compile time via `include_dir`
-- **Desktop mode** — optional Electron wrapper that bundles the binary + a native window (`./build.sh --desktop`)
+- **Boards** — create, rename inline, recolour (with automatic light/dark palette), archive/restore, reorder, and switch quickly via the bottom Board Dock
+- **Kanban Mode & Notes Mode** — view lists side by side or press `V` to switch any board into a split master-detail writing view with list tabs
+- **Lists** — add, rename, reorder (drag or keyboard), collapse into narrow vertical strips (`C`), and delete safely (contained cards are archived)
+- **Quick-add & Cards** — drag within/across lists (mouse, keyboard, or long-press touch), or assign `#label` and `due:` tokens right in a new card's title
+- **Rich Card Detail** — formatted title (`**bold**` / `*italic*`), structured rich-text description (headings, code blocks, quotes, nested lists, smart links, tables, transposable matrices, and inline images), keyboard-first due date picker, flat checklist, and file attachments (≤50 MB) with image thumbnails and lightbox preview
+- **Labels & Filtering** — per-board ordered labels with loose matching and merge support; filter cards by text, due date (`Overdue`, `This week`, `Until…`), and labels
+- **Card History & PDF/A Export** — inspect the last 100 content snapshots with field-by-field diffs, or export any card offline to archival **PDF/A-2u**
+- **Archive, Crash Safety & Resilience** — two-step archive before permanent deletion, machine-local crash drafts for open unsaved edits, warning banners for partial/corrupt files, and offline/outage resilience
+- **Keyboard-first & Dark Mode** — cross-platform shortcuts (`?` for contextual help) and system/light/dark themes
+- **File-based Sync & Single Binary** — plain JSON files + sidecar attachments on disk with 15-second external change polling; frontend assets embedded into one Rust binary
 
 ## Quick Start
 
@@ -30,27 +30,29 @@ Can be run in two ways:
 # Build everything into a single binary
 ./build.sh
 
-# Run (creates ./data/ directory automatically)
+# Run (creates ~/.config/synkban/data/ automatically)
 ./backend/target/release/synkban
 
 # Open http://localhost:8080
 ```
 
-## Development
+## Documentation
 
-Dev setup, API reference, project structure, architecture notes, and testing are documented separately:
-
-➡️ **[Development guide](docs/development.md)**
+- **[User Guide](docs/user-guide.md)** — complete guide to features, workflows, syncing across devices, backups, and shortcuts
+- **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docs/docker/README.md)** — Docker image, persistent single-prompt login, and mobile/desktop PWA setup
+- **[PDF Export Examples](docs/export-examples/README.md)** — reference PDFs showing layout and typography rules
+- **[Development Guide](docs/development.md)** — dev setup, API reference, project structure, architecture notes, and testing
 
 ## Configuration
 
 Environment variables and CLI flags:
 
-| Variable   | Default     | Description                                      |
-| ---------- | ----------- | ------------------------------------------------ |
-| `HOST`     | `127.0.0.1` | Bind address                                     |
-| `PORT`     | `8080`      | Bind port                                        |
-| `DATA_DIR` | `./data`    | **Path to the data directory** (created if absent) |
+| Variable             | Default               | Description                                                |
+| -------------------- | --------------------- | ---------------------------------------------------------- |
+| `HOST`               | `127.0.0.1`           | Bind address                                               |
+| `PORT`               | `8080`                | Bind port                                                  |
+| `DATA_DIR`           | `~/.config/synkban/data` | **Path to the data directory** (created if absent)      |
+| `SYNKBAN_CONFIG_DIR` | `~/.config/synkban`   | Directory for `synkban.toml` and local crash-recovery draft |
 
 | Flag                | Description                                        |
 | ------------------- | -------------------------------------------------- |
@@ -68,11 +70,12 @@ Persistent settings live in `~/.config/synkban/synkban.toml` (all platforms and 
 
 ```toml
 data_dir = "/home/me/Sync/synkban"   # optional custom data directory
-startup_view = "last"                 # "overview" (default) | "last"
-last_board_id = "…"                   # maintained automatically
+startup_view = "last"                # "overview" (default) | "last"
+theme = "system"                     # "system" (default) | "light" | "dark"
+last_board_id = "…"                  # maintained automatically
 ```
 
-You normally never edit it — the in-app **⚙ Settings** dialog (gear button on the board overview) writes it for you.
+You normally never edit it — the in-app **⚙ Settings** dialog (gear button in the top bar) writes it for you.
 
 ### How the effective data directory is determined
 
