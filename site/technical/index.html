@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synkban Technical &amp; Self-Hosting Reference</title>
+  <meta name="description" content="Standalone Web Mode CLI options, Docker and PWA self-hosting, synkban.toml configuration, on-disk folder structure, and sync internals.">
+  <link rel="icon" href="../favicon.png" type="image/png">
+  <script>
+    (() => {
+      try {
+        const s = localStorage.getItem("synkban-site-theme");
+        const d = s === "dark" || (s !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", d ? "dark" : "light");
+      } catch {}
+    })();
+  </script>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="../">
+        <img src="../icon-192.png" alt="" width="28" height="28">
+        <span>Synkban</span>
+      </a>
+      <nav class="nav-links" id="nav-links" aria-label="Primary">
+        <a class="nav-link" href="../#features">Features</a>
+        <a class="nav-link" href="../#workflows">Workflows</a>
+        <a class="nav-link" href="../#install">Install</a>
+        <a class="nav-link" href="../guide/">User Guide</a>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <a class="nav-link nav-link--tech" href="./" aria-current="page">Self-Hosting &amp; CLI</a>
+        <a class="nav-link" href="https://github.com/waschmittel/Synkban">GitHub</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle theme" aria-pressed="false" title="Toggle theme">
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button type="button" class="icon-btn nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-side" id="docs-side" aria-label="Technical Reference Contents">
+      <input type="search" id="toc-filter" class="toc-filter" placeholder="Filter sections…" aria-label="Filter sections" autocomplete="off">
+      <ul class="toc-list" id="toc-list">
+        <li>
+          <a href="#web-mode">Standalone Web Server</a>
+          <ul>
+            <li><a href="#cli-and-env">CLI Options &amp; Env Variables</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#docker-pwa">Docker &amp; Mobile PWA</a>
+        </li>
+        <li>
+          <a href="#directories-and-config">Directories &amp; <code>synkban.toml</code></a>
+          <ul>
+            <li><a href="#data-directory">Data Directory Layout</a></li>
+            <li><a href="#config-directory">Config Directory &amp; Drafts</a></li>
+          </ul>
+        </li>
+        <li><a href="#sync-internals">Sync &amp; Storage Internals</a></li>
+        <li><a href="#developer-docs">Building from Source &amp; Dev Docs</a></li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="mobile-toc-bar">
+        <button type="button" class="btn btn-secondary btn-sm" id="mobile-toc-btn" aria-expanded="false" aria-controls="docs-side">☰ Contents</button>
+      </div>
+
+      <article class="docs-article">
+        <h1>Technical &amp; Self-Hosting Reference</h1>
+        <p>
+          Everything here is intended for <strong>self-hosters, terminal users, and developers</strong>: running the standalone web server, deploying with Docker as a Progressive Web App (PWA), CLI flags, environment variables, <code>synkban.toml</code>, and on-disk storage internals.
+        </p>
+
+        <div class="callout callout--note">
+          <strong>Using the Desktop App?</strong> You don't need any of this — head to the <a href="../guide/">everyday User Guide</a>.
+        </div>
+
+        <h2 id="web-mode">Standalone Web Server (Web Mode)</h2>
+        <p>Synkban compiles into a single self-contained Rust binary with all frontend assets embedded. Run it directly from a terminal (or build from source with <code>./build.sh</code>):</p>
+        <div class="code-block">
+          <pre><code>./synkban</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+        <p>Open <code>http://localhost:8080</code> in your browser.</p>
+
+        <div class="callout callout--warn">
+          <strong>Security note:</strong> Web Mode has <strong>no built-in authentication</strong> (single-user design). Run it on localhost, over a private network (such as Tailscale), or behind an authenticating reverse proxy.
+        </div>
+
+        <h3 id="cli-and-env">CLI Options &amp; Environment Variables</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Option / Variable</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--data-dir &lt;path&gt;</code></td><td><em>(see resolution order)</em></td><td>Path to the <strong>Data Directory</strong> (also accepts <code>--data-dir=&lt;path&gt;</code>). Highest precedence.</td></tr>
+              <tr><td><code>-h</code>, <code>--help</code></td><td>—</td><td>Print CLI usage help and exit.</td></tr>
+              <tr><td><code>-V</code>, <code>--version</code></td><td>—</td><td>Print the Synkban version and exit.</td></tr>
+              <tr><td><code>DATA_DIR</code></td><td><em>(see resolution order)</em></td><td>Path to the <strong>Data Directory</strong> (created automatically if absent).</td></tr>
+              <tr><td><code>HOST</code></td><td><code>127.0.0.1</code></td><td>Bind address (<code>0.0.0.0</code> in the official Docker image).</td></tr>
+              <tr><td><code>PORT</code></td><td><code>8080</code></td><td>Bind port.</td></tr>
+              <tr><td><code>SYNKBAN_CONFIG_DIR</code></td><td><code>~/.config/synkban</code></td><td>Machine-local directory for <code>synkban.toml</code> and <code>draft.json</code>. Uses <code>%USERPROFILE%\.config\synkban</code> on Windows; <code>/app/config</code> in Docker.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-block">
+          <pre><code>HOST=0.0.0.0 PORT=3000 DATA_DIR=/home/me/Sync/synkban ./synkban</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+
+        <h2 id="docker-pwa">Docker &amp; Mobile / Desktop PWA</h2>
+        <p>Official multi-architecture (<code>linux/amd64</code>, <code>linux/arm64</code>) container images are published to <code>ghcr.io/waschmittel/synkban</code>:</p>
+        <div class="code-block">
+          <pre><code>docker run -d \
+  --name synkban \
+  -p 127.0.0.1:8080:8080 \
+  -e DATA_DIR=/data \
+  -v /path/on/host/data:/data \
+  -v /path/on/host/config:/app/config \
+  ghcr.io/waschmittel/synkban:latest</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+        <div class="callout callout--warn">
+          <strong>Permissions:</strong> The container runs as non-root user <code>app</code> (UID <code>10001</code>). Ensure mounted host directories are writable by UID <code>10001</code> (for example, <code>chown -R 10001:10001 /path/on/host/data /path/on/host/config</code>).
+        </div>
+        <p>
+          For internet-facing deployments with persistent single-prompt login and installable Home Screen apps on iOS, Android, and desktop browsers, follow the <a href="https://github.com/waschmittel/Synkban/blob/main/docs/docker/README.md">Self-Hosting &amp; Docker Guide (Traefik + Tinyauth PWA)</a>. Narrow viewports stack Notes Mode cleanly and support long-press touch drag-and-drop:
+        </p>
+        <figure>
+          <img src="../images/mobile-notes.png" alt="Synkban Notes Mode on a narrow mobile viewport" width="340" data-zoom data-caption="Notes Mode on a narrow mobile viewport — stacked list and inline Notes Pane.">
+          <figcaption>Notes Mode on a narrow viewport (&lt; 760 px), stacking the active list above the Notes Pane.</figcaption>
+        </figure>
+
+        <h2 id="directories-and-config">Directories &amp; <code>synkban.toml</code></h2>
+
+        <h3 id="data-directory">1. Data Directory (Sync Across Devices)</h3>
+        <div class="code-block">
+          <pre><code>&lt;DATA_DIR&gt;/
+└── boards/
+    └── {board-id}/
+        ├── board.json
+        ├── lists/{list-id}/
+        │   ├── list.json
+        │   └── cards/{card-id}.json
+        ├── archived_cards/{card-id}.json
+        └── attachments/{card-id}/
+            ├── {att-id}
+            ├── {att-id}_thumb
+            └── {att-id}.json</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+        <p><strong>Data Directory resolution order</strong> (highest priority wins):</p>
+        <ol>
+          <li><code>--data-dir &lt;path&gt;</code> CLI flag</li>
+          <li><code>DATA_DIR</code> environment variable</li>
+          <li><code>data_dir</code> in <code>~/.config/synkban/synkban.toml</code></li>
+          <li>Default: <code>~/.config/synkban/data/</code> (<code>%USERPROFILE%\.config\synkban\data\</code> on Windows)</li>
+        </ol>
+
+        <h3 id="config-directory">2. Config Directory (Keep Local to Each Machine)</h3>
+        <p>Stored in <code>~/.config/synkban/</code> (or <code>SYNKBAN_CONFIG_DIR</code>) and intentionally excluded from synced board data:</p>
+        <ul>
+          <li><strong><code>synkban.toml</code></strong> — persisted <strong>Settings</strong> (editable when Synkban is stopped):</li>
+        </ul>
+        <div class="code-block">
+          <pre><code>data_dir = "/home/me/Sync/synkban"
+startup_view = "last"      # "overview" (default) | "last"
+theme = "system"           # "system" (default) | "light" | "dark"
+last_board_id = "..."      # maintained automatically</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+        <ul>
+          <li><strong><code>draft.json</code></strong> — the single local crash-recovery <strong>Draft</strong> for the currently open card.</li>
+        </ul>
+
+        <h2 id="sync-internals">Sync &amp; Storage Internals</h2>
+        <ul>
+          <li><strong>Atomic file writes:</strong> JSON updates write to a temporary file beside the target and atomically rename over it, preventing half-written JSON during crashes or sync scans.</li>
+          <li><strong>Sidecar attachments:</strong> Each upload creates raw bytes (<code>{att-id}</code>), an optional JPEG thumbnail (<code>{att-id}_thumb</code> ≤ 400 px), and metadata sidecar (<code>{att-id}.json</code>) outside the card JSON so uploads never conflict with concurrent card edits.</li>
+          <li><strong>15-second change polling:</strong> The UI polls <code>GET /api/changes</code> every 15 seconds and refreshes only changed boards while keeping open forms and keyboard focus intact.</li>
+          <li><strong>5-minute attachment GC grace window:</strong> Startup cleanup ignores partial/orphaned attachment files newer than 5 minutes so active syncs are never mistaken for leftovers.</li>
+          <li><strong>Desktop local auth:</strong> Desktop Mode spawns the Rust binary on a random <code>127.0.0.1</code> port with a per-launch UUID token so other local apps cannot reach your boards.</li>
+          <li><strong>Version alignment:</strong> Keep all synced devices on the same Synkban version so newer card features (tables, matrices, inline images) render consistently everywhere.</li>
+        </ul>
+
+        <h2 id="developer-docs">Building from Source &amp; Developer Docs</h2>
+        <ul>
+          <li><strong>Build single binary:</strong> <code>./build.sh</code> → <code>backend/target/release/synkban</code></li>
+          <li><strong>Build Desktop App:</strong> <code>./build.sh --desktop</code> → <code>electron/dist/</code></li>
+          <li><a href="https://github.com/waschmittel/Synkban/blob/main/docs/development.md">Development Guide</a> — hot-reload setup, HTTP API reference, architecture, and test suites</li>
+          <li><a href="https://github.com/waschmittel/Synkban/blob/main/docs/export-examples/README.md">PDF Export Examples</a> — sample PDFs covering typography, pagination, matrices, and edge cases</li>
+          <li><a href="https://github.com/waschmittel/Synkban/tree/main/docs/adr">Architecture Decision Records</a> — rationale behind every major technical choice</li>
+        </ul>
+      </article>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand" href="../">
+          <img src="../icon-192.png" alt="" width="24" height="24">
+          <span>Synkban</span>
+        </a>
+        <p style="margin:10px 0 0;max-width:340px;">Local-first, keyboard-driven kanban boards &amp; notes. MIT License.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Using Synkban</h4>
+          <ul>
+            <li><a href="../">Home</a></li>
+            <li><a href="../#install">Download Desktop App</a></li>
+            <li><a href="../guide/">User Guide</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Technical &amp; Source</h4>
+          <ul>
+            <li><a href="./">Self-Hosting &amp; CLI</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban/blob/main/docs/docker/README.md">Docker &amp; PWA Guide</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban">GitHub Repository</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../site.js"></script>
+</body>
+</html>

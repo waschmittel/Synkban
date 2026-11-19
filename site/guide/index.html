@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synkban User Guide</title>
+  <meta name="description" content="Everything everyday users need to know: installing the Desktop App, Kanban Mode and Notes Mode, Quick-add, rich card editing, filters, PDF export, and syncing.">
+  <link rel="icon" href="../favicon.png" type="image/png">
+  <script>
+    (() => {
+      try {
+        const s = localStorage.getItem("synkban-site-theme");
+        const d = s === "dark" || (s !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", d ? "dark" : "light");
+      } catch {}
+    })();
+  </script>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="../">
+        <img src="../icon-192.png" alt="" width="28" height="28">
+        <span>Synkban</span>
+      </a>
+      <nav class="nav-links" id="nav-links" aria-label="Primary">
+        <a class="nav-link" href="../#features">Features</a>
+        <a class="nav-link" href="../#workflows">Workflows</a>
+        <a class="nav-link" href="../#install">Install</a>
+        <a class="nav-link" href="./" aria-current="page">User Guide</a>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <a class="nav-link nav-link--tech" href="../technical/">Self-Hosting &amp; CLI</a>
+        <a class="nav-link" href="https://github.com/waschmittel/Synkban">GitHub</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle theme" aria-pressed="false" title="Toggle theme">
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button type="button" class="icon-btn nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-side" id="docs-side" aria-label="User Guide Contents">
+      <input type="search" id="toc-filter" class="toc-filter" placeholder="Filter sections…" aria-label="Filter sections" autocomplete="off">
+      <ul class="toc-list" id="toc-list">
+        <li>
+          <a href="#why-synkban">Why Synkban?</a>
+          <ul>
+            <li><a href="#core-advantages">Core Advantages</a></li>
+            <li><a href="#intentional-scope">Intentional Scope</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#getting-started">Getting Started</a>
+          <ul>
+            <li><a href="#installing-desktop-app">Installing the Desktop App</a></li>
+            <li><a href="#two-minute-walkthrough">Two-Minute Walkthrough</a></li>
+          </ul>
+        </li>
+        <li><a href="#core-concepts">Core Concepts</a></li>
+        <li>
+          <a href="#managing-boards">Managing Boards</a>
+          <ul>
+            <li><a href="#board-overview">Board Overview</a></li>
+            <li><a href="#board-top-bar">Board Top Bar &amp; Personalisation</a></li>
+            <li><a href="#switching-boards">Switching Boards &amp; Session Memory</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#kanban-and-notes">Kanban Mode &amp; Notes Mode</a>
+          <ul>
+            <li><a href="#kanban-mode">Kanban Mode</a></li>
+            <li><a href="#notes-mode">Notes Mode</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#lists-and-cards">Lists &amp; Cards</a>
+          <ul>
+            <li><a href="#working-with-lists">Working with Lists</a></li>
+            <li><a href="#quick-add">Adding Cards &amp; Quick-Add</a></li>
+            <li><a href="#title-formatting">Title Formatting</a></li>
+            <li><a href="#moving-and-reordering">Moving &amp; Reordering</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="#inside-a-card">Working Inside a Card</a>
+          <ul>
+            <li><a href="#deliberate-saves">Deliberate Saves &amp; Unsaved Guard</a></li>
+            <li><a href="#description-editor">Rich-Text Description Editor</a></li>
+            <li><a href="#tables-and-matrices">Tables &amp; Matrices</a></li>
+            <li><a href="#inline-images">Inline Images</a></li>
+            <li><a href="#labels">Labels &amp; Label Drawer</a></li>
+            <li><a href="#due-dates">Due Dates &amp; Picker</a></li>
+            <li><a href="#checklist">Checklist</a></li>
+            <li><a href="#attachments">Attachments</a></li>
+            <li><a href="#card-history">Card History &amp; Diffs</a></li>
+            <li><a href="#pdf-export">Archival PDF/A Export</a></li>
+          </ul>
+        </li>
+        <li><a href="#filtering-cards">Filtering Cards</a></li>
+        <li><a href="#archiving">Archiving &amp; Permanent Deletion</a></li>
+        <li>
+          <a href="#syncing-and-safety">Syncing, Backups &amp; Crash Safety</a>
+          <ul>
+            <li><a href="#syncing-across-devices">Syncing Across Devices</a></li>
+            <li><a href="#backups">Backups &amp; Moving Computers</a></li>
+            <li><a href="#crash-drafts">Crash-Safe Drafts</a></li>
+            <li><a href="#warnings">Warnings &amp; Offline Protection</a></li>
+          </ul>
+        </li>
+        <li><a href="#settings">Settings &amp; Appearance</a></li>
+        <li><a href="#keyboard-shortcuts">Keyboard Shortcuts</a></li>
+        <li><a href="#faq">Troubleshooting &amp; FAQ</a></li>
+      </ul>
+    </aside>
+
+    <main>
+      <div class="mobile-toc-bar">
+        <button type="button" class="btn btn-secondary btn-sm" id="mobile-toc-btn" aria-expanded="false" aria-controls="docs-side">☰ Contents</button>
+      </div>
+
+      <article class="docs-article">
+        <h1>Synkban User Guide</h1>
+        <p>
+          Synkban is a <strong>local-first, keyboard-driven kanban board and structured note-taking workspace</strong> whose data lives as plain JSON files and standalone attachment files on your disk. There is no database, no cloud account, and no vendor lock-in — you own your boards completely and can sync them with whatever tool you already trust.
+        </p>
+
+        <div class="callout callout--note">
+          <strong>Shortcut notation:</strong> Throughout this guide, <strong><kbd>Cmd/Ctrl</kbd></strong> means <strong><kbd>Cmd</kbd> (<kbd>⌘</kbd>) on macOS</strong> and <strong><kbd>Ctrl</kbd> on Windows and Linux</strong>. Press <strong><kbd>?</kbd></strong> anywhere outside a text field to open the contextual in-app shortcut reference.
+        </div>
+
+        <h2 id="why-synkban">Why Synkban?</h2>
+        <p>
+          Most kanban and note-taking apps store your work inside an opaque cloud database or a single monolithic database file. That makes true file-based syncing fragile, backups awkward, and long-term ownership uncertain. Synkban flips that model: <strong>every board, list, card, and attachment is a clean file in a folder you control</strong>, paired with a fast interface designed for keyboard, mouse, and touch alike.
+        </p>
+
+        <h3 id="core-advantages">Core Advantages</h3>
+        <ul>
+          <li><strong>Plain files, zero lock-in:</strong> No database server, no sign-up, and no proprietary format. Back up by copying a folder or inspect any file in a plain text editor.</li>
+          <li><strong>Conflict-friendly file sync:</strong> Each card is its own JSON file and attachments store metadata sidecars separately, so editing different cards across <strong>Syncthing, Dropbox, iCloud Drive, Nextcloud, Git, or rsync</strong> stays conflict-free.</li>
+          <li><strong>Live external change awareness:</strong> Synkban checks your Data Directory every 15 seconds and refreshes external sync changes automatically without interrupting active typing or dropping keyboard focus.</li>
+          <li><strong>Kanban Mode &amp; Notes Mode on the same cards:</strong> Track pipelines side by side or press <kbd>V</kbd> to turn any board into <strong>List Tabs</strong> plus a full inline <strong>Notes Pane</strong>.</li>
+          <li><strong>Keyboard-first across macOS, Linux, and Windows:</strong> Navigate, reorder, quick-add with <code>#label</code> and <code>due:</code>, pick dates, build tables/matrices, browse history, and export PDFs without touching the mouse.</li>
+          <li><strong>Deliberate saves with crash safety:</strong> Card edits save atomically on <kbd>Cmd/Ctrl</kbd>+<kbd>S</kbd>, keeping sync clean and history meaningful, while machine-local crash drafts safeguard unsaved typing if the app closes unexpectedly.</li>
+          <li><strong>Two-step safety &amp; 100-version history:</strong> Boards, cards, and deleted lists' cards are always <strong>Archived</strong> before permanent deletion, and every content edit records a snapshot with a visual diff viewer.</li>
+          <li><strong>Offline archival PDF/A-2u export:</strong> Render any card to a standards-compliant PDF/A-2u document with bundled fonts, clickable links, inline images, and repeating table headers.</li>
+        </ul>
+
+        <h3 id="intentional-scope">Intentional Scope</h3>
+        <ul>
+          <li><strong>Single-user / personal design:</strong> Built for individual workflows — no user accounts, role permissions, or multi-cursor editing. (If you self-host the web version on a server, place it behind a private network or login proxy — see the <a href="../technical/">Technical &amp; Self-Hosting Reference</a>.)</li>
+          <li><strong>Focused data model:</strong> One flat <strong>Checklist</strong> per card, clean simple <strong>Tables</strong> and <strong>Matrices</strong> (no merged cells or drag-resized columns), and structured rich text (no raw HTML or script links) keep syncing predictable and PDF exports crisp.</li>
+        </ul>
+
+        <h2 id="getting-started">Getting Started</h2>
+
+        <h3 id="installing-desktop-app">Installing the Desktop App</h3>
+        <p>Download the installer for your operating system from <a href="https://github.com/waschmittel/Synkban/releases/latest">GitHub Releases</a>:</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Platform</th><th>Available Packages</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>macOS (Apple Silicon)</strong></td><td><code>.dmg</code> installer and <code>.zip</code> archive</td></tr>
+              <tr><td><strong>Linux</strong></td><td><code>.AppImage</code> and <code>.deb</code></td></tr>
+              <tr><td><strong>Windows</strong></td><td><code>.exe</code> installer (NSIS)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout callout--warn">
+          <strong>macOS Gatekeeper note:</strong> Because release builds are not notarised with a paid Apple Developer certificate, macOS may say <em>"Synkban.app is damaged and can't be opened."</em> Run this once in Terminal, then open Synkban normally:
+          <div class="code-block">
+            <pre><code>sudo xattr -cr /Applications/Synkban.app</code></pre>
+            <button type="button" class="code-copy">Copy</button>
+          </div>
+        </div>
+
+        <ul>
+          <li><strong>Seamless coloured window:</strong> The top bar doubles as the window title bar and adapts to the active board's colour and theme.</li>
+          <li><strong>Remembers window geometry:</strong> Size, position, and maximised/fullscreen state restore on relaunch and automatically fit onto active monitors.</li>
+          <li><strong>Native integration:</strong> External links open in your default browser, and <strong>Settings</strong> includes a folder picker for choosing your synced <strong>Data Directory</strong>.</li>
+        </ul>
+
+        <div class="callout callout--tip">
+          <strong>Prefer self-hosting, Docker, mobile PWA, or the standalone web server?</strong> Those instructions live separately in the <a href="../technical/">Technical &amp; Self-Hosting Reference</a> so this guide stays focused on daily use.
+        </div>
+
+        <h3 id="two-minute-walkthrough">Two-Minute Walkthrough</h3>
+        <ol>
+          <li>Launch Synkban and press <kbd>N</kbd> (or click <strong>Create new board</strong>) to create your first <strong>Board</strong>.</li>
+          <li>Press <kbd>L</kbd> (or click <strong>Add list</strong>) to add lists such as <em>To Do</em>, <em>Doing</em>, and <em>Done</em>.</li>
+          <li>Press <kbd>N</kbd> to add a <strong>Card</strong> using <strong>Quick-add</strong> tokens directly in the title: <code>Prepare launch notes #work #urgent due:fri</code> and press <kbd>Enter</kbd>.</li>
+          <li>Press <kbd>Enter</kbd> on the card to open the <strong>Card Modal</strong>. Write rich text, add checklist items (<kbd>Cmd/Ctrl</kbd>+<kbd>L</kbd>), or drag files onto the modal to attach them. Press <kbd>Cmd/Ctrl</kbd>+<kbd>S</kbd> to save.</li>
+          <li>Press <kbd>Cmd/Ctrl</kbd>+<kbd>P</kbd> to export the card to an archival PDF, or close the modal (<kbd>Esc</kbd>) and press <kbd>V</kbd> to switch into <strong>Notes Mode</strong>.</li>
+        </ol>
+
+        <h2 id="core-concepts">Core Concepts</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Term</th><th>What it means in Synkban</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Board</strong></td><td>Top-level workspace with its own title, optional colour, <strong>Labels</strong>, <strong>Lists</strong>, and saved view mode (<strong>Kanban Mode</strong> or <strong>Notes Mode</strong>).</td></tr>
+              <tr><td><strong>List</strong></td><td>An ordered group of <strong>Cards</strong> (side-by-side lane in <strong>Kanban Mode</strong>, <strong>List Tab</strong> in <strong>Notes Mode</strong>) on a board.</td></tr>
+              <tr><td><strong>Card</strong></td><td>A work item or note inside a list holding a title, <strong>Labels</strong>, <strong>Due Date</strong>, rich-text <strong>Description</strong>, <strong>Checklist</strong>, <strong>Attachments</strong>, and <strong>History</strong>.</td></tr>
+              <tr><td><strong>Label</strong></td><td>A coloured tag defined per board. Display order is shared across the board, card faces, Card Modal, and Filter Bar.</td></tr>
+              <tr><td><strong>Archive</strong></td><td>Safe holding area for soft-deleted boards and cards. Items must be archived before they can be permanently deleted.</td></tr>
+              <tr><td><strong>Data Directory</strong></td><td>The folder where all boards, cards, and attachments live (<code>boards/</code>). Back up and sync this folder across devices.</td></tr>
+              <tr><td><strong>Config Directory</strong></td><td>Machine-local folder (<code>~/.config/synkban</code> by default) keeping per-machine <strong>Settings</strong> and crash recovery. Never synced.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="managing-boards">Managing Boards</h2>
+
+        <h3 id="board-overview">Board Overview</h3>
+        <p>The home screen (<strong>Your Boards</strong>) displays all active boards with each board's colour, <strong>total active cards</strong>, highlighted <strong>overdue count</strong>, and <strong>last edited</strong> timestamp (hover for exact local time).</p>
+        <ul>
+          <li><strong>Create a board:</strong> Click <strong>Create new board</strong> or press <kbd>N</kbd>.</li>
+          <li><strong>Open a board:</strong> Click a board card, or move with <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> and press <kbd>Enter</kbd>.</li>
+          <li><strong>Reorder boards:</strong> Drag and drop (long-press on touch), or focus a board and press <kbd>Shift</kbd> + arrow keys.</li>
+          <li><strong>Archive / restore boards:</strong> Focus a board and press <kbd>Del</kbd> / <kbd>Backspace</kbd> to archive (confirmed first), or press <kbd>A</kbd> to open <strong>Archived Boards</strong>.</li>
+        </ul>
+        <figure>
+          <img src="../images/board-overview.png" alt="Board Overview showing coloured boards, card counts, overdue count, and archive button" data-zoom data-caption="Board Overview — coloured boards with card counts, overdue badges, and Archived Boards access.">
+          <figcaption>Board Overview showing custom board colours, card counts, overdue badge, and the Archive toggle.</figcaption>
+        </figure>
+
+        <h3 id="board-top-bar">Board Top Bar &amp; Personalisation</h3>
+        <ul>
+          <li><strong>Inline rename:</strong> Click the board title in the centre of the top bar, edit it, and press <kbd>Enter</kbd> to save (<kbd>Esc</kbd> cancels).</li>
+          <li><strong>Board colour:</strong> Click the palette icon for any custom colour with live preview across the background, header, buttons, and focus rings — or click <strong>Reset to default</strong>.</li>
+          <li><strong>Quick actions:</strong> Back to boards (<kbd>B</kbd>), <strong>Board / Notes</strong> view switch (<kbd>V</kbd>), <strong>Filter</strong> (<kbd>F</kbd>), <strong>Archived cards</strong> (<kbd>A</kbd>), <strong>Manage labels</strong> (<kbd>G</kbd>), <strong>Keyboard shortcuts</strong> (<kbd>?</kbd>), and <strong>Settings</strong> (gear icon).</li>
+        </ul>
+
+        <h3 id="switching-boards">Switching Boards &amp; Session Memory</h3>
+        <p>When you have two or more boards, a scrollable <strong>Board Dock</strong> of coloured dots appears at the bottom of the screen. Click any dot, or cycle boards with <kbd>,</kbd> / <kbd>J</kbd> (previous) and <kbd>.</kbd> / <kbd>K</kbd> (next).</p>
+        <p>Switching boards within an open window remembers your <strong>last focused card</strong>, horizontal and per-list vertical scroll positions, active <strong>Filter Bar</strong> state, and the last open card per list in <strong>Notes Mode</strong>.</p>
+
+        <h2 id="kanban-and-notes">Kanban Mode &amp; Notes Mode</h2>
+        <p>Every board saves its own view mode (<strong>Kanban Mode</strong> or <strong>Notes Mode</strong>) so a board used as a notebook opens in Notes Mode everywhere. Toggle anytime with <kbd>V</kbd> or the top-bar switch.</p>
+
+        <h3 id="kanban-mode">Kanban Mode</h3>
+        <ul>
+          <li><strong>At-a-glance card badges:</strong> Formatted titles, ordered labels, due-date badge, description indicator, checklist progress (<code>done/total</code>), and attachment count.</li>
+          <li><strong>Collapsed Lists:</strong> Click a list's collapse chevron or press <kbd>C</kbd> while focused inside it to fold it into a narrow vertical strip showing its card count and title. Collapsed lists still accept dropped cards and <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> moves (appended to the end), and collapse state syncs across devices.</li>
+          <li><strong>Sticky-row horizontal navigation:</strong> Pressing <kbd>←</kbd> / <kbd>→</kbd> across lists remembers your vertical row index, so stepping past shorter, empty, or collapsed lists restores your depth on the next taller list.</li>
+        </ul>
+        <figure>
+          <img src="../images/kanban-mode.png" alt="Kanban Mode with side-by-side lists, collapsed Done strip, badges, and Board Dock" data-zoom data-caption="Kanban Mode — expanded lists alongside a collapsed Done strip and the bottom Board Dock.">
+          <figcaption>Kanban Mode showing side-by-side lists, a Collapsed List (Done), card badges, and the Board Dock.</figcaption>
+        </figure>
+
+        <h3 id="notes-mode">Notes Mode</h3>
+        <p><strong>Notes Mode</strong> turns lists into <strong>List Tabs</strong> across the top, keeps the active list on the left, and opens the selected card inline on the right in the <strong>Notes Pane</strong> (centred at a 90-character reading measure; stacks cleanly on narrow windows under 760 px).</p>
+        <ul>
+          <li><strong>Navigate:</strong> <kbd>↑</kbd> / <kbd>↓</kbd> browse cards (switching immediately when clean), <kbd>←</kbd> / <kbd>→</kbd> switch tabs, <kbd>Enter</kbd> or <kbd>E</kbd> jumps straight into editing the description, and <kbd>Esc</kbd> returns focus to the selected card.</li>
+          <li><strong>Work with List Tabs:</strong> Click the active tab (or press <kbd>R</kbd> / <kbd>F2</kbd>) to rename the list, click its <code>×</code> to delete it, or drag cards onto any tab (or press <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) to move cards between lists.</li>
+          <li><strong>Save &amp; stay:</strong> <kbd>Cmd/Ctrl</kbd>+<kbd>S</kbd> saves without closing and shows <em>"Saved HH:MM"</em>. A dot on the card icon and active tab marks unsaved edits; <strong>Revert</strong> discards them.</li>
+          <li><strong>External conflict protection:</strong> If another device syncs edits to the open card while you have unsaved edits in the Notes Pane, Synkban keeps your work and offers a banner to <strong>Load theirs</strong> or keep yours on Save.</li>
+        </ul>
+        <figure>
+          <img src="../images/notes-mode.png" alt="Notes Mode showing List Tabs, master list, and inline Notes Pane with diagram and table" data-zoom data-caption="Notes Mode — List Tabs across the top with the selected card edited inline in the Notes Pane.">
+          <figcaption>Notes Mode displaying List Tabs, the active card list, formatted notes, an Inline Image, and a Table.</figcaption>
+        </figure>
+
+        <h2 id="lists-and-cards">Lists &amp; Cards</h2>
+
+        <h3 id="working-with-lists">Working with Lists</h3>
+        <ul>
+          <li><strong>Add a list:</strong> Press <kbd>L</kbd> or click the <em>Add list</em> strip.</li>
+          <li><strong>Rename a list:</strong> Click the list header (or active List Tab) or press <kbd>R</kbd> / <kbd>F2</kbd>.</li>
+          <li><strong>Reorder lists:</strong> Drag horizontally, or press <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> while focused on a card or the list's add button.</li>
+          <li><strong>Delete a list:</strong> Click <code>×</code> in the header (asks for confirmation if non-empty). All cards inside are moved safely to <strong>Archived Cards</strong>.</li>
+        </ul>
+
+        <h3 id="quick-add">Adding Cards &amp; Quick-Add Syntax</h3>
+        <p>Press <kbd>N</kbd> inside a list (or click <em>Add card</em>) and include <code>#label</code> and <code>due:…</code> tokens right in the title — a live preview beneath the field shows what will be applied:</p>
+        <ul>
+          <li><strong><code>#label</code>:</strong> Attaches an existing label or creates a new one (dashed border in the preview). Matches loosely ignoring case, spaces, and dashes (<code>#in-progress</code> matches <em>In Progress</em>). Must start with a letter so numbers like <code>#42</code> stay literal text.</li>
+          <li><strong><code>due:…</code>:</strong> Accepts <code>2026-12-01</code>, <code>today</code>, <code>tomorrow</code>, weekdays (<code>fri</code> = next Friday), or offsets (<code>+3d</code>, <code>+2w</code>, <code>-1d</code>).</li>
+        </ul>
+        <figure>
+          <img src="../images/quick-add.png" alt="Quick-add live preview parsing #docs, #v2-launch, and due:fri" width="380" data-zoom data-caption="Quick-add — live preview chips for existing labels, new labels, and parsed due dates.">
+          <figcaption>Quick-add preview parsing an existing label (<code>Docs</code>), a new label (<code>+ v2-launch</code>), and <code>due:fri</code>.</figcaption>
+        </figure>
+
+        <h3 id="title-formatting">Title Formatting</h3>
+        <p>Card titles and label names support <code>**bold**</code> and <code>*italic*</code> — type markers directly or select text and press <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> / <kbd>Cmd/Ctrl</kbd>+<kbd>I</kbd>.</p>
+
+        <h3 id="moving-and-reordering">Moving &amp; Reordering (Mouse, Keyboard &amp; Touch)</h3>
+        <ul>
+          <li><strong>Mouse:</strong> Drag and drop cards, lists, boards, labels, and checklist items natively.</li>
+          <li><strong>Keyboard:</strong> <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> reorder within a list; <kbd>Shift</kbd>+<kbd>Home</kbd>/<kbd>End</kbd> jump to top/bottom; <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> move across lists or tabs; <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> reorder lists.</li>
+          <li><strong>Touch screens:</strong> <strong>Long-press</strong> (~220 ms held still) on any draggable item, drag with edge auto-scrolling, and release. Regular taps and scrolling work normally.</li>
+        </ul>
+
+        <h2 id="inside-a-card">Working Inside a Card</h2>
+        <p>Click a card (or press <kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>E</kbd>) to open the <strong>Card Modal</strong> in Kanban Mode or focus the <strong>Notes Pane</strong> in Notes Mode. Jump straight to any section with <kbd>Cmd/Ctrl</kbd> + <kbd>E</kbd> (Title), <kbd>U</kbd> (Due Date), <kbd>G</kbd> (Labels), <kbd>D</kbd> (Description), <kbd>L</kbd> (Checklist), <kbd>O</kbd> (Attachment), <kbd>J</kbd> (History), or <kbd>P</kbd> (Export PDF).</p>
+
+        <h3 id="deliberate-saves">Deliberate Saves &amp; Unsaved Changes Guard</h3>
+        <p>Title, labels, due date, description, and checklist are edited locally and saved together as one atomic update with <strong>Save</strong> (<kbd>Cmd/Ctrl</kbd>+<kbd>S</kbd>). (<strong>Attachments</strong> save or delete immediately as standalone files.) Leaving a card with unsaved edits prompts <strong>Save</strong>, <strong>Discard</strong>, or <strong>Cancel</strong>.</p>
+
+        <h3 id="description-editor">Rich-Text Description Editor</h3>
+        <ul>
+          <li><strong>Inline marks &amp; Text Styles:</strong> Bold, Italic, Inline code (<code>Cmd/Ctrl+`</code>), Links, <strong>Plain text</strong>, <strong>Code block</strong>, <strong>Heading 1–3</strong>, Quotes, and nested Bulleted/Numbered lists (<kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> or <kbd>Cmd/Ctrl</kbd>+<kbd>]</kbd>/<kbd>[</kbd> inside lists).</li>
+          <li><strong>Markdown typing shortcuts:</strong> Start a line with <code># </code>, <code>## </code>, <code>### </code>, <code>- </code>, <code>1. </code>, <code>&gt; </code>, or <code>```</code> (press <kbd>Backspace</kbd> right after to undo).</li>
+          <li><strong>Smart links:</strong> URLs followed by whitespace auto-link; pasting a URL onto selected text wraps it as a link. Plain click opens the link; <kbd>Cmd/Ctrl</kbd>+Click edits or removes the whole link cleanly.</li>
+          <li><strong>Editor Menu (<kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> or Right-Click):</strong> Opens right beside your caret with clickable actions and single-key hints while keeping your selection intact.</li>
+        </ul>
+        <figure>
+          <img src="../images/card-modal-editor-menu.png" alt="Card Modal with the context-sensitive Editor Menu open" data-zoom data-caption="Card Modal — context-sensitive Editor Menu (Cmd/Ctrl + K or Right-Click) beside the caret.">
+          <figcaption>Card Modal with the context-sensitive Editor Menu (<kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> or Right-Click) open.</figcaption>
+        </figure>
+
+        <h3 id="tables-and-matrices">Tables &amp; Matrices</h3>
+        <p>Insert a 3×3 <strong>Table</strong> (Editor Menu <kbd>T</kbd>) or <strong>Matrix</strong> (<kbd>X</kbd>) from the toolbar or <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd>:</p>
+        <ul>
+          <li><strong>Tables:</strong> The first row is always the centred <strong>Header Row</strong>, governing left/centre/right column alignment automatically as rows are added or moved.</li>
+          <li><strong>Matrices:</strong> Top-left corner stays empty and uneditable while both the first row and first column act as centred headers, with <strong>per-cell alignment</strong> on body cells and one-step <strong>Transpose</strong> (<kbd>X</kbd>).</li>
+          <li><strong>Navigation:</strong> <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> walk cells (<kbd>Tab</kbd> at the end appends a row), <kbd>Enter</kbd> moves down a row, and <kbd>Shift</kbd>+<kbd>Enter</kbd> inserts a line break. Inside the Editor Menu: <kbd>W</kbd>/<kbd>S</kbd>/<kbd>A</kbd>/<kbd>D</kbd> move rows/columns, <kbd>Shift</kbd>+Arrows insert rows/columns, <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> align, and <kbd>R</kbd>/<kbd>C</kbd>/<kbd>T</kbd> delete.</li>
+        </ul>
+        <figure>
+          <img src="../images/matrix.png" alt="Matrix in the description editor with open top-left corner, centred headers, and per-cell alignment" data-zoom data-caption="Matrix — empty top-left corner, centred row/column headers, per-cell alignment, and one-step Transpose.">
+          <figcaption>A 4×4 Matrix in the description editor with open top-left corner and mixed per-cell alignments.</figcaption>
+        </figure>
+
+        <h3 id="inline-images">Inline Images</h3>
+        <p>Embed image attachments straight into a description by pasting an image from the clipboard, pressing <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> then <kbd>M</kbd> (or clicking the toolbar image icon), or clicking <code>+</code> on an image attachment tile. Click any inline image for a full-size lightbox preview; copying rich text with inline images to another card copies the image attachments automatically.</p>
+
+        <h3 id="labels">Labels &amp; Label Drawer</h3>
+        <p>Press <kbd>G</kbd> to open the right-side <strong>Label Drawer</strong>. Labels auto-assign pastel colours from a 12-colour palette, and reordering rows here (drag or <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>) controls label display order everywhere on the board. Loose matching prevents duplicates; renaming one label onto another's name triggers a confirmed, board-wide <strong>Label Merge</strong>. Inside a card (<kbd>Cmd/Ctrl</kbd>+<kbd>G</kbd>), toggle chips directly or create and assign a new label inline.</p>
+        <figure>
+          <img src="../images/label-drawer.png" alt="Right-side Label Drawer showing ordered coloured labels" data-zoom data-caption="Label Drawer — create, rename, merge, and reorder board labels.">
+          <figcaption>Label Drawer on the right edge of a board controlling label order everywhere.</figcaption>
+        </figure>
+
+        <h3 id="due-dates">Due Dates &amp; Keyboard-First Picker</h3>
+        <p>Click the <strong>Due Date</strong> chip or press <kbd>Cmd/Ctrl</kbd>+<kbd>U</kbd> to open the picker. Type <code>2026-12-01</code>, <code>today</code>, <code>tomorrow</code>, a weekday (<code>fri</code>), or an offset (<code>+3d</code>, <code>+2w</code>, <code>-1d</code>) and press <kbd>Enter</kbd>, press <kbd>↓</kbd> to step through the calendar grid, or click <strong>Today</strong>, <strong>Tomorrow</strong>, <strong>Next week</strong>, or <strong>Clear</strong>.</p>
+        <figure>
+          <img src="../images/due-date-picker.png" alt="Keyboard-first Due Date Picker popover" width="640" data-zoom data-caption="Due Date Picker — type natural date shorthands or navigate the calendar grid by keyboard.">
+          <figcaption>Due Date Picker combining typed shorthands, calendar grid navigation, and one-click presets.</figcaption>
+        </figure>
+
+        <h3 id="checklist">Checklist</h3>
+        <p>Press <kbd>Cmd/Ctrl</kbd>+<kbd>L</kbd> to focus (or expand) a card's flat <strong>Checklist</strong>. Press <kbd>Enter</kbd> to add items rapidly, <kbd>↑</kbd>/<kbd>↓</kbd> to move, <kbd>Space</kbd> to check/uncheck, <kbd>Enter</kbd> to edit inline, <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> or drag to reorder, and <kbd>Del</kbd>/<kbd>Backspace</kbd> to delete (with inline confirmation). Includes a live <code>done/total</code> pill and <strong>Check all / Uncheck all</strong> toggle.</p>
+
+        <h3 id="attachments">Attachments</h3>
+        <p>Attach files up to <strong>50 MB</strong> each via <kbd>Cmd/Ctrl</kbd>+<kbd>O</kbd>, dragging files anywhere onto the open card, or pasting images from the clipboard. Image tiles generate thumbnails, open in a lightbox on click/<kbd>Enter</kbd>, and display an <code>in text</code> badge when embedded in the description; general files show extension badges and download on click/<kbd>Enter</kbd>.</p>
+        <figure>
+          <img src="../images/attachments.png" alt="Attachments grid with image thumbnails, in text badge, PDF tile, and Add tile" width="680" data-zoom data-caption="Attachments grid — image thumbnails, in text indicator, PDF extension badge, and Add tile.">
+          <figcaption>Attachments grid displaying image thumbnails, the <code>in text</code> badge, a PDF badge, and the dashed Add tile.</figcaption>
+        </figure>
+
+        <h3 id="card-history">Card History &amp; Diffs</h3>
+        <p>Press <kbd>Cmd/Ctrl</kbd>+<kbd>J</kbd> to browse up to the <strong>last 100 saved content versions</strong> of the card (list moves and archiving do not clutter history). Select any version on the left to inspect a field-by-field diff on the right — including row-by-row table diffs and inline image markers.</p>
+        <figure>
+          <img src="../images/card-history.png" alt="Card History dialog showing version list and field-by-field diffs" data-zoom data-caption="Card History — read-only version timeline with per-field additions and removals.">
+          <figcaption>Card History diff viewer comparing saved versions across title, labels, due date, description, and checklist.</figcaption>
+        </figure>
+
+        <h3 id="pdf-export">Archival PDF/A Export</h3>
+        <p>Press <kbd>Cmd/Ctrl</kbd>+<kbd>P</kbd> (or click the PDF icon) to download a self-contained <strong>PDF/A-2u</strong> archive of the saved card — complete with embedded fonts, clickable links, formatted headings/lists/quotes/code blocks, inline images, checklists, and tables with repeating headers. If the card has unsaved edits, Synkban asks whether to <strong>Save &amp; export</strong> or <strong>Export saved version</strong>.</p>
+        <figure>
+          <img src="../images/pdf-export-preview.png" alt="Rendered preview of an exported PDF/A-2u card" width="540" data-zoom data-caption="PDF/A-2u export preview — offline archival output with embedded fonts, diagrams, tables, and checklist.">
+          <figcaption>Rendered preview of a card exported offline to archival PDF/A-2u.</figcaption>
+        </figure>
+
+        <h2 id="filtering-cards">Filtering Cards</h2>
+        <p>Press <kbd>F</kbd> (or click <strong>Filter</strong>) to open the <strong>Filter Bar</strong>. All active criteria combine with <strong>AND</strong> logic: case-insensitive text across titles, descriptions, and checklists; due-date segments (<strong>Overdue</strong>, <strong>This week</strong>, or <strong>Until…</strong> any calendar date); and multiple label chips. Headers and List Tabs show <code>matching/total</code> counts while filtering, and <kbd>Esc</kbd> clears active filters before closing the bar.</p>
+        <figure>
+          <img src="../images/filter-bar.png" alt="Filter Bar active with This week and Priority filters showing matching/total counts" data-zoom data-caption="Filter Bar — combine text, due-date range, and label chips with matching/total counts.">
+          <figcaption>Filter Bar active with <em>This week</em> and <em>Priority</em> filters applied across lists.</figcaption>
+        </figure>
+
+        <h2 id="archiving">Archiving &amp; Permanent Deletion</h2>
+        <p>Boards and cards are always <strong>Archived</strong> first before permanent deletion. Press <kbd>A</kbd> on the Board Overview (for archived boards) or inside a board (for archived cards) to <strong>Restore</strong> items or confirm <strong>Delete permanently? Yes / No</strong>. Deleting a non-empty list automatically archives its cards safely as <strong>Orphaned Cards</strong>; restoring one places it back into the board's first list (or active list in Notes Mode).</p>
+        <figure>
+          <img src="../images/archive-panel.png" alt="Archived Cards panel with Restore and inline Delete permanently confirmation" data-zoom data-caption="Archive Panel — restore archived cards or confirm permanent deletion inline.">
+          <figcaption>Archived Cards panel showing Restore and the inline permanent-delete confirmation.</figcaption>
+        </figure>
+
+        <h2 id="syncing-and-safety">Syncing, Backups &amp; Crash Safety</h2>
+
+        <h3 id="syncing-across-devices">Syncing Across Devices</h3>
+        <ol>
+          <li>Create a shared sync folder in <strong>Syncthing</strong>, <strong>Dropbox</strong>, <strong>iCloud Drive</strong>, <strong>Nextcloud</strong>, <strong>Git</strong>, or <strong>rsync</strong>.</li>
+          <li>In the Desktop App, open <strong>Settings → Data folder → Browse…</strong>, select your synced folder, and click <strong>Save &amp; Restart</strong>.</li>
+          <li>If you already had boards in the default folder, copy the <code>boards/</code> directory into your synced folder manually (changing the folder in Settings does not move existing files automatically).</li>
+        </ol>
+        <p>Sync only your <strong>Data Directory</strong> — keep your machine's <code>~/.config/synkban/</code> folder local. Open boards automatically poll for external file changes every 15 seconds and refresh cleanly without disrupting typing.</p>
+
+        <h3 id="backups">Backups &amp; Moving Computers</h3>
+        <p>Copy your <strong>Data Directory</strong> (or its <code>boards/</code> folder) anytime — standard file backups (Time Machine, ZIP archives, cloud backup, rsync) work without stopping Synkban. On a new computer, copy the folder over and pick it in <strong>Settings → Data folder → Browse…</strong>.</p>
+
+        <h3 id="crash-drafts">Crash-Safe Drafts</h3>
+        <p>While a single card has unsaved edits, Synkban keeps a machine-local crash recovery <strong>Draft</strong>. If the app closes or reloads unexpectedly before you save, the next launch automatically reopens that card with your edits and offers a <strong>Discard</strong> option (safely dropping the draft if the card changed externally in the meantime).</p>
+
+        <h3 id="warnings">Warnings &amp; Offline Protection</h3>
+        <p>If Synkban encounters an unreadable or half-synced file, it skips only that file, leaves it intact on disk, keeps the rest of your boards usable, and shows a warning banner naming the exact file path.</p>
+
+        <h2 id="settings">Settings &amp; Appearance</h2>
+        <p>Click the <strong>Settings</strong> gear button in the top-right corner of the header on any page to choose <strong>Appearance</strong> (System, Light, or Dark with live preview), <strong>On startup, open</strong> (Board overview or Last used board), and your <strong>Data folder</strong>.</p>
+        <figure>
+          <img src="../images/settings.png" alt="Settings dialog for Appearance, startup view, and Data folder" data-zoom data-caption="Settings — configure Appearance, startup behaviour, and your Data Directory.">
+          <figcaption>Settings dialog for Appearance, startup view, and Data folder selection.</figcaption>
+        </figure>
+        <figure>
+          <img src="../images/dark-mode.png" alt="Synkban board in Dark Mode" data-zoom data-caption="Dark Mode — adapted board surfaces, lists, and accent highlights.">
+          <figcaption>Coloured board rendered in Dark Mode.</figcaption>
+        </figure>
+
+        <h2 id="keyboard-shortcuts">Keyboard Shortcuts</h2>
+        <p>Press <strong><kbd>?</kbd></strong> anywhere outside text fields (or click the <strong><kbd>?</kbd></strong> button in the top bar) to open the in-app <strong>Keyboard shortcuts</strong> dialog. It opens directly to the tab matching where your focus currently is (<strong>Boards</strong>, <strong>Board</strong>, <strong>Notes</strong>, <strong>Card</strong>, or <strong>Editor</strong> — switch tabs with <kbd>←</kbd> / <kbd>→</kbd> or <kbd>1</kbd>–<kbd>5</kbd>, and close with <kbd>?</kbd> or <kbd>Esc</kbd>).</p>
+        <figure>
+          <img src="../images/shortcut-help.png" alt="Contextual Keyboard Shortcuts dialog opened on the Board tab" data-zoom data-caption="Contextual Keyboard Shortcuts — press ? anytime for an always up-to-date reference.">
+          <figcaption>Contextual Keyboard Shortcuts dialog opened on the active Board tab.</figcaption>
+        </figure>
+
+        <h2 id="faq">Troubleshooting &amp; FAQ</h2>
+
+        <h3>macOS says <em>"Synkban.app is damaged and can't be opened"</em></h3>
+        <p>Release builds are unsigned. Run <code>sudo xattr -cr /Applications/Synkban.app</code> in Terminal once and reopen the app.</p>
+
+        <h3>I changed the Data folder in Settings and my existing boards disappeared</h3>
+        <p>Changing the Data folder points Synkban at the new folder without moving files automatically. Copy your existing <code>boards/</code> folder from the old Data Directory into the new folder and Synkban will load them automatically.</p>
+
+        <h3>Why does Synkban have a Save button instead of autosaving every keystroke?</h3>
+        <p>Writing one clean atomic JSON file per save avoids sync churn across Dropbox, Syncthing, and Git and keeps your 100-version Card History meaningful — while machine-local crash drafts still protect every unsaved word if the app quits unexpectedly.</p>
+
+        <h3>A yellow warning banner says a file could not be read and was skipped — is my data lost?</h3>
+        <p>No. Skipped files remain untouched on disk. Let your sync tool finish transferring (or fix invalid JSON syntax at the path shown) and Synkban picks the file back up on the next refresh.</p>
+
+        <h3>I accidentally deleted a list — are its cards gone?</h3>
+        <p>No. Deleting a list moves all of its cards into <strong>Archived Cards</strong> as <strong>Orphaned Cards</strong>. Press <kbd>A</kbd> on the board and click <strong>Restore</strong> to bring them back.</p>
+
+        <h3>How can I use Synkban on my phone or tablet?</h3>
+        <p>Self-host Synkban via Docker behind an HTTPS reverse proxy and install it as a Home Screen web app — see the <a href="../technical/">Technical &amp; Self-Hosting Reference</a>.</p>
+
+        <div class="callout callout--note">
+          <strong>Need CLI flags, Docker/PWA setup, <code>synkban.toml</code>, or raw folder layouts?</strong> Continue to the <a href="../technical/">Technical &amp; Self-Hosting Reference →</a>
+        </div>
+      </article>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand" href="../">
+          <img src="../icon-192.png" alt="" width="24" height="24">
+          <span>Synkban</span>
+        </a>
+        <p style="margin:10px 0 0;max-width:340px;">Local-first, keyboard-driven kanban boards &amp; notes. MIT License.</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Using Synkban</h4>
+          <ul>
+            <li><a href="../">Home</a></li>
+            <li><a href="../#install">Download Desktop App</a></li>
+            <li><a href="./">User Guide</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Technical &amp; Source</h4>
+          <ul>
+            <li><a href="../technical/">Self-Hosting &amp; CLI</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban/blob/main/docs/docker/README.md">Docker &amp; PWA Guide</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban">GitHub Repository</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../site.js"></script>
+</body>
+</html>

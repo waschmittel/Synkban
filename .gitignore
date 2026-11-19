@@ -30,3 +30,6 @@ electron/app-version.json
 # used when a sandbox is active
 .pnpm-store
 
+# Site build
+public/
+

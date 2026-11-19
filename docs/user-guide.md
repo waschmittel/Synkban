@@ -9,10 +9,8 @@ Synkban is a **local-first, keyboard-driven kanban board and structured note-tak
 - [Why Synkban?](#why-synkban)
   - [Core Advantages](#core-advantages)
   - [Intentional Scope](#intentional-scope)
-- [Getting Started & Ways to Run Synkban](#getting-started--ways-to-run-synkban)
-  - [Desktop Mode (macOS, Linux, Windows)](#desktop-mode-macos-linux-windows)
-  - [Web Mode (Standalone Binary)](#web-mode-standalone-binary)
-  - [Self-Hosting with Docker & Installing as a PWA](#self-hosting-with-docker--installing-as-a-pwa)
+- [Getting Started](#getting-started)
+  - [Installing the Desktop App](#installing-the-desktop-app)
   - [Two-Minute Walkthrough](#two-minute-walkthrough)
 - [Core Concepts](#core-concepts)
 - [Managing Boards](#managing-boards)
@@ -40,15 +38,15 @@ Synkban is a **local-first, keyboard-driven kanban board and structured note-tak
   - [Archival PDF/A Export](#archival-pdfa-export)
 - [Filtering Cards](#filtering-cards)
 - [Archiving & Permanent Deletion](#archiving--permanent-deletion)
-- [Syncing, Backups, Crash Safety & Resilience](#syncing-backups-crash-safety--resilience)
-  - [Data Directory vs. Config Directory](#data-directory-vs-config-directory)
+- [Syncing, Backups & Crash Safety](#syncing-backups--crash-safety)
   - [Syncing Across Devices](#syncing-across-devices)
-  - [Backups & Migration](#backups--migration)
+  - [Backups & Moving to a New Computer](#backups--moving-to-a-new-computer)
   - [Crash-Safe Drafts](#crash-safe-drafts)
-  - [Data-Integrity Warnings & Offline Resilience](#data-integrity-warnings--offline-resilience)
+  - [Warnings & Offline Protection](#warnings--offline-protection)
 - [Settings & Appearance](#settings--appearance)
-- [Keyboard Shortcuts Reference](#keyboard-shortcuts-reference)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Troubleshooting & FAQ](#troubleshooting--faq)
+- [Technical & Self-Hosting Reference](#technical--self-hosting-reference)
 
 ---
 
@@ -75,16 +73,16 @@ Synkban is designed around a different idea: **every board, list, card, and atta
 
 Knowing what Synkban deliberately omits helps decide whether it fits your workflow:
 
-- **Single-user / personal design:** Synkban has no user accounts, role permissions, or real-time collaborative cursors. In **Web Mode**, the server has no built-in login screen — run it on your local machine, over a private network (such as Tailscale), or behind an authenticating reverse proxy (see [Self-Hosting & Docker Guide](docker/README.md)).
+- **Single-user / personal design:** Synkban has no user accounts, role permissions, or real-time collaborative cursors. (If you self-host the web version on a server, place it behind a private network or login proxy — see [Technical & Self-Hosting Reference](technical-reference.md).)
 - **Focused data model:** Cards support one flat **Checklist** (not nested sub-checklists), clean simple **Tables** and **Matrices** (no merged cells or drag-resized columns), and a strict, safe rich-text format (no arbitrary raw HTML or script links). This keeps syncing predictable, history diffs clean, and PDF exports crisp.
 
 ---
 
-## Getting Started & Ways to Run Synkban
+## Getting Started
 
-### Desktop Mode (macOS, Linux, Windows)
+### Installing the Desktop App
 
-Pre-built Desktop Mode installers are published on GitHub Releases:
+Download the installer for your platform from [GitHub Releases](https://github.com/waschmittel/Synkban/releases/latest):
 
 | Platform | Available Packages |
 | --- | --- |
@@ -92,68 +90,19 @@ Pre-built Desktop Mode installers are published on GitHub Releases:
 | **Linux** | `.AppImage` and `.deb` |
 | **Windows** | `.exe` installer (NSIS) |
 
-You can also package Desktop Mode directly from source with `./build.sh --desktop` (output lands in `electron/dist/`).
-
-> **macOS Gatekeeper note:** Because release builds are not notarised with a paid Apple Developer certificate, macOS may warn that `Synkban.app` *"is damaged and can't be opened"*. Run this command once in Terminal to clear the quarantine attribute, then open Synkban normally:
+> **macOS Gatekeeper note:** Because release builds are not notarised with a paid Apple Developer certificate, macOS may warn that `Synkban.app` *"is damaged and can't be opened"*. Run this command once in Terminal to clear the quarantine flag, then open Synkban normally:
 >
 > ```bash
 > sudo xattr -cr /Applications/Synkban.app
 > ```
 
-**Desktop Mode highlights:**
+**Desktop App highlights:**
 
 - **Seamless coloured window:** The app's top bar doubles as the window title bar and adapts to the active board's colour and theme.
 - **Remembers window geometry:** Window size, position, and maximised (Windows/Linux) or fullscreen (macOS) state are restored on relaunch, and automatically fitted onto available displays if an external monitor is disconnected.
-- **Per-launch local security:** Each launch binds only to `127.0.0.1` on a random port with a fresh secret token so other local apps or browser tabs cannot access your boards.
-- **Native integration:** External links in card descriptions open in your operating system's default browser, and **Settings** provides a native folder picker for choosing your synced **Data Directory**.
+- **Private & local:** Runs strictly locally on your computer; external links in card descriptions open in your default web browser, and **Settings** provides a native folder picker to choose where your boards live.
 
-### Web Mode (Standalone Binary)
-
-Synkban compiles into a single self-contained binary with all web assets embedded. Run it directly from a terminal (or build it yourself with `./build.sh`):
-
-```bash
-./synkban
-```
-
-Then open **`http://localhost:8080`** in your browser.
-
-#### Command-Line Options & Environment Variables
-
-| Option / Variable | Default | Description |
-| --- | --- | --- |
-| `--data-dir <path>` | *(see below)* | Path to the **Data Directory** (also accepts `--data-dir=<path>`). Takes precedence over `DATA_DIR` and config file. |
-| `-h`, `--help` | — | Print CLI usage help and exit. |
-| `-V`, `--version` | — | Print the Synkban version and exit. |
-| `DATA_DIR` | *(see below)* | Path to the **Data Directory** (created automatically if absent). |
-| `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` in the official Docker image). |
-| `PORT` | `8080` | Bind port. |
-| `SYNKBAN_CONFIG_DIR` | `~/.config/synkban` | Directory for machine-local settings (`synkban.toml`) and crash drafts (`draft.json`). Uses `%USERPROFILE%\.config\synkban` on Windows; `/app/config` in Docker. |
-
-Example running on a custom port and folder:
-
-```bash
-HOST=0.0.0.0 PORT=3000 DATA_DIR=/home/me/Sync/synkban ./synkban
-```
-
-### Self-Hosting with Docker & Installing as a PWA
-
-Official multi-architecture (`linux/amd64`, `linux/arm64`) container images are published to `ghcr.io/waschmittel/synkban`.
-
-For local or private-network (e.g. Tailscale) use:
-
-```sh
-docker run -d \
-  --name synkban \
-  -p 127.0.0.1:8080:8080 \
-  -e DATA_DIR=/data \
-  -v /path/on/host/data:/data \
-  -v /path/on/host/config:/app/config \
-  ghcr.io/waschmittel/synkban:latest
-```
-
-> **Important:** The container runs as non-root user `app` (UID `10001`). Ensure host-mounted data and config directories are writable by UID `10001` (for example, `chown -R 10001:10001 /path/on/host/data /path/on/host/config`).
-
-To expose Synkban over HTTPS with persistent single-prompt login and install it as a standalone **Progressive Web App (PWA)** on desktop browsers, Android, or iOS/iPadOS, follow the complete **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docker/README.md)**.
+> **Prefer self-hosting, Docker, mobile PWA, or the standalone server?** Those setup instructions live separately in the **[Technical & Self-Hosting Reference](technical-reference.md)** so this guide stays focused on daily use.
 
 ### Two-Minute Walkthrough
 
@@ -174,12 +123,12 @@ To expose Synkban over HTTPS with persistent single-prompt login and install it 
 | Term | What it means in Synkban |
 | --- | --- |
 | **Board** | Top-level workspace with its own title, optional colour, **Labels**, **Lists**, and default view mode (**Kanban Mode** or **Notes Mode**). |
-| **List** | An ordered column (or tab in **Notes Mode**) on a board holding **Cards**. |
+| **List** | An ordered group of **Cards** (side-by-side lane in **Kanban Mode**, **List Tab** in **Notes Mode**) on a board. |
 | **Card** | An individual work item or note inside a list. Holds a title, **Labels**, **Due Date**, rich-text **Description**, **Checklist**, **Attachments**, and **History**. |
 | **Label** | A coloured tag defined per board. Display order is shared across the board, card faces, card detail, and Filter Bar. |
 | **Archive** | Safe holding area for soft-deleted boards and cards. Items must be archived before they can be permanently deleted. |
-| **Data Directory** | The folder where all boards, lists, cards, and attachments are stored (`boards/`). This is the folder you back up and sync across devices. |
-| **Config Directory** | Machine-local folder (`~/.config/synkban` by default) holding your **Settings** (`synkban.toml`) and crash-recovery **Draft** (`draft.json`). Kept local — never synced. |
+| **Data Directory** | The folder where all your boards, cards, and attachments live (`boards/`). This is the folder you back up and sync across devices. |
+| **Config Directory** | Machine-local folder (`~/.config/synkban` by default) where Synkban keeps per-machine **Settings** and crash recovery. Never synced. |
 
 ---
 
@@ -201,6 +150,8 @@ From the Board Overview you can:
 - **Reorder boards:** Drag and drop a board card (long-press on touch devices), or focus a board and press **`Shift + ↑ / ↓ / ← / →`**.
 - **Archive a board:** Hover and click the archive icon, or focus a board and press **`Del`** / **`Backspace`** (asks for confirmation first).
 - **View Archived Boards:** Click **Archive** (shows the count when non-empty) or press **`A`** to restore or permanently delete archived boards.
+
+![Board Overview showing coloured boards, card counts, and overdue count](images/board-overview.png)
 
 ### Board Top Bar & Personalisation
 
@@ -249,6 +200,8 @@ Every board remembers its own view mode (**Kanban Mode** or **Notes Mode**) so a
   - Collapse state is saved per list and syncs across devices.
 - **Sticky-row horizontal navigation:** Pressing `←` / `→` across lists remembers your vertical row index (like a cursor moving across lines of text). Passing through a shorter list, an empty list, or a **Collapsed List** keeps your target row so you land back at the same depth on the next taller list. Moving vertically (`↑` / `↓` / `Home` / `End`) or clicking resets the remembered row.
 
+![Kanban Mode with side-by-side lists, a collapsed list, card badges, and the Board Dock](images/kanban-mode.png)
+
 ### Notes Mode
 
 **Notes Mode** turns the board into a distraction-free master-detail workspace built for cards with long descriptions:
@@ -265,6 +218,8 @@ Every board remembers its own view mode (**Kanban Mode** or **Notes Mode**) so a
 - **Unsaved changes indicator:** A dot appears both on the card icon in the pane and on the active **List Tab** whenever the open card has unsaved edits.
 - **External conflict protection:** If another device syncs a change to the currently open card while you have unsaved edits in the Notes Pane, Synkban keeps your edits safe and displays a banner offering **Load theirs** (or **Save** to keep your version — their version remains accessible in Card History). If the card was archived or deleted elsewhere while dirty, a banner lets you **Restore & save** it back into the active list.
 
+![Notes Mode showing List Tabs, active list, and inline Notes Pane](images/notes-mode.png)
+
 ---
 
 ## Lists & Cards
@@ -273,7 +228,7 @@ Every board remembers its own view mode (**Kanban Mode** or **Notes Mode**) so a
 
 - **Add a list:** Click **Add list** (shown as a compact vertical strip in Kanban Mode, or inline beside the tabs in Notes Mode) or press **`L`**, type a name, and press `Enter`.
 - **Rename a list:** Click the list title (or active **List Tab** in Notes Mode), or focus the list and press **`R`** or **`F2`**. Press `Enter` to save or `Esc` to cancel.
-- **Reorder lists:** Drag a list by its column/header to drop it in a new position, or press **`Shift + Alt + ← / →`** while focused on a card or the list's *Add card* button.
+- **Reorder lists:** Drag a list by its header to drop it in a new position, or press **`Shift + Alt + ← / →`** while focused on a card or the list's *Add card* button.
 - **Collapse / expand a list (Kanban Mode):** Click the collapse chevron or press **`C`**.
 - **Delete a list:** Click the `×` button in the list header (or active List Tab). If the list contains cards, Synkban asks for confirmation; deleting the list moves all of its cards safely to **Archived Cards** as **Orphaned Cards**.
 
@@ -293,6 +248,8 @@ Send tax documents #finance #urgent due:fri
 - **`due:…`:** Accepts any date expression the **Due Date Picker** understands (`due:2026-12-01`, `due:today`, `due:tomorrow`, `due:fri`, `due:+3d`, `due:+2w`, `due:-1d`). Tokens that cannot be parsed (like `due:someday`) remain literal text in the title.
 - **Live preview:** Below the input field, Synkban previews the labels to be applied (existing labels shown solid, new labels to be created shown with a dashed border) and the resolved due date before you press `Enter`.
 - **Title required:** A card consisting only of tokens cannot be submitted until you include title text.
+
+<img src="images/quick-add.png" alt="Quick-add live preview parsing #docs, #v2-launch, and due:fri" width="380">
 
 ### Title Formatting
 
@@ -360,6 +317,8 @@ The description area (styled with a subtle warm note background) gives you struc
   - Opens right beside your caret (or pointer) without losing your text selection or touch keyboard.
   - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `0` plain, `B` code block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
 
+![Card Modal with the context-sensitive Editor Menu open](images/card-modal-editor-menu.png)
+
 ### Tables & Matrices
 
 Insert structured data directly in any card description using the **Insert table** / **Insert matrix** toolbar buttons or **`Cmd/Ctrl + K`** (`T` for a 3×3 table, `X` for a 3×3 matrix).
@@ -383,6 +342,8 @@ Insert structured data directly in any card description using the **Insert table
     - `R` / `C` / `T`: Delete row / delete column / delete table or matrix
 
 In the **Card Modal**, tables span the full editor width; in **Notes Mode**, tables and code blocks grow cleanly to fit their content (scrolling horizontally inside the description if wider than the pane).
+
+![Matrix in the description editor with open top-left corner, centred headers, and per-cell alignment](images/matrix.png)
 
 ### Inline Images
 
@@ -411,6 +372,8 @@ Labels are colour-coded per board, automatically assigned from a distinct 12-col
   - Assigned labels appear first with a checkmark (`✓`), followed by unassigned labels (if your board has many labels, click **+N more** to expand the rest). While hovering or navigating the row with the keyboard, chip positions stay frozen so chips never jump out from under your pointer.
   - Click the dashed **New label** chip to create and immediately assign a new label without leaving the card.
 
+![Label Drawer open on the right side of a board](images/label-drawer.png)
+
 ### Due Dates & Keyboard-First Picker
 
 Click the **Due Date** chip (`Set due date` when empty) or press **`Cmd/Ctrl + U`** to open the popover picker.
@@ -433,6 +396,8 @@ Click the **Due Date** chip (`Set due date` when empty) or press **`Cmd/Ctrl + U
    - `Home` / `End`: Start / end of the week (respecting your locale's first day of the week)
    - `Enter` / `Space`: Pick the highlighted date
 3. **Quick buttons:** Click **Today**, **Tomorrow**, **Next week**, or **Clear** (or click the `×` right on the due-date chip).
+
+<img src="images/due-date-picker.png" alt="Keyboard-first Due Date Picker popover" width="640">
 
 ### Checklist
 
@@ -462,6 +427,8 @@ Each card can hold file attachments up to **50 MB** per file.
 - **Hover / focus actions:** Insert image into description (`+`, for images) or delete (`×`, or `Del` / `Backspace` on a focused tile).
 - Attachments save and delete immediately as standalone sidecar files and record their filename in the card's **History**.
 
+<img src="images/attachments.png" alt="Attachments grid with image thumbnails, in text badge, PDF tile, and Add tile" width="680">
+
 ### Card History & Diffs
 
 Press **`Cmd/Ctrl + J`** (or click the clock/history button in the card footer) to inspect the card's version **History**:
@@ -469,6 +436,8 @@ Press **`Cmd/Ctrl + J`** (or click the clock/history button in the card footer) 
 - Automatically records up to the **last 100 saved content versions** of the card (title, labels, due date, description, checklist, and attachment filenames). Moving a card between lists, reordering it, or archiving it does not clutter history with no-op entries.
 - Select versions on the left (newest at the top; navigate with `↑` / `↓`, `PgUp` / `PgDn` by 10, `Home` / `End`) to view a **field-by-field diff** on the right showing exactly what was added (`+`) or removed (`−`) in that version — including row-by-row diffs for tables and `[image: filename]` markers for inline images.
 - History is read-only. Press `Cmd/Ctrl + J` or `Esc` to close.
+
+![Card History dialog showing version list and field-by-field diffs](images/card-history.png)
 
 ### Archival PDF/A Export
 
@@ -479,6 +448,8 @@ Press **`Cmd/Ctrl + P`** (or click the **PDF** button in the card footer) to dow
 - **Unsaved edits prompt:** PDFs always render the *saved* card on disk. If you have unsaved changes when exporting, Synkban asks whether to **Save & export**, **Export saved version**, or **Cancel**.
 - **Self-contained offline fonts:** Bundles DejaVu Sans, DejaVu Sans Mono, monochrome Noto Emoji, and Noto Sans Arabic, Hebrew, Devanagari, and Thai directly inside the app — zero reliance on system fonts or external browsers. *(To keep the app lightweight, CJK fonts are not bundled and appear as `?` in exported PDFs, though they display normally in the app.)*
 - See **[PDF Export Examples](export-examples/README.md)** for visual reference sheets of every supported element and edge case.
+
+<img src="images/pdf-export-preview.png" alt="Rendered preview of an exported PDF/A-2u card" width="540">
 
 ---
 
@@ -498,6 +469,8 @@ All three filter controls combine with **AND** logic (every active condition mus
 
 While filtering, list headers (and **List Tabs** in Notes Mode) display counts as **`matching/total`**. Press **`Esc`** inside the filter field once to clear active filters, and **`Esc`** again to close the bar.
 
+![Filter Bar active with This week and Priority filters showing matching/total counts](images/filter-bar.png)
+
 ---
 
 ## Archiving & Permanent Deletion
@@ -513,76 +486,43 @@ To protect against accidental data loss (especially across synced devices), Synk
 - Lists cannot be archived directly. When you delete a list (confirmation required if non-empty), Synkban archives all cards inside it as **Orphaned Cards** before removing the list.
 - Restoring a regular archived card returns it to its original list. Restoring an **Orphaned Card** from the **Archive Panel** places it into the first active list on the board (if the board currently has no lists, create a list first). In **Notes Mode**, clicking **Restore & save** on an open dirty card that was archived elsewhere restores it into the currently active list.
 
+![Archived Cards panel with Restore and inline Delete permanently confirmation](images/archive-panel.png)
+
 ---
 
-## Syncing, Backups, Crash Safety & Resilience
-
-### Data Directory vs. Config Directory
-
-Understanding the two folders Synkban uses makes syncing and backups effortless:
-
-1. **Data Directory (sync this across devices):**
-   Holds all boards, lists, cards, archived cards, and attachments under `boards/`:
-   ```text
-   <DATA_DIR>/
-   └── boards/
-       └── {board-id}/
-           ├── board.json
-           ├── lists/{list-id}/
-           │   ├── list.json
-           │   └── cards/{card-id}.json
-           ├── archived_cards/{card-id}.json
-           └── attachments/{card-id}/
-               ├── {att-id}
-               ├── {att-id}_thumb
-               └── {att-id}.json
-   ```
-   **Resolution order** (highest priority wins):
-   1. `--data-dir <path>` CLI flag
-   2. `DATA_DIR` environment variable
-   3. `data_dir` in `~/.config/synkban/synkban.toml`
-   4. Default: `~/.config/synkban/data/` (`%USERPROFILE%\.config\synkban\data\` on Windows)
-
-2. **Config Directory (keep local to each machine):**
-   Default `~/.config/synkban/` (`%USERPROFILE%\.config\synkban\` on Windows, overridable via `SYNKBAN_CONFIG_DIR`). Contains:
-   - `synkban.toml` — machine **Settings** (`data_dir`, `startup_view`, `last_board_id`, `theme`)
-   - `draft.json` — the machine's local crash-recovery **Draft** for the open card
+## Syncing, Backups & Crash Safety
 
 ### Syncing Across Devices
 
-Synkban works seamlessly with folder-sync tools such as **Syncthing**, **Dropbox**, **iCloud Drive**, **Nextcloud**, **Git**, or **rsync**:
+Because every board, list, card, and attachment lives as plain files inside your **Data Directory**, Synkban works seamlessly with folder-sync tools such as **Syncthing**, **Dropbox**, **iCloud Drive**, **Nextcloud**, **Git**, or **rsync**:
 
-1. Set up your sync folder (for example `~/Sync/synkban`) on each computer.
-2. In Desktop Mode, open **Settings → Data folder → Browse…**, select your synced folder, and click **Save & Restart**. (In Web Mode, set `DATA_DIR` or `--data-dir`.)
-3. If you already had boards in the default folder, **copy the `boards/` directory** into your synced folder manually — changing the folder in Settings never moves existing files automatically.
+1. Set up a synced folder on each computer (for example `~/Sync/synkban`).
+2. In the Desktop App, open **Settings → Data folder → Browse…**, select that synced folder, and click **Save & Restart**.
+3. If you already created boards in the default folder, **copy the `boards/` folder** into your synced folder manually — changing the folder in Settings never moves existing files automatically.
 
-**Sync best practices:**
-- **Sync only the Data Directory** — never sync `~/.config/synkban/` itself, because `draft.json` and `synkban.toml` are per-machine.
-- **Keep Synkban versions aligned** across devices so newer features (such as tables, matrices, or inline images) render consistently everywhere.
-- **No manual refresh needed:** Open boards and the Board Overview check for external file changes every **15 seconds** and reload updated boards automatically while keeping your cursor, open quick-add drafts, and card focus intact.
-- **In-flight sync protection:** At startup, Synkban cleans up partial or orphaned attachment leftovers only if they are older than 5 minutes, avoiding interference with a sync still in progress.
+**Sync tips:**
+- **Sync only your Data Directory** — leave your machine's `~/.config/synkban/` folder unsynced so local settings and crash recovery stay per-computer.
+- **Keep Synkban up to date on all devices** so newer card features (such as tables, matrices, or inline images) render identically everywhere.
+- **Automatic live updates:** Open boards check for external file changes every **15 seconds** and refresh automatically while keeping your cursor, open quick-add drafts, and card focus intact.
 
-### Backups & Migration
+### Backups & Moving to a New Computer
 
-- **Back up:** Copy your **Data Directory** (`boards/`). Because everything is plain JSON and regular files, standard snapshots (Time Machine, Borg, restic, rsync, or ZIP archives) work without shutting Synkban down.
-- **Migrate to a new machine:** Copy the Data Directory to the new machine and point Synkban at it via **Settings** (Desktop Mode) or `DATA_DIR` / `--data-dir` (Web Mode).
+- **Back up:** Copy your **Data Directory** (or its `boards/` folder). Because everything is plain files, standard backups (Time Machine, cloud backups, ZIP archives, or rsync) work cleanly without shutting Synkban down.
+- **Move to a new computer:** Copy the folder to the new computer and point Synkban at it via **Settings → Data folder → Browse…**.
 
 ### Crash-Safe Drafts
 
 Only one card can be open for editing at a time (in the **Card Modal** or **Notes Pane**). While it has unsaved changes:
 
-- Synkban writes your unsaved content locally to `draft.json` in the Config Directory (~300 ms after typing, and again when closing/reloading the page).
-- If the app crashes, closes unexpectedly, or reloads before you save, launching Synkban automatically navigates back to that board, reopens the card with your edits, and displays a banner: **`Restored your unsaved edits … Discard`**.
-- **Conflict safety:** If the card was modified on disk in the meantime (e.g. synced from another device) or deleted, Synkban safely discards the stale draft instead of overwriting newer changes.
-- Saving, clicking **Discard**, clicking **Revert**, or undoing back to the saved content clears the draft immediately.
+- Synkban automatically keeps a local crash-recovery **Draft** on your machine as you type and when closing the window.
+- If the app crashes, closes unexpectedly, or reloads before you save, launching Synkban automatically reopens that board and card with your edits and displays a **`Restored your unsaved edits … Discard`** banner.
+- **Conflict safety:** If the card was updated on disk from another device in the meantime (or deleted), Synkban safely discards the stale draft instead of overwriting newer changes.
+- Saving, clicking **Discard**, clicking **Revert**, or undoing back to the saved text clears the draft right away.
 
-### Data-Integrity Warnings & Offline Resilience
+### Warnings & Offline Protection
 
-- **Data-integrity Warning Banner:** If Synkban encounters a corrupt or half-synced JSON file while reading your boards, it does **not** crash or wipe anything. It skips only the unreadable file, leaves it untouched on disk, keeps the rest of your workspace running, and displays a dismissible banner naming the exact file path so you can repair or finish syncing it.
-- **Network Banner (Web / PWA Mode):** If the server temporarily restarts or your connection drops:
-  - Already-loaded boards, lists, and open card edits stay on screen — Synkban never falsely shows *"Board not found"* or *"No boards yet"* during a network outage.
-  - Failed quick-adds or label inputs restore your typed text instead of discarding it.
-  - A non-blocking **Network Banner** with a **Retry** button appears and clears automatically once connectivity returns (re-syncing any open crash draft).
+- **Data-integrity Warning Banner:** If Synkban encounters an unreadable or half-synced file while reading your boards, it skips only that file, leaves it untouched on disk so nothing is lost, and displays a dismissible banner naming the exact file path so you can finish syncing or inspect it.
+- **Network resilience (when connected to a server):** Already-loaded boards and open card edits stay safely on screen if a server restarts or your connection drops, failed quick-adds keep your typed text, and changes recover automatically when connectivity returns.
 
 ---
 
@@ -599,173 +539,21 @@ Click the **Settings** gear button in the top-right corner of the header on any 
   - **Board overview** (default) — always starts on *Your Boards*.
   - **Last used board** — reopens the last board you visited (deep links to a specific board URL always take precedence, and if the last board was archived or deleted, Synkban falls back cleanly to the Board Overview).
 - **Data folder:**
-  - **Desktop Mode:** Displays the active folder path with **Browse…**, **Use default**, and **Save & Restart** (restarts the app onto the chosen folder; existing boards stay in the old folder).
-  - **Web Mode:** Displays the active folder path and configuration precedence (`--data-dir`, `DATA_DIR`, or `synkban.toml`).
+  - In Desktop Mode, displays the active folder path with **Browse…**, **Use default**, and **Save & Restart** (restarts the app onto the chosen folder; existing boards stay in the old folder).
 
-Power users can also edit `~/.config/synkban/synkban.toml` directly when Synkban is stopped:
+![Settings dialog for Appearance, startup view, and Data folder](images/settings.png)
 
-```toml
-data_dir = "/home/me/Sync/synkban"
-startup_view = "last"      # "overview" (default) | "last"
-theme = "system"           # "system" (default) | "light" | "dark"
-last_board_id = "..."      # maintained automatically
-```
+![Synkban board in Dark Mode](images/dark-mode.png)
+
+> Need to override the data folder via CLI flags, environment variables, or edit `synkban.toml` directly? See the **[Technical & Self-Hosting Reference](technical-reference.md)**.
 
 ---
 
-## Keyboard Shortcuts Reference
+## Keyboard Shortcuts
 
-Press **`?`** at any time outside text inputs to open the in-app **Keyboard shortcuts** dialog, which opens directly to the tab matching where your cursor or focus currently is (**Boards**, **Board**, **Notes**, **Card**, or **Editor** — switch tabs with `←` / `→` or `1`–`5`, and close with `?` or `Esc`).
+Press **`?`** at any time outside text fields (or click the **`?`** button in the top bar) to open the in-app **Keyboard shortcuts** dialog. It lists every available shortcut and opens directly to the tab matching where your cursor or focus currently is (**Boards**, **Board**, **Notes**, **Card**, or **Editor** — switch tabs with `←` / `→` or `1`–`5`, and close with `?` or `Esc`).
 
-### Boards Overview
-
-| Shortcut | Action |
-| --- | --- |
-| `↑` `↓` `←` `→` | Move focus between boards |
-| `Enter` | Open focused board |
-| `N` | New board |
-| `Shift + ↑ / ↓ / ← / →` | Reorder focused board |
-| `Del` / `Backspace` | Archive focused board |
-| `A` | Open / close Archived Boards |
-| `Esc` | Close new-board form or Archive Panel |
-| `?` | Open Keyboard shortcuts help |
-
-### Board (Kanban Mode)
-
-| Shortcut | Action |
-| --- | --- |
-| `↑` `↓` | Previous / next card in list (wraps) |
-| `←` `→` | Move to neighbouring list (preserves vertical row) |
-| `Home` / `PgUp` | First card of the list |
-| `End` / `PgDn` | Last card of the list |
-| `Enter` / `Space` / `E` | Open / edit focused card |
-| `N` | Add card to focused list (`Enter` adds, `Esc` cancels) |
-| `Del` / `Backspace` | Archive focused card |
-| `C` | Collapse / expand focused list |
-| `Enter` (on collapsed list) | Expand list |
-| `R` / `F2` (or `Enter` on list title) | Rename list |
-| `Shift + ↑` / `Shift + ↓` | Move card up / down (wraps) |
-| `Shift + ←` / `Shift + →` | Move card to previous / next list |
-| `Shift + Home` / `Shift + End` | Move card to top / bottom of list |
-| `Shift + Alt + ←` / `Shift + Alt + →` | Move list left / right |
-
-### Notes Mode Shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| `↑` `↓` | Select card (shown beside the list) |
-| `Home` / `End` | First / last card |
-| `←` `→` | Previous / next List Tab |
-| `Enter` / `E` | Edit the card's description |
-| `Esc` | Return focus to the selected card from anywhere (asks if dirty) |
-| `N` | Add card |
-| `Shift + ↑` / `Shift + ↓` | Move card up / down |
-| `Shift + ←` / `Shift + →` | Move card to previous / next list |
-| `Shift + Alt + ←` / `Shift + Alt + →` | Move list (tab) left / right |
-| `Drag` | Drop a card onto a List Tab to move it there |
-| `Del` / `Backspace` | Archive card |
-| `R` / `F2` (or `Enter` / click on active tab) | Rename list |
-| `Cmd/Ctrl + S` | Save and keep editing |
-
-### Whole Board & Panels (Both Modes)
-
-| Shortcut | Action |
-| --- | --- |
-| `V` | Switch between Board (Kanban) and Notes view |
-| `L` | Add list |
-| `G` | Toggle Labels panel (**Label Drawer**) |
-| `F` | Toggle **Filter Bar** |
-| `A` | Open **Archived Cards** |
-| `,` / `J` | Previous board |
-| `.` / `K` | Next board |
-| `B` | Back to all boards (Board Overview) |
-| `?` | Keyboard shortcuts help |
-| `Esc` (in Filter Bar) | Clear active filters first, then close the bar |
-| `↑` `↓` (in Label Drawer / Archive Panel) | Move between items |
-| `Shift + ↑` / `Shift + ↓` (in Label Drawer) | Reorder labels |
-| `Enter` (in Label Drawer) | Rename label (renaming onto another label merges after confirmation) |
-| `Esc` | Close open panel / cancel rename |
-
-### Card Modal & Notes Pane
-
-| Shortcut | Action |
-| --- | --- |
-| `Cmd/Ctrl + S` | Save card |
-| `Esc` | Close modal / leave Notes Pane (asks about unsaved edits) |
-| `Cmd/Ctrl + J` | Open / close Card **History** |
-| `Cmd/Ctrl + P` | Export card as **PDF/A** |
-| `Cmd/Ctrl + E` | Focus **Title** (`Enter` jumps to Description) |
-| `Cmd/Ctrl + U` | Open **Due Date** picker |
-| `Cmd/Ctrl + G` | Focus **Labels** row |
-| `Cmd/Ctrl + D` | Focus **Description** editor |
-| `Cmd/Ctrl + L` | Focus / expand **Checklist** add field |
-| `Cmd/Ctrl + O` | Add **Attachment** |
-| `Cmd/Ctrl + B` / `Cmd/Ctrl + I` (in title/label input) | Wrap selection in `**bold**` / `*italic*` |
-| `?` (outside text fields) | Keyboard shortcuts help |
-
-#### Due Date Picker, Checklist, Attachments & History
-
-| Context | Shortcut | Action |
-| --- | --- | --- |
-| **Due Date Picker** | `2026-12-01`, `tomorrow`, `fri`, `+3d` + `Enter` | Parse typed date and apply (empty clears) |
-| **Due Date Picker** | `↓` (from field) | Enter calendar grid |
-| **Due Date Picker** | `←` `→` `↑` `↓` | Move by day / week |
-| **Due Date Picker** | `PgUp` / `PgDn` (`Shift`: year) | Previous / next month (or year) |
-| **Due Date Picker** | `Home` / `End` | Start / end of the week |
-| **Due Date Picker** | `Enter` / `Space` / `Esc` | Pick day / close picker |
-| **Checklist** | `↑` `↓` | Previous / next checklist item |
-| **Checklist** | `Space` | Check / uncheck item |
-| **Checklist** | `Enter` (on item) | Edit item (`Enter` saves, `Esc` cancels) |
-| **Checklist** | `Enter` (in *Add item*) | Add item and stay for the next |
-| **Checklist** | `Shift + ↑` / `Shift + ↓` | Reorder item |
-| **Checklist** | `Del` / `Backspace` | Delete item (asks inline) |
-| **Attachments** | `Enter` (on tile) | Preview image / download file |
-| **Attachments** | `Del` / `Backspace` (on tile) | Remove attachment |
-| **History** | `↑` `↓` | Newer / older version |
-| **History** | `PgUp` / `PgDn` | Jump 10 versions |
-| **History** | `Home` / `End` | Current / oldest version |
-
-### Rich-Text Editor
-
-| Context | Shortcut | Action |
-| --- | --- | --- |
-| **Text** | `Cmd/Ctrl + B` | Bold |
-| **Text** | `Cmd/Ctrl + I` | Italic |
-| **Text** | ``Cmd/Ctrl + ` `` | Inline code |
-| **Text** | `Cmd/Ctrl + Z` | Undo |
-| **Text** | `Cmd/Ctrl + Shift + Z` or `Cmd/Ctrl + Y` | Redo |
-| **Text** | `Shift + Enter` or `Cmd/Ctrl + Enter` | Line break |
-| **Text** | `Cmd/Ctrl + K` or `Right-click` | Open **Editor Menu** |
-| **Text** | `Esc` | Close menu, else leave card |
-| **Text styles** | `Ctrl + Shift + 0` | Plain text |
-| **Text styles** | `Ctrl + Shift + 1 / 2 / 3` | Heading 1–3 |
-| **Text styles** | `Ctrl + Shift + \` | Code block |
-| **Text styles** | `Ctrl + >` | Quote |
-| **Text styles** | `Alt + ↑` / `Alt + ↓` | Join with block above / below |
-| **While typing** | `# `, `## `, `### ` | Heading 1–3 (at line start) |
-| **While typing** | `- ` or `* ` | Bulleted list (at line start) |
-| **While typing** | `1. ` | Numbered list (at line start) |
-| **While typing** | `> ` | Quote (at line start) |
-| **While typing** | ```` ``` ```` | Code block (at line start) |
-| **While typing** | `Backspace` right after | Undo auto-formatting |
-| **Lists** | `Tab` or `Cmd/Ctrl + ]` | Nest item |
-| **Lists** | `Shift + Tab` or `Cmd/Ctrl + [` | Outdent item |
-| **Lists** | `Enter` | New item (empty item exits list) |
-| **Lists** | `Ctrl + Shift + 8` / `9` | Bulleted / numbered list |
-| **In Editor Menu** | `↑` `↓` `Home` `End` + `Enter` | Highlight and run item |
-| **In Editor Menu** | `L` / `U` | Add or edit link / remove link |
-| **In Editor Menu** | `I` / `M` | Inline code / insert image |
-| **In Editor Menu** | `0` / `B` / `1` `2` `3` | Plain text / code block / Heading 1–3 |
-| **In Editor Menu** | `T` / `X` | Insert table / insert matrix |
-| **In Image Picker** | `1`–`9` / `U` / `↑` `↓` + `Enter` | Insert existing image / upload new image |
-| **Tables & Matrices** | `Tab` / `Shift + Tab` | Next / previous cell (last cell adds row) |
-| **Tables & Matrices** | `Enter` | Next row (last row exits table) |
-| **Tables & Matrices** | `Shift + Enter` | Line break inside cell |
-| **Tables & Matrices (Menu)** | `W` `S` `A` `D` | Move row up/down or column left/right |
-| **Tables & Matrices (Menu)** | `X` | Transpose matrix |
-| **Tables & Matrices (Menu)** | `Shift + ↑↓←→` | Insert row / column |
-| **Tables & Matrices (Menu)** | `1` `2` `3` | Align column (matrix: cell) left / centre / right |
-| **Tables & Matrices (Menu)** | `R` / `C` / `T` | Delete row / column / table or matrix |
+![Contextual Keyboard Shortcuts dialog opened on the Board tab](images/shortcut-help.png)
 
 ---
 
@@ -781,7 +569,7 @@ sudo xattr -cr /Applications/Synkban.app
 Changing the **Data folder** points Synkban at the new folder without moving files automatically. Copy your existing `boards/` folder from the old Data Directory (by default `~/.config/synkban/data/boards/` on macOS/Linux or `%USERPROFILE%\.config\synkban\data\boards\` on Windows) into the new folder and Synkban will pick them up on the next refresh or restart.
 
 ### Why does Synkban have a Save button on cards instead of autosaving every keystroke?
-Syncing one JSON file per card across Dropbox, Syncthing, or Git works best when edits are written cleanly in one atomic step rather than mid-word every few milliseconds — and saving deliberately gives you meaningful **Card History** snapshots. Meanwhile, machine-local crash drafts (`draft.json`) ensure you still never lose unsaved typing if the app closes or reloads unexpectedly.
+Syncing one JSON file per card across Dropbox, Syncthing, or Git works best when edits are written cleanly in one atomic step rather than mid-word every few milliseconds — and saving deliberately gives you meaningful **Card History** snapshots. Meanwhile, machine-local crash **Drafts** ensure you still never lose unsaved typing if the app closes or reloads unexpectedly.
 
 ### A yellow warning banner says a file could not be read and was skipped — is my data lost?
 No. Synkban leaves skipped files untouched on disk so other boards and cards stay usable. This usually happens if a sync tool is mid-transfer or if a JSON file was edited manually with invalid syntax. Let your sync finish (or fix the syntax in the file path listed in the banner) and Synkban will pick it up on the next refresh.
@@ -790,7 +578,15 @@ No. Synkban leaves skipped files untouched on disk so other boards and cards sta
 No. Deleting a list automatically archives all cards that were inside it as **Orphaned Cards**. Press **`A`** on the board to open **Archived Cards** and click **Restore** to bring them back into the board's first list.
 
 ### How can I use Synkban on my phone or tablet?
-Run Synkban in Docker behind an HTTPS reverse proxy (such as the [Traefik + Tinyauth PWA setup](docker/README.md)), sign in once, and install it to your Home Screen. Touch screens support scrolling, tapping, and **long-press drag-and-drop** for reordering cards, lists, boards, labels, and checklist items.
+Run Synkban in Docker behind an HTTPS reverse proxy (see the **[Technical & Self-Hosting Reference](technical-reference.md)** and [Traefik + Tinyauth PWA setup](docker/README.md)), sign in once, and install it to your Home Screen. Touch screens support scrolling, tapping, and **long-press drag-and-drop** for reordering cards, lists, boards, labels, and checklist items.
 
 ### Why do Chinese, Japanese, or Korean (CJK) characters appear as `?` in exported PDFs?
-To keep the offline single binary and PDF export engine compact, CJK font files (10–18 MB each) are not bundled inside the binary, and the PDF/A standard requires replacing missing glyphs with `?`. Inside the Synkban app itself, CJK text displays normally using your system fonts.
+To keep the offline app and PDF export engine compact, CJK font files (10–18 MB each) are not bundled inside the app, and the PDF/A standard requires replacing missing glyphs with `?`. Inside the Synkban app itself, CJK text displays normally using your system fonts.
+
+---
+
+## Technical & Self-Hosting Reference
+
+Looking for the standalone web server CLI flags, environment variables, Docker & PWA instructions, `synkban.toml` syntax, or the on-disk folder structure?
+
+➡️ **[Technical & Self-Hosting Reference](technical-reference.md)**

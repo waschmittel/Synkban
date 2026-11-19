@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synkban — Local-First Kanban Boards &amp; Notes You Actually Own</title>
+  <meta name="description" content="A fast, keyboard-driven kanban board and structured note workspace stored as plain JSON files you can sync with Syncthing, Dropbox, iCloud, or Git.">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <script>
+    (() => {
+      try {
+        const s = localStorage.getItem("synkban-site-theme");
+        const d = s === "dark" || (s !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", d ? "dark" : "light");
+      } catch {}
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="./">
+        <img src="icon-192.png" alt="" width="28" height="28">
+        <span>Synkban</span>
+      </a>
+      <nav class="nav-links" id="nav-links" aria-label="Primary">
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#workflows">Workflows</a>
+        <a class="nav-link" href="#install">Install</a>
+        <a class="nav-link" href="guide/">User Guide</a>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <a class="nav-link nav-link--tech" href="technical/">Self-Hosting &amp; CLI</a>
+        <a class="nav-link" href="https://github.com/waschmittel/Synkban">GitHub</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle theme" aria-pressed="false" title="Toggle theme">
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button type="button" class="icon-btn nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-head">
+          <div class="eyebrow">
+            <span class="eyebrow-dot" aria-hidden="true"></span>
+            <span>Local-first · Open source (MIT) · macOS, Linux &amp; Windows</span>
+          </div>
+          <h1>Kanban boards and structured notes — stored as plain files you own.</h1>
+          <p class="lead">
+            Organise work across lists in <strong>Kanban Mode</strong>, switch any board to <strong>Notes Mode</strong> for long-form writing, and sync seamlessly through Dropbox, iCloud, Syncthing, or Git. No cloud account. No database lock-in.
+          </p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="#install">Download Desktop App</a>
+            <a class="btn btn-secondary" href="guide/">Read the User Guide</a>
+          </div>
+        </div>
+
+        <div class="showcase">
+          <div class="showcase-tabs" role="tablist" aria-label="Workspace previews">
+            <button type="button" class="tab-btn" role="tab" aria-selected="true" tabindex="0">
+              <span class="tab-dot" style="background:#4f46e5" aria-hidden="true"></span>
+              Kanban Mode
+            </button>
+            <button type="button" class="tab-btn" role="tab" aria-selected="false" tabindex="-1">
+              <span class="tab-dot" style="background:#0f766e" aria-hidden="true"></span>
+              Notes Mode
+            </button>
+            <button type="button" class="tab-btn" role="tab" aria-selected="false" tabindex="-1">
+              <span class="tab-dot" style="background:#0079bf" aria-hidden="true"></span>
+              Rich Card Editor
+            </button>
+            <button type="button" class="tab-btn" role="tab" aria-selected="false" tabindex="-1">
+              <span class="tab-dot" style="background:#334155" aria-hidden="true"></span>
+              Dark Mode
+            </button>
+          </div>
+          <div class="showcase-stage">
+            <div class="showcase-panel active" role="tabpanel">
+              <img src="images/kanban-mode.png" alt="Synkban Kanban Mode showing side-by-side lists, a collapsed list, card badges, and the bottom Board Dock" data-zoom data-caption="Kanban Mode — lists side by side, collapsed Done strip, due-date badges, and the bottom Board Dock.">
+              <div class="showcase-caption">
+                <span>Side-by-side lists, collapsible lists (<kbd>C</kbd>), due-date &amp; checklist badges, and instant board switching via the bottom <strong>Board Dock</strong>.</span>
+                <span class="zoom-hint">Click image to zoom</span>
+              </div>
+            </div>
+            <div class="showcase-panel" role="tabpanel">
+              <img src="images/notes-mode.png" alt="Synkban Notes Mode showing List Tabs, active card list, and inline Notes Pane with diagram and table" data-zoom data-caption="Notes Mode — press V to turn any board into List Tabs with a live side-by-side Notes Pane.">
+              <div class="showcase-caption">
+                <span>Press <kbd>V</kbd> to switch any board to <strong>Notes Mode</strong> — <strong>List Tabs</strong> on top, live <strong>Notes Pane</strong> beside your cards.</span>
+                <span class="zoom-hint">Click image to zoom</span>
+              </div>
+            </div>
+            <div class="showcase-panel" role="tabpanel">
+              <img src="images/card-modal-editor-menu.png" alt="Card Modal with rich description, inline image, aligned table, and the Cmd/Ctrl+K Editor Menu open" data-zoom data-caption="Card Modal — rich descriptions with inline images, tables, checklists, and the Cmd/Ctrl + K Editor Menu.">
+              <div class="showcase-caption">
+                <span>Structured rich text, inline images, aligned tables, and the context-sensitive <strong>Editor Menu</strong> (<kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd>).</span>
+                <span class="zoom-hint">Click image to zoom</span>
+              </div>
+            </div>
+            <div class="showcase-panel" role="tabpanel">
+              <img src="images/dark-mode.png" alt="Synkban board in Dark Mode with adapted board background and card surfaces" data-zoom data-caption="Dark Mode — adapts board colours, cards, and editor surfaces automatically.">
+              <div class="showcase-caption">
+                <span>Follows your system appearance or locks to Light / Dark mode — automatically tuning each board's colour palette.</span>
+                <span class="zoom-hint">Click image to zoom</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Value Pillars -->
+    <section class="section section--alt">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="section-kicker">Why Synkban?</span>
+          <h2>Simple files underneath. Serious speed on top.</h2>
+          <p>Built for personal workflows that should still work ten years from now — fast on your keyboard, gentle on your sync folder, and safe against accidents.</p>
+        </div>
+        <div class="pillars">
+          <article class="pillar">
+            <div class="pillar-icon pillar-icon--blue" aria-hidden="true">{}</div>
+            <h3>Plain files, zero lock-in</h3>
+            <p>No database, no proprietary vault, and no sign-up wall. Every board, list, and card is a clean JSON file you can inspect, back up, or copy anywhere.</p>
+          </article>
+          <article class="pillar">
+            <div class="pillar-icon pillar-icon--teal" aria-hidden="true">⇄</div>
+            <h3>Conflict-friendly sync</h3>
+            <p>One file per card plus sidecar attachments mean edits on different cards never clash in Syncthing, Dropbox, iCloud, or Git. External edits refresh every 15 seconds.</p>
+          </article>
+          <article class="pillar">
+            <div class="pillar-icon pillar-icon--indigo" aria-hidden="true">◫</div>
+            <h3>Kanban &amp; Notes on one board</h3>
+            <p>Track visual pipelines in Kanban Mode, or press <kbd>V</kbd> to read and write long-form specs side by side in Notes Mode without modal fatigue.</p>
+          </article>
+          <article class="pillar">
+            <div class="pillar-icon pillar-icon--amber" aria-hidden="true">✓</div>
+            <h3>Crash-safe &amp; built to last</h3>
+            <p>Deliberate <kbd>Cmd/Ctrl</kbd>+<kbd>S</kbd> saves keep sync clean while local crash drafts protect open typing. Two-step archive, 100-version history, and offline PDF/A-2u exports guard your work.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature Deep-Dive -->
+    <section class="section" id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="section-kicker">Everything you need, nothing bloated</span>
+          <h2>Designed to stay out of your way</h2>
+          <p>Every interaction works cleanly with the keyboard, mouse, or long-press touch — from quick task capture to archival PDF reports.</p>
+        </div>
+
+        <div class="feature-stack">
+          <div class="feature-row">
+            <div class="feature-copy">
+              <h3>See every board at a glance</h3>
+              <p>Start on <strong>Your Boards</strong> with custom colours, total card counts, highlighted overdue counts, and relative last-edited times. Drag or arrow-move boards into any order.</p>
+              <ul class="feature-list">
+                <li>Switch boards in one keystroke (<kbd>,</kbd> / <kbd>.</kbd> or <kbd>J</kbd> / <kbd>K</kbd>) or via the bottom <strong>Board Dock</strong>.</li>
+                <li>Per-session memory remembers your focused card, scroll position, and active filter when switching between boards.</li>
+                <li>Custom board colours adapt automatically in both Light and Dark mode.</li>
+              </ul>
+            </div>
+            <div class="feature-media">
+              <div class="shot-card">
+                <img src="images/board-overview.png" alt="Board Overview showing coloured boards, card counts, overdue count, and archive button" data-zoom data-caption="Board Overview — track active cards, overdue items, and last-edited times across coloured boards.">
+              </div>
+            </div>
+          </div>
+
+          <div class="feature-row feature-row--flip">
+            <div class="feature-copy">
+              <h3>Capture cards in one line with Quick-add</h3>
+              <p>Press <kbd>N</kbd> in any list and add labels or due dates right inside the card title — Synkban parses them live and previews what will be applied before you hit <kbd>Enter</kbd>.</p>
+              <ul class="feature-list">
+                <li><code>#label</code> matches existing labels loosely (ignoring case, spaces, and dashes) or creates new ones on the spot.</li>
+                <li>Numbers like <code>#42</code> stay literal title text so issue numbers are never swallowed.</li>
+                <li><code>due:fri</code>, <code>due:tomorrow</code>, <code>due:+3d</code>, or <code>due:2026-12-01</code> set the due date in one step.</li>
+              </ul>
+            </div>
+            <div class="feature-media">
+              <div class="shot-card shot-card--narrow">
+                <img src="images/quick-add.png" alt="Quick-add form parsing #docs, #v2-launch, and due:fri with live preview chips" data-zoom data-caption="Quick-add — live preview shows existing labels (solid), new labels (dashed), and the resolved due date.">
+              </div>
+            </div>
+          </div>
+
+          <div class="feature-row">
+            <div class="feature-copy">
+              <h3>Due dates that speak human, picked at keyboard speed</h3>
+              <p>Dates within a week read relatively (<em>Today</em>, <em>Tomorrow</em>, <em>in 3d</em>, <em>Overdue 2d</em>); further out they show the calendar date so you never have to do mental date math.</p>
+              <ul class="feature-list">
+                <li>Press <kbd>Cmd/Ctrl</kbd>+<kbd>U</kbd> inside a card and type <code>tomorrow</code>, <code>fri</code>, <code>+2w</code>, or <code>2026-12-01</code>.</li>
+                <li>Or press <kbd>↓</kbd> to step through the calendar grid by day, week, month, or year.</li>
+              </ul>
+            </div>
+            <div class="feature-media">
+              <div class="shot-card shot-card--medium">
+                <img src="images/due-date-picker.png" alt="Due Date Picker popover with typed input field, calendar grid, and quick buttons" data-zoom data-caption="Due Date Picker — type natural offsets or navigate the calendar grid without touching the mouse.">
+              </div>
+            </div>
+          </div>
+
+          <div class="feature-row feature-row--flip">
+            <div class="feature-copy">
+              <h3>Structured descriptions with Tables, Matrices &amp; Inline Images</h3>
+              <p>Write headings, code blocks, quotes, nested lists, smart links, tables, and transposable 2D <strong>Matrices</strong>. Everything stays structured and clean — never raw HTML.</p>
+              <ul class="feature-list">
+                <li>Matrices give you an open top-left corner, centred row and column headers, per-cell alignment, and one-step <strong>Transpose</strong>.</li>
+                <li>Paste screenshots directly into a description, or pick any attached image with <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> then <kbd>M</kbd>.</li>
+                <li>Flat <strong>Checklists</strong> (<kbd>Cmd/Ctrl</kbd>+<kbd>L</kbd>) and file <strong>Attachments</strong> up to 50 MB keep everything for a task in one card.</li>
+              </ul>
+            </div>
+            <div class="feature-media">
+              <div class="shot-card">
+                <img src="images/matrix.png" alt="Matrix in the description editor showing open top-left corner, centred headers, and mixed body alignment" data-zoom data-caption="Matrix in the description editor — open top-left corner, centred headers, and per-cell alignment.">
+                <div class="shot-caption">Matrix inside Notes Mode — also supports one-step Transpose (<kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> → <kbd>X</kbd>).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento Grid -->
+        <div class="bento">
+          <article class="bento-card">
+            <h4>Filter by text, due date &amp; labels</h4>
+            <p>Press <kbd>F</kbd> to narrow cards using combined AND filters across titles, descriptions, checklists, <em>Overdue / This week / Until…</em>, and board labels — with <code>matching/total</code> counts.</p>
+            <div class="shot-card">
+              <img src="images/filter-bar.png" alt="Filter Bar active with This week and Priority filters showing matching/total counts" data-zoom data-caption="Filter Bar — combine text, due-date range, and multiple labels with matching/total counts.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>100-version Card History &amp; diffs</h4>
+            <p>Press <kbd>Cmd/Ctrl</kbd>+<kbd>J</kbd> on any card to browse its last 100 content snapshots with field-by-field additions and removals — even row-by-row table diffs.</p>
+            <div class="shot-card">
+              <img src="images/card-history.png" alt="Card History dialog showing version list and field-by-field diff" data-zoom data-caption="Card History — compare any of the last 100 saved versions field by field.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>Offline archival PDF/A-2u export</h4>
+            <p>Press <kbd>Cmd/Ctrl</kbd>+<kbd>P</kbd> to export a saved card as a self-contained PDF/A-2u document with embedded fonts, clickable links, inline diagrams, repeating table headers, and checklists.</p>
+            <div class="shot-card">
+              <img src="images/pdf-export-preview.png" alt="Rendered preview of an exported PDF/A-2u card" data-zoom data-caption="Archival PDF/A-2u export — crisp typography, inline images, and tables generated completely offline.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>Attachments &amp; inline images</h4>
+            <p>Drop files anywhere onto an open card or paste images from the clipboard. Image tiles show thumbnails and an <code>in text</code> badge when embedded in the description; other files show extension badges.</p>
+            <div class="shot-card">
+              <img src="images/attachments.png" alt="Attachments grid with image thumbnail, PDF badge, inline in text badge, and Add tile" data-zoom data-caption="Attachments grid — image thumbnails, in text indicator, non-image file badges, and drag-and-drop upload.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>Ordered labels &amp; safe Label Merge</h4>
+            <p>Press <kbd>G</kbd> to open the <strong>Label Drawer</strong>. Drag or press <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> to reorder labels everywhere on the board, or merge duplicates safely when renaming.</p>
+            <div class="shot-card">
+              <img src="images/label-drawer.png" alt="Right-side Label Drawer showing ordered coloured labels" data-zoom data-caption="Label Drawer — label order here sets label order across cards, modals, and filters.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>Two-step Archive safety</h4>
+            <p>Boards, cards, and even deleted lists' cards go to the <strong>Archive Panel</strong> (<kbd>A</kbd>) first as <strong>Orphaned Cards</strong> or archived items — restore with one click or confirm permanent deletion.</p>
+            <div class="shot-card">
+              <img src="images/archive-panel.png" alt="Archived Cards panel with Restore and inline Delete permanently confirmation" data-zoom data-caption="Archive Panel — restore archived cards or confirm before permanent deletion.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>Contextual shortcut help (<kbd>?</kbd>)</h4>
+            <p>No cheat sheets to memorise: press <kbd>?</kbd> anywhere outside a text field and the help dialog opens straight to the tab for where your focus is (Boards, Board, Notes, Card, or Editor).</p>
+            <div class="shot-card">
+              <img src="images/shortcut-help.png" alt="Contextual Keyboard Shortcuts dialog opened on the Board tab" data-zoom data-caption="Contextual Keyboard Shortcuts — press ? anytime to see keys for your current view.">
+            </div>
+          </article>
+
+          <article class="bento-card">
+            <h4>Themes, startup view &amp; data folder</h4>
+            <p>Open <strong>Settings</strong> from any view to pick System, Light, or Dark appearance, launch straight into your last board, or point the Desktop App at a synced folder.</p>
+            <div class="shot-card">
+              <img src="images/settings.png" alt="Settings dialog showing Appearance, startup view, and Data folder options" data-zoom data-caption="Settings — choose System/Light/Dark mode, startup view, and your Data Directory.">
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Make It Yours (Goal 3) -->
+    <section class="section section--alt" id="workflows">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="section-kicker">Make it yours</span>
+          <h2>Four ways people actually use Synkban</h2>
+          <p>Start simple with one board, then adapt Synkban's views and plain-file storage to match how you think and work.</p>
+        </div>
+        <div class="recipes">
+          <article class="recipe">
+            <span class="recipe-tag">Daily Tasks</span>
+            <h3>Personal Project Hub</h3>
+            <p>Use <strong>Kanban Mode</strong> with <em>Backlog</em>, <em>Doing</em>, and collapsed <em>Done</em> (<kbd>C</kbd>). Capture tasks fast with <code>#label due:fri</code>, filter by <strong>This week</strong> on Monday morning, and keep the Board Overview as your triage dashboard.</p>
+          </article>
+          <article class="recipe">
+            <span class="recipe-tag">Long-Form Writing</span>
+            <h3>Living Reference Notebook</h3>
+            <p>Create a board for docs, study notes, or meeting logs and switch it to <strong>Notes Mode</strong> (<kbd>V</kbd>). Each board remembers its own mode, so notebooks open directly as <strong>List Tabs</strong> + inline <strong>Notes Pane</strong> on every device.</p>
+          </article>
+          <article class="recipe">
+            <span class="recipe-tag">Multi-Device Sync</span>
+            <h3>Private Sync Without the Cloud Tax</h3>
+            <p>Point <strong>Settings → Data folder</strong> on each computer to a shared Syncthing, Dropbox, or iCloud Drive folder. Edit offline on a plane, let your sync tool merge files later, and see external updates flow in automatically.</p>
+          </article>
+          <article class="recipe">
+            <span class="recipe-tag">Deliverables &amp; Records</span>
+            <h3>Clean PDF/A Handoffs</h3>
+            <p>Draft specs with embedded screenshots, checklists, and comparison matrices, then press <kbd>Cmd/Ctrl</kbd>+<kbd>P</kbd> to share a crisp archival <strong>PDF/A-2u</strong> snapshot with clients or teammates who don't use Synkban.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install & First 2 Minutes (Goal 3 - Everyday Desktop Focus) -->
+    <section class="section" id="install">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="section-kicker">Get started in minutes</span>
+          <h2>Install the Desktop App</h2>
+          <p>Free, open-source installers for macOS, Windows, and Linux — everything runs locally out of the box.</p>
+        </div>
+
+        <div class="install-box">
+          <div class="os-tabs" role="tablist" aria-label="Operating system">
+            <button type="button" class="os-tab" role="tab" data-os="macos" aria-selected="true">macOS</button>
+            <button type="button" class="os-tab" role="tab" data-os="windows" aria-selected="false">Windows</button>
+            <button type="button" class="os-tab" role="tab" data-os="linux" aria-selected="false">Linux</button>
+          </div>
+
+          <div class="os-panel active" data-os="macos" role="tabpanel">
+            <h3>macOS (Apple Silicon)</h3>
+            <p>Download the <code>.dmg</code> installer (or <code>.zip</code> archive) from the latest GitHub Release and drag <strong>Synkban.app</strong> into <strong>Applications</strong>.</p>
+            <p><a class="btn btn-primary" href="https://github.com/waschmittel/Synkban/releases/latest">Download from GitHub Releases</a></p>
+            <div class="callout callout--warn">
+              <strong>First launch on macOS:</strong> Release builds are currently unsigned, so macOS Gatekeeper may say <em>"Synkban.app is damaged and can't be opened."</em> Run this once in Terminal, then open Synkban normally:
+              <div class="code-block">
+                <pre><code>sudo xattr -cr /Applications/Synkban.app</code></pre>
+                <button type="button" class="code-copy">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="os-panel" data-os="windows" role="tabpanel">
+            <h3>Windows</h3>
+            <p>Download and run the <code>.exe</code> NSIS installer from the latest GitHub Release. Synkban installs a native desktop window with zero background services or external dependencies.</p>
+            <p><a class="btn btn-primary" href="https://github.com/waschmittel/Synkban/releases/latest">Download Windows Installer</a></p>
+          </div>
+
+          <div class="os-panel" data-os="linux" role="tabpanel">
+            <h3>Linux</h3>
+            <p>Choose either the portable <code>.AppImage</code> (make executable and run) or the <code>.deb</code> package for Debian/Ubuntu from the latest GitHub Release.</p>
+            <p><a class="btn btn-primary" href="https://github.com/waschmittel/Synkban/releases/latest">Download AppImage / .deb</a></p>
+          </div>
+        </div>
+
+        <div class="steps-strip">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <h4>Create a board</h4>
+            <p>Press <kbd>N</kbd>, give your board a title, and optionally pick a custom colour from the palette icon.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <h4>Add lists &amp; cards</h4>
+            <p>Press <kbd>L</kbd> to add lists, then <kbd>N</kbd> to quick-add cards like <code>Plan trip #personal due:fri</code>.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">3</div>
+            <h4>Write &amp; organise</h4>
+            <p>Press <kbd>Enter</kbd> on a card to edit notes, checklists, and attachments, or <kbd>V</kbd> for Notes Mode.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">4</div>
+            <h4>Connect your sync</h4>
+            <p>Open <strong>Settings → Data folder → Browse…</strong> and pick your Syncthing, Dropbox, or iCloud folder.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cleanly Separated Technical & Self-Hosting Band (Goal 4) -->
+    <section class="tech-band" id="technical">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="tech-badge">For Self-Hosters &amp; Power Users</span>
+          <h2>Technical Reference, Docker &amp; CLI</h2>
+          <p>Using the Desktop App? You don't need anything in this section — head straight to the <a href="guide/">User Guide</a>. If you want a self-hosted web server, mobile PWA, or raw folder layout, everything technical lives separately below.</p>
+        </div>
+
+        <div class="tech-grid">
+          <article class="tech-card">
+            <h3>Standalone Web Server</h3>
+            <p>Single self-contained binary with embedded web assets. Configure via <code>--data-dir</code>, <code>DATA_DIR</code>, <code>HOST</code>, and <code>PORT</code>. Place behind a private network or login proxy.</p>
+            <div class="code-block">
+              <pre><code>HOST=0.0.0.0 PORT=8080 ./synkban</code></pre>
+              <button type="button" class="code-copy">Copy</button>
+            </div>
+          </article>
+
+          <article class="tech-card">
+            <h3>Docker &amp; Mobile PWA</h3>
+            <p>Multi-arch container (<code>ghcr.io/waschmittel/synkban</code>) ready for Tailscale or Traefik + Tinyauth — installable as a PWA on iOS, Android, and desktop with long-press touch drag.</p>
+            <div class="code-block">
+              <pre><code>docker pull ghcr.io/waschmittel/synkban:latest</code></pre>
+              <button type="button" class="code-copy">Copy</button>
+            </div>
+          </article>
+
+          <article class="tech-card">
+            <h3>JSON Layout &amp; <code>synkban.toml</code></h3>
+            <p>Clean separation between synced <code>boards/</code> data and machine-local <code>~/.config/synkban/</code> settings + crash drafts, using atomic renames and sidecar attachments.</p>
+            <div class="code-block">
+              <pre><code>data_dir = "~/Sync/synkban"
+startup_view = "last"</code></pre>
+              <button type="button" class="code-copy">Copy</button>
+            </div>
+          </article>
+        </div>
+
+        <div class="tech-cta">
+          <a class="btn btn-primary" href="technical/">Open Self-Hosting, CLI &amp; Storage Docs →</a>
+          <a class="btn btn-secondary" href="https://github.com/waschmittel/Synkban/blob/main/docs/docker/README.md">Docker + Traefik PWA Guide</a>
+          <a class="btn btn-secondary" href="https://github.com/waschmittel/Synkban/blob/main/docs/development.md">Developer Guide</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand" href="./">
+          <img src="icon-192.png" alt="" width="24" height="24">
+          <span>Synkban</span>
+        </a>
+        <p style="margin:10px 0 0;max-width:340px;">
+          Local-first, keyboard-driven kanban boards &amp; notes. Released under the MIT License.
+        </p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Using Synkban</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#workflows">Workflows</a></li>
+            <li><a href="#install">Download Desktop App</a></li>
+            <li><a href="guide/">User Guide</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Technical &amp; Source</h4>
+          <ul>
+            <li><a href="technical/">Self-Hosting &amp; CLI</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban/blob/main/docs/docker/README.md">Docker &amp; PWA Guide</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban/blob/main/docs/development.md">Development &amp; API</a></li>
+            <li><a href="https://github.com/waschmittel/Synkban">GitHub Repository</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="site.js"></script>
+</body>
+</html>

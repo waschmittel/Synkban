@@ -4,7 +4,7 @@ A **local-first, keyboard-driven, syncable** (via any third party file sync) kan
 
 ![demo](demo.gif)
 
-➡️ **[Read the User Guide](docs/user-guide.md)** — full walkthrough of features, Kanban & Notes modes, syncing, crash safety, and keyboard shortcuts.
+➡️ **[Explore the Website](https://waschmittel.github.io/Synkban/)** · **[Read the User Guide](docs/user-guide.md)** · **[Technical & Self-Hosting Reference](docs/technical-reference.md)**
 
 Can be run in two ways:
 
@@ -38,8 +38,9 @@ Can be run in two ways:
 
 ## Documentation
 
-- **[User Guide](docs/user-guide.md)** — complete guide to features, workflows, syncing across devices, backups, and shortcuts
-- **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docs/docker/README.md)** — Docker image, persistent single-prompt login, and mobile/desktop PWA setup
+- **[User Guide](docs/user-guide.md)** — everyday Desktop App walkthrough: Kanban & Notes modes, rich card editing, filters, PDF export, and syncing
+- **[Technical & Self-Hosting Reference](docs/technical-reference.md)** — standalone Web Mode CLI/env vars, Docker/PWA setup, `synkban.toml`, and storage internals
+- **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docs/docker/README.md)** — Docker Compose with persistent single-prompt login and mobile/desktop PWA setup
 - **[PDF Export Examples](docs/export-examples/README.md)** — reference PDFs showing layout and typography rules
 - **[Development Guide](docs/development.md)** — dev setup, API reference, project structure, architecture notes, and testing
 
