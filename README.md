@@ -1,6 +1,6 @@
 # Synkban
 
-**Kanban boards and structured notes — stored as plain files you own.**
+**Kanban boards and notes — stored as plain files you own. Fast and keyboard friendly.**
 
 Organise tasks across lists in **Kanban Mode**, switch any board to **Notes Mode** for long-form writing, and sync seamlessly with Syncthing, Dropbox, iCloud, Nextcloud, or Git. Available as a native **Desktop App** (macOS, Windows, Linux) or self-hosted **Web Mode** / mobile PWA — no cloud account, no database lock-in.
 
