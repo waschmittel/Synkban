@@ -1,105 +1,88 @@
 # Synkban
 
-A **local-first, keyboard-driven, syncable** (via any third party file sync) kanban board with a Rust backend (Actix Web) and SolidJS frontend. Data stored as JSON files on disk.
+**Kanban boards and structured notes — stored as plain files you own.**
 
-![demo](demo.gif)
+Organise tasks across lists in **Kanban Mode**, switch any board to **Notes Mode** for long-form writing, and sync seamlessly with Syncthing, Dropbox, iCloud, Nextcloud, or Git. Available as a native **Desktop App** (macOS, Windows, Linux) or self-hosted **Web Mode** / mobile PWA — no cloud account, no database lock-in.
 
-➡️ **[Explore the Website](https://waschmittel.github.io/Synkban/)** · **[Read the User Guide](docs/user-guide.md)** · **[Technical & Self-Hosting Reference](docs/technical-reference.md)**
+➡️ **[Website](https://waschmittel.github.io/Synkban/)** · **[Download Desktop App](https://github.com/waschmittel/Synkban/releases/latest)** · **[User Guide](docs/user-guide.md)** · **[Technical & Self-Hosting Reference](docs/technical-reference.md)**
 
-Can be run in two ways:
+![Synkban demo](demo.gif)
 
-* Standalone **Desktop Mode** app (macOS, Linux, Windows)
-* **Web Mode** server / Docker container (installable as a PWA) for local use or behind an authenticating proxy
+## Why Synkban?
 
-## Features
+- **Plain files, zero lock-in** — Every board, list, and card is readable JSON on disk (with sidecar attachment files). Copy, back up, or inspect your workspace anytime.
+- **Conflict-friendly sync** — One JSON file per card means edits on different cards never clash in Syncthing, Dropbox, iCloud, or Git. External file changes refresh every 15 seconds.
+- **Kanban Mode & Notes Mode on one board** — Track pipelines side by side, or press `V` to turn any board into **List Tabs** with an inline **Notes Pane** for focused writing.
+- **Crash-safe & built to last** — Deliberate `Cmd/Ctrl + S` saves keep sync clean while machine-local **Draft** recovery protects unsaved typing. Two-step **Archive**, 100-version **Card History**, and offline **PDF/A-2u** export safeguard your work.
 
-- **Boards** — create, rename inline, recolour (with automatic light/dark palette), archive/restore, reorder, and switch quickly via the bottom Board Dock
-- **Kanban Mode & Notes Mode** — view lists side by side or press `V` to switch any board into a split master-detail writing view with list tabs
-- **Lists** — add, rename, reorder (drag or keyboard), collapse into narrow vertical strips (`C`), and delete safely (contained cards are archived)
-- **Quick-add & Cards** — drag within/across lists (mouse, keyboard, or long-press touch), or assign `#label` and `due:` tokens right in a new card's title
-- **Rich Card Detail** — formatted title (`**bold**` / `*italic*`), structured rich-text description (headings, code blocks, quotes, nested lists, smart links, tables, transposable matrices, and inline images), keyboard-first due date picker, flat checklist, and file attachments (≤50 MB) with image thumbnails and lightbox preview
-- **Labels & Filtering** — per-board ordered labels with loose matching and merge support; filter cards by text, due date (`Overdue`, `This week`, `Until…`), and labels
-- **Card History & PDF/A Export** — inspect the last 100 content snapshots with field-by-field diffs, or export any card offline to archival **PDF/A-2u**
-- **Archive, Crash Safety & Resilience** — two-step archive before permanent deletion, machine-local crash drafts for open unsaved edits, warning banners for partial/corrupt files, and offline/outage resilience
-- **Keyboard-first & Dark Mode** — cross-platform shortcuts (`?` for contextual help) and system/light/dark themes
-- **File-based Sync & Single Binary** — plain JSON files + sidecar attachments on disk with 15-second external change polling; frontend assets embedded into one Rust binary
+## What You Can Do
 
-## Quick Start
+- **Board Overview & Board Dock** — Start on **Your Boards** with custom colours (auto-tuned light/dark palette), total card and overdue counts, and relative last-edited times. Rename boards inline, reorder them, or switch boards quickly from the bottom **Board Dock** (`,`, `.`, `J`, `K`) with per-session view memory.
+- **Kanban Mode & Collapsed Lists** — Navigate lists with sticky-row arrow keys, collapse quieter lists like *Done* into narrow vertical strips (`C`) that still accept drops, and move cards by mouse drag, keyboard (`Shift + ← / →`), or long-press touch.
+- **Notes Mode (`V`)** — Dedicated split master-detail workspace where each board saves its preferred view mode across synced devices.
+- **Quick-add (`#label` & `due:`)** — Assign labels and due dates (`#design`, `due:fri`, `due:tomorrow`, `due:+3d`, `due:2026-12-01`) directly in a new card's title with live preview chips.
+- **Rich Card Detail** — Bold/italic titles (`**bold**`, `*italic*`), structured rich-text **Description** via the **`Cmd/Ctrl + K` Editor Menu** (Heading 1–3, code blocks, quotes, nested lists, smart links, tables, transposable 2D **Matrices**, and inline pasted/embedded images), keyboard-first **Due Date Picker** (`Cmd/Ctrl + U`), flat **Checklists** (`Cmd/Ctrl + L`), and file **Attachments** (≤50 MB) with thumbnails and preview lightbox.
+- **Ordered Labels & Filter Bar** — Manage and reorder board **Labels** in the **Label Drawer** (`G`, with safe **Label Merge** on rename), and narrow any board via the **Filter Bar** (`F`) combining text, due-date range (*Overdue*, *This week*, *Until…*), and labels.
+- **History, PDF/A Export & Safety** — Compare the last 100 saved versions field-by-field (`Cmd/Ctrl + J`), export saved cards offline to archival **PDF/A-2u** (`Cmd/Ctrl + P`), recover items from the **Archive Panel** (`A`), choose System / Light / Dark mode in **Settings**, and press **`?`** anywhere for contextual shortcut help.
 
-```bash
-# Build everything into a single binary
-./build.sh
+## Install the Desktop App
 
-# Run (creates ~/.config/synkban/data/ automatically)
-./backend/target/release/synkban
+Download prebuilt installers for **macOS**, **Windows**, and **Linux** from the **[latest GitHub Release](https://github.com/waschmittel/Synkban/releases/latest)**:
 
-# Open http://localhost:8080
-```
+- **macOS (Apple Silicon):** Open the `.dmg` (or `.zip`) and drag **Synkban.app** into **Applications**. Because release builds are currently unsigned, macOS Gatekeeper may warn on first launch — run once in Terminal:
+  ```bash
+  sudo xattr -cr /Applications/Synkban.app
+  ```
+- **Windows:** Run the `.exe` installer.
+- **Linux:** Launch the portable `.AppImage` or install the `.deb` package.
 
-## Documentation
+To sync across devices, open **⚙ Settings → Data folder → Browse…** and point Synkban at any folder inside Syncthing, Dropbox, iCloud Drive, Nextcloud, or Git. For a complete everyday walkthrough, see the **[User Guide](docs/user-guide.md)**.
 
-- **[User Guide](docs/user-guide.md)** — everyday Desktop App walkthrough: Kanban & Notes modes, rich card editing, filters, PDF export, and syncing
-- **[Technical & Self-Hosting Reference](docs/technical-reference.md)** — standalone Web Mode CLI/env vars, Docker/PWA setup, `synkban.toml`, and storage internals
-- **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docs/docker/README.md)** — Docker Compose with persistent single-prompt login and mobile/desktop PWA setup
-- **[PDF Export Examples](docs/export-examples/README.md)** — reference PDFs showing layout and typography rules
-- **[Development Guide](docs/development.md)** — dev setup, API reference, project structure, architecture notes, and testing
+---
 
-## Configuration
+## Self-Hosting, CLI & Developers
 
-Environment variables and CLI flags:
+Everything below is only needed for headless servers, Docker / mobile PWA setups, raw configuration files, or building from source.
 
-| Variable             | Default               | Description                                                |
-| -------------------- | --------------------- | ---------------------------------------------------------- |
-| `HOST`               | `127.0.0.1`           | Bind address                                               |
-| `PORT`               | `8080`                | Bind port                                                  |
-| `DATA_DIR`           | `~/.config/synkban/data` | **Path to the data directory** (created if absent)      |
-| `SYNKBAN_CONFIG_DIR` | `~/.config/synkban`   | Directory for `synkban.toml` and local crash-recovery draft |
+### Web Mode & Docker / PWA
 
-| Flag                | Description                                        |
-| ------------------- | -------------------------------------------------- |
-| `--data-dir <path>` | Data directory; takes precedence over `DATA_DIR`   |
+Synkban also runs as a single self-contained web server binary (or multi-arch Docker container) installable as a **Progressive Web App (PWA)** on iOS, Android, and desktop:
 
 ```bash
-HOST=0.0.0.0 PORT=3000 DATA_DIR=/var/lib/tc ./synkban
-# or
-./synkban --data-dir /var/lib/tc
+# Run the standalone web server (HTTP on localhost:8080 by default)
+HOST=0.0.0.0 PORT=8080 ./synkban
+
+# Or pull the multi-arch container image
+docker pull ghcr.io/waschmittel/synkban:latest
 ```
 
-### Config file
+> **Security note:** Web Mode has **no built-in authentication** (single-user design). Bind to `127.0.0.1`, run over a private network such as Tailscale, or place it behind an authenticating reverse proxy (see the Traefik + Tinyauth PWA setup guide).
 
-Persistent settings live in `~/.config/synkban/synkban.toml` (all platforms and modes; directory overridable via `SYNKBAN_CONFIG_DIR`):
+Full CLI flags (`--data-dir`), environment variables (`HOST`, `PORT`, `DATA_DIR`, `SYNKBAN_CONFIG_DIR`), `synkban.toml`, and the on-disk JSON storage layout live in the **[Technical & Self-Hosting Reference](docs/technical-reference.md)**.
 
-```toml
-data_dir = "/home/me/Sync/synkban"   # optional custom data directory
-startup_view = "last"                # "overview" (default) | "last"
-theme = "system"                     # "system" (default) | "light" | "dark"
-last_board_id = "…"                  # maintained automatically
+### Build from Source
+
+Synkban compiles a SolidJS frontend embedded directly into a Rust (Actix Web) binary, with an optional Electron desktop shell:
+
+```bash
+./build.sh            # builds frontend, Rust release binary, and runs Playwright e2e
+./build.sh --desktop  # packages the Electron Desktop App into electron/dist/
 ```
 
-You normally never edit it — the in-app **⚙ Settings** dialog (gear button in the top bar) writes it for you.
+### Documentation
 
-### How the effective data directory is determined
+**For Users**
 
-The data directory is the one setting that decides **where all your boards live**. Resolution order (identical in web server and desktop mode):
+- **[Website & Showcase](https://waschmittel.github.io/Synkban/)** — Feature overview, interactive previews, and Desktop App downloads
+- **[User Guide](docs/user-guide.md)** — Everyday walkthrough for Kanban & Notes modes, Quick-add, rich editing, filters, PDF export, and syncing
 
-1. `--data-dir` CLI flag
-2. `DATA_DIR` environment variable
-3. `data_dir` in `~/.config/synkban/synkban.toml`
-4. default: `~/.config/synkban/data/`
+**For Self-Hosters & Developers**
 
-Created automatically on first run. In the desktop app a custom folder (e.g. inside your Syncthing/Dropbox tree) can be chosen via **⚙ Settings** → *Data folder* → *Browse…*; saving restarts the app on the new folder. Existing boards are **not** moved automatically — copy the `boards/` folder yourself.
-
-### Startup view
-
-By default the app opens on the board overview. **⚙ Settings** → *On startup, open* switches to reopening the last used board instead (persisted in the config file; deep links always win, and a board that no longer exists falls back to the overview).
-
-Data is plain JSON files: to back up, copy the directory; to migrate, move it to the new host and point `DATA_DIR` at it. The on-disk layout and file formats are documented in the [development guide](docs/development.md#data-storage).
-
-## Self-Hosting & Docker
-
-Synkban's web server has **no authentication of its own** (single-user MVP), so run it locally, on a private network, or behind an authenticating reverse proxy:
-
-➡️ **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docs/docker/README.md)** — `ghcr.io/waschmittel/synkban`, local/standalone Docker runs, and Docker Compose with persistent single-prompt login and unauthenticated PWA metadata
+- **[Technical & Self-Hosting Reference](docs/technical-reference.md)** — Web Mode CLI flags, environment variables, Docker/PWA overview, `synkban.toml`, and storage internals
+- **[Docker + Traefik + Tinyauth PWA Guide](docs/docker/README.md)** — Docker Compose setup with persistent single-prompt login and mobile PWA support
+- **[PDF Export Examples](docs/export-examples/README.md)** — Generated PDF/A-2u reference samples
+- **[Development Guide](docs/development.md)** — Dev workflow, REST API reference, architecture notes, and testing
+- **[Architecture Decision Records](docs/adr/)** & **[Ubiquitous Language](UBIQUITOUS_LANGUAGE.md)** — Design decisions and domain glossary
 
 ## License
 
