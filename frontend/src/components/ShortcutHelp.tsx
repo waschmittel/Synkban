@@ -227,7 +227,7 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k(A, "`")], "Inline code"],
           [[k(A, "Z")], "Undo"],
           [[k(A, "Shift", "Z"), k(A, "Y")], "Redo"],
-          [[k("Shift", "Enter"), k(A, "Enter")], "Line break"],
+          [[k("Shift", "Enter"), k(A, "Enter")], "Line break (code block: exit below)"],
           [[k(A, "K"), k("Right-click")], "Editor menu: link, code, image, style, table"],
           [[k("Esc")], "Close the menu, else leave the card"],
         ],
@@ -240,6 +240,9 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("Ctrl", "Shift", "\\")], "Code block"],
           [[k("Ctrl", ">")], "Quote"],
           [[k("Alt", "↑"), k("Alt", "↓")], "Join with the block above / below"],
+          [[k("↑"), k("↓")], "Past a block's edge (or click outside): cursor before / after"],
+          [[k("Enter")], "In a code block on a blank trailing line: exit below"],
+          [[k("⌫")], "In an empty code block: turn into plain text"],
         ],
       },
       {
@@ -271,6 +274,7 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("I"), k("M")], "Inline code, insert image"],
           [[k("0"), k("B"), k("1", "2", "3")], "Plain, code block, heading 1–3"],
           [[k("T"), k("X")], "Insert table, insert matrix"],
+          [[k("Shift", "P"), k("P")], "Insert paragraph above / below block"],
         ],
       },
       {

@@ -13,6 +13,7 @@ A tight schema keeps the stored format, the server-side text extraction (`descri
 - New node types are a data-format change: update `schema.json`, backend text extraction, `pdf.rs` (+ corner cases), `diff.ts`, and the compatibility note in ADR-0017.
 - The sticky-note tint (`#fffbe6`, dark variant in ADR-0013) distinguishes the description from the rest of the modal.
 - `Tab`/`Shift+Tab` indent/outdent list items (`Mod-]`/`Mod-[` also work). Inside a list they always belong to the editor: an item that can't move (the first has nothing to nest under) is a no-op, never a focus jump out of the description; outside lists and tables `Tab` moves focus on. Ctrl/Cmd+B/I toggle marks.
+- **Escaping blocks (`blockEscape.ts`):** `code_block`, `blockquote`, `bullet_list` and `ordered_list` opt into ProseMirror's gap cursor (`createGapCursor: true`; `list_item` sets `allowGapCursor: false`; `prosemirror-gapcursor` stylesheet + theme-aware cursor in `app.css`), and clicking editor padding above, between or below closed blocks places the gap cursor there without mutating the document until text or an image is inserted. Inside a code block, pressing `Enter` on an already-blank trailing line strips the trailing blank lines and exits into a new paragraph below (in addition to `Shift+Enter`/`Accel+Enter`), and `Backspace` on an empty code block converts it to a paragraph (after `undoInputRule`).
 
 ## Links
 

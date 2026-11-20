@@ -14,6 +14,7 @@
 | Code | Inline code (`I`) | always |
 | Text style | Plain (`0`), Code block (`B`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
 | Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`) | outside tables |
+| Block | Insert paragraph above (`Shift+P`), Insert paragraph below (`P`) | inside tables, code blocks, quotes, lists (before Delete inside tables) |
 | Table | move row/column (`W`/`S` up/down, `A`/`D` left/right), transpose matrix (`X`), insert row/column (Shift+arrows), align column or matrix cell (`1`/`2`/`3`), delete row/column/table or matrix (`R`/`C`/`T`; tinted danger) | inside tables/matrices |
 
 ## Why

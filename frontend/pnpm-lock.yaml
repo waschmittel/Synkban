@@ -17,6 +17,9 @@ importers:
       prosemirror-example-setup:
         specifier: ^1.2.4
         version: 1.2.4
+      prosemirror-gapcursor:
+        specifier: ^1.4.1
+        version: 1.4.1
       prosemirror-inputrules:
         specifier: ^1.6.0
         version: 1.6.0

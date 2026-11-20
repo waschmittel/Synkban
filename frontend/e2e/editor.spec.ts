@@ -553,3 +553,136 @@ test("Tab nests list items and Shift+Tab lifts them; in a list Tab never leaves 
   await page.keyboard.press("Tab");
   await expect(editor(page)).not.toBeFocused();
 });
+
+async function expectGapCursor(page: Page) {
+  const gap = editor(page).locator(".ProseMirror-gapcursor");
+  await expect(gap).toHaveCount(1);
+  await expect
+    .poll(() =>
+      gap.evaluate((el) => ({
+        display: getComputedStyle(el).display,
+        border: parseFloat(getComputedStyle(el, "::after").borderTopWidth),
+      })),
+    )
+    .toMatchObject({ display: "block" });
+  expect(
+    await gap.evaluate((el) => parseFloat(getComputedStyle(el, "::after").borderTopWidth)),
+  ).toBeGreaterThan(0);
+}
+
+test("code block: gap cursor navigation, padding clicks, menu escape, triple-Enter and Backspace", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Editor Code Escape");
+  const pm = editor(page);
+
+  // Plain paragraph omits the block-escape menu items.
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu-item", { hasText: "Insert paragraph above" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Typing ``` converts to a code block; immediate Backspace undoes the input rule back to ```.
+  await page.keyboard.type("```");
+  await expect(pm.locator("pre")).toHaveCount(1);
+  await page.keyboard.press("Backspace");
+  await expect(pm.locator("pre")).toHaveCount(0);
+  await expect(pm.locator("p")).toHaveText("```");
+
+  // An empty code block created via the menu turns back into a paragraph on Backspace.
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("b");
+  await expect(pm.locator("pre")).toHaveCount(1);
+  await page.keyboard.press("Backspace");
+  await expect(pm.locator("pre")).toHaveCount(0);
+  await expect(pm.locator("p")).toHaveCount(1);
+
+  // Two Enters allow a blank line inside the code block; a third exits into a paragraph below.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("b");
+  await page.keyboard.type("line1");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("line2");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(pm.locator(":scope > p")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("after");
+  await expect(pm.locator(":scope > pre")).toHaveText("line1\nline2");
+  await expect(pm.locator(":scope > p")).toHaveText("after");
+
+  // Remove the trailing paragraph so the code block stands alone, then save & reopen clean.
+  await pm.locator(":scope > p").click();
+  await settle(page);
+  await page.keyboard.press("End");
+  for (let i = 0; i < 6; i++) await page.keyboard.press("Backspace");
+  await expect(pm.locator(":scope > p")).toHaveCount(0);
+  await page.locator(".modal-save-btn").click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "Editor card" }).click();
+  await expect(pm.locator("pre")).toHaveCount(1);
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Clicking the padding above and below places a gap cursor without dirtying the card.
+  const pmBox = (await pm.boundingBox())!;
+  const preBox = (await pm.locator("pre").boundingBox())!;
+  await pm.click({ position: { x: pmBox.width / 2, y: Math.max(2, (preBox.y - pmBox.y) / 2) } });
+  await expectGapCursor(page);
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  await pm.click({
+    position: {
+      x: pmBox.width / 2,
+      y: Math.min(pmBox.height - 2, (preBox.y + preBox.height - pmBox.y + pmBox.height) / 2),
+    },
+  });
+  await expectGapCursor(page);
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // ArrowUp from the top line and ArrowDown from the bottom line place gap cursors;
+  // repeating the arrow at the document edge keeps the gap cursor rather than falling back inside.
+  await pm.locator("pre").click({ position: { x: 16, y: 18 } });
+  await settle(page);
+  await page.keyboard.press("ArrowUp");
+  await expectGapCursor(page);
+  await page.keyboard.press("ArrowUp");
+  await expectGapCursor(page);
+  await page.keyboard.type("before code");
+  await expect(pm.locator(":scope > :first-child")).toHaveText("before code");
+
+  const preBox2 = (await pm.locator("pre").boundingBox())!;
+  await pm.locator("pre").click({ position: { x: 16, y: preBox2.height - 18 } });
+  await settle(page);
+  await page.keyboard.press("ArrowDown");
+  await expectGapCursor(page);
+  await page.keyboard.press("ArrowDown");
+  await expectGapCursor(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("below code");
+  await expect(pm.locator(":scope > :last-child")).toHaveText("below code");
+
+  // Accel+K inside a code block offers Insert paragraph above (Shift+P) and below (P).
+  await pm.locator(":scope > p").first().click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("b");
+  await page.keyboard.type("code only");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu-item", { hasText: "Insert paragraph above" })).toBeVisible();
+  await expect(page.locator(".table-menu-item", { hasText: "Insert paragraph below" })).toBeVisible();
+  await page.keyboard.press("Shift+P");
+  await page.keyboard.type("menu top");
+
+  await pm.locator("pre").click();
+  await settle(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("p");
+  await page.keyboard.type("menu bottom");
+
+  await expect(pm.locator(":scope > :first-child")).toHaveText("menu top");
+  await expect(pm.locator(":scope > :last-child")).toHaveText("menu bottom");
+});

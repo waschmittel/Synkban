@@ -8,6 +8,7 @@ import { api } from "./api";
 import { applyTheme } from "./theme";
 import "prosemirror-view/style/prosemirror.css";
 import "prosemirror-menu/style/menu.css";
+import "prosemirror-gapcursor/style/gapcursor.css";
 import "./styles/app.css";
 
 // Mark the document so CSS can adapt the title bar for the Electron shell,

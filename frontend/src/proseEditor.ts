@@ -5,6 +5,7 @@
 
 import { EditorState, TextSelection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
+import { GapCursor } from "prosemirror-gapcursor";
 import {
   DOMParser as PmDOMParser,
   DOMSerializer,
@@ -14,6 +15,7 @@ import { sinkListItem, liftListItem } from "prosemirror-schema-list";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
+import { blockEscapeKeymap, gapPosAtY } from "./blockEscape";
 import { insertMatrix, insertTable, tablePlugins } from "./tables";
 import { schema, TEXT_STYLES, validateDescription } from "./schema";
 import { api } from "./api";
@@ -221,6 +223,7 @@ export function createCardEditor(
       tableMenuKeymap,
       ...tablePlugins(),
       listKeymap,
+      blockEscapeKeymap,
       autolinkInputRules(schema),
       ...exampleSetup({ schema, menuBar: true, menuContent }),
     ],
@@ -318,6 +321,26 @@ export function createCardEditor(
       return false;
     },
     handleDOMEvents: {
+      // Clicking the editor padding above, between or below non-paragraph
+      // blocks places a gap cursor there instead of snapping back inside.
+      mousedown(view, event) {
+        if (
+          event.button !== 0 ||
+          event.shiftKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          event.target !== view.dom
+        ) {
+          return false;
+        }
+        const gap = gapPosAtY(view, event.clientY);
+        if (gap === null) return false;
+        event.preventDefault();
+        view.focus();
+        view.dispatch(view.state.tr.setSelection(new GapCursor(view.state.doc.resolve(gap))));
+        return true;
+      },
       // Right-click = Accel+K at the pointer. The caret moves there first
       // (like a native right-click) unless it lands inside the selection.
       contextmenu(view, event) {

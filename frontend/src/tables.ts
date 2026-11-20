@@ -17,7 +17,10 @@ import {
   TextSelection,
   type Transaction,
 } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
+import { GapCursor } from "prosemirror-gapcursor";
 import { keymap } from "prosemirror-keymap";
+import { isValidGapCursor } from "./blockEscape";
 import {
   CellSelection,
   TableMap,
@@ -394,10 +397,68 @@ export const enterInTable: Command = (state, dispatch) => {
   return true;
 };
 
+/// Arrow out of the top/bottom/first/last edge of a table or matrix onto a
+/// gap cursor when there is no adjacent inline textblock (and prevent matrices
+/// from bouncing off the forbidden `(0, 0)` corner on ArrowLeft).
+export function arrowOutOfTable(axis: "vert" | "horiz", dir: -1 | 1): Command {
+  return (state, dispatch, view) => {
+    const sel = state.selection;
+    if (!(sel instanceof TextSelection) || !sel.empty) return false;
+    const ctx = cellContext(state);
+    if (!ctx) return false;
+    const $cell = selectionCell(state);
+    const cellNode = $cell.nodeAfter;
+    if (!cellNode) return false;
+    const { $from, $to } = sel;
+    if (axis === "vert") {
+      if (dir < 0) {
+        if (ctx.row !== 0 || $from.before() !== $cell.pos + 1) return false;
+        if (view && !view.endOfTextblock("up", state)) return false;
+      } else {
+        if (ctx.row !== ctx.map.height - 1 || $to.after() !== $cell.pos + cellNode.nodeSize - 1) return false;
+        if (view && !view.endOfTextblock("down", state)) return false;
+      }
+    } else {
+      const firstCol = isMatrix(ctx.table) && ctx.map.width > 1 ? 1 : 0;
+      if (dir < 0) {
+        if (ctx.row !== 0 || ctx.col !== firstCol || $from.before() !== $cell.pos + 1) return false;
+        if (!(view ? view.endOfTextblock("left", state) : $from.parentOffset === 0)) return false;
+      } else {
+        if (
+          ctx.row !== ctx.map.height - 1 ||
+          ctx.col !== ctx.map.width - 1 ||
+          $to.after() !== $cell.pos + cellNode.nodeSize - 1
+        ) {
+          return false;
+        }
+        if (!(view ? view.endOfTextblock("right", state) : $to.parentOffset === $to.parent.content.size)) return false;
+      }
+    }
+    const edge = dir < 0 ? ctx.tablePos : ctx.tablePos + ctx.table.nodeSize;
+    const $edge = state.doc.resolve(edge);
+    if (isValidGapCursor($edge)) {
+      if (dispatch) dispatch(state.tr.setSelection(new GapCursor($edge)).scrollIntoView());
+      return true;
+    }
+    if (axis === "horiz" && dir < 0 && isMatrix(ctx.table) && edge > 0) {
+      const target = Selection.near($edge, -1);
+      if (!target.eq(sel)) {
+        if (dispatch) dispatch(state.tr.setSelection(target).scrollIntoView());
+        return true;
+      }
+    }
+    return false;
+  };
+}
+
 export const tableKeymap = keymap({
   Tab: tabForward,
   "Shift-Tab": tabBackward,
   Enter: enterInTable,
+  ArrowUp: arrowOutOfTable("vert", -1),
+  ArrowDown: arrowOutOfTable("vert", 1),
+  ArrowLeft: arrowOutOfTable("horiz", -1),
+  ArrowRight: arrowOutOfTable("horiz", 1),
 });
 
 // ── Header invariant ─────────────────────────────────────────────────────

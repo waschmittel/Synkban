@@ -53,6 +53,8 @@ export const ICONS = {
   code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
   codeBlock: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l-3 3 3 3M14 9l3 3-3 3"/>',
   paragraph: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+  paraAbove: '<path d="M4 6h6M7 3v6M13 6h7"/><rect x="4" y="13" width="16" height="7" rx="1.5"/>',
+  paraBelow: '<rect x="4" y="4" width="16" height="7" rx="1.5"/><path d="M4 18h6M7 15v6M13 18h7"/>',
   heading1: '<path d="M4 5v14M4 12h8M12 5v14M17 9l3-2v12"/>',
   heading2: '<path d="M4 5v14M4 12h8M12 5v14M16 9a2.5 2.5 0 0 1 5 0c0 3-5 5-5 8h5"/>',
   heading3: '<path d="M4 5v14M4 12h8M12 5v14M16 7h5l-3 4a3 3 0 1 1-2 5"/>',

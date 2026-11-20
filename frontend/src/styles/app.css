@@ -2434,6 +2434,12 @@ html.theme-dark .modal-history-btn:hover {
   color: var(--color-text);
 }
 
+.editor-wrapper .ProseMirror .ProseMirror-gapcursor:after {
+  top: -4px;
+  width: 24px;
+  border-top: 2px solid var(--color-text);
+}
+
 .editor-wrapper .ProseMirror img.editor-image {
   max-height: 120px;
   max-width: 100%;

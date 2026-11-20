@@ -19,6 +19,7 @@
 ///   always            l link (add/edit) · u remove link · i inline code · m image
 ///                     ↑ ↓ Home End move a highlight, Enter runs it
 ///   outside a table   0 plain · b code block · 1/2/3 heading · t table · x matrix
+///   in a block/table  Shift+P / P … insert paragraph above / below
 ///   inside a table    w s / a d … move the row up, down / column left, right
 ///                     x … transpose (matrix only)
 ///                     Shift+arrow … insert a row / column in that direction
@@ -36,6 +37,7 @@ import { accel, hasAccel, isMac, tip } from "./platform";
 import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
 import { menuNav, navKey } from "./menuNav";
 import { canInsertImage, hooksOf, openImagePicker } from "./imagePicker";
+import { inEscapableBlock, insertParagraphAbove, insertParagraphBelow } from "./blockEscape";
 
 import {
   cellContext,
@@ -79,7 +81,8 @@ interface Item {
 
 const arrow = (key: string, shift: boolean) => (e: KeyboardEvent) =>
   e.key === key && e.shiftKey === shift;
-const letter = (ch: string) => (e: KeyboardEvent) => !e.shiftKey && e.key.toLowerCase() === ch;
+const letter = (ch: string, shift = false) => (e: KeyboardEvent) =>
+  e.shiftKey === shift && e.key.toLowerCase() === ch;
 
 const digit = (d: string) => (e: KeyboardEvent) => !e.shiftKey && e.key === d;
 
@@ -181,10 +184,18 @@ const TABLE_REST_ITEMS: Item[] = [
   { label: (s) => (inMatrix(s) ? "Align cell left" : "Align column left"), icon: ICONS.alignLeft, group: 5, hint: "1", match: digit("1"), command: alignLeft },
   { label: (s) => (inMatrix(s) ? "Align cell center" : "Align column center"), icon: ICONS.alignCenter, group: 5, hint: "2", match: digit("2"), command: alignCenter },
   { label: (s) => (inMatrix(s) ? "Align cell right" : "Align column right"), icon: ICONS.alignRight, group: 5, hint: "3", match: digit("3"), command: alignRight },
+];
+
+const PARAGRAPH_ITEMS: Item[] = [
+  { label: "Insert paragraph above", icon: ICONS.paraAbove, group: 6, hint: `${SHIFT}P`, match: letter("p", true), command: insertParagraphAbove },
+  { label: "Insert paragraph below", icon: ICONS.paraBelow, group: 6, hint: "P", match: letter("p"), command: insertParagraphBelow },
+];
+
+const TABLE_DELETE_ITEMS: Item[] = [
   // Delete
-  { label: "Delete row", icon: ICONS.deleteRow, group: 6, danger: true, hint: "R", match: letter("r"), command: removeRow },
-  { label: "Delete column", icon: ICONS.deleteColumn, group: 6, danger: true, hint: "C", match: letter("c"), command: removeColumn },
-  { label: (s) => (inMatrix(s) ? "Delete matrix" : "Delete table"), icon: ICONS.deleteTable, group: 6, danger: true, hint: "T", match: letter("t"), command: removeTable },
+  { label: "Delete row", icon: ICONS.deleteRow, group: 7, danger: true, hint: "R", match: letter("r"), command: removeRow },
+  { label: "Delete column", icon: ICONS.deleteColumn, group: 7, danger: true, hint: "C", match: letter("c"), command: removeColumn },
+  { label: (s) => (inMatrix(s) ? "Delete matrix" : "Delete table"), icon: ICONS.deleteTable, group: 7, danger: true, hint: "T", match: letter("t"), command: removeTable },
 ];
 
 const INSERT_ITEMS: Item[] = [
@@ -214,11 +225,20 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
 
   const items = (): Item[] => {
     const ctx = cellContext(view.state);
-    if (!ctx) return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...STYLE_ITEMS, ...INSERT_ITEMS];
+    if (!ctx) {
+      return [
+        ...LINK_ITEMS,
+        CODE_ITEM,
+        IMAGE_ITEM,
+        ...STYLE_ITEMS,
+        ...INSERT_ITEMS,
+        ...(inEscapableBlock(view.state) ? PARAGRAPH_ITEMS : []),
+      ];
+    }
     const tableItems = isMatrix(ctx.table)
       ? [...MOVE_ITEMS, TRANSPOSE_ITEM, ...TABLE_REST_ITEMS]
       : [...MOVE_ITEMS, ...TABLE_REST_ITEMS];
-    return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...tableItems];
+    return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...tableItems, ...PARAGRAPH_ITEMS, ...TABLE_DELETE_ITEMS];
   };
 
   const nav = menuNav(menu);

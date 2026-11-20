@@ -3,8 +3,9 @@
 /// plus "Upload image…". Opened from the toolbar and the editor menu (Accel+K).
 /// Same look and keys as the editor menu (↑↓ Home End Enter Esc, 1–9, U).
 
-import type { EditorState } from "prosemirror-state";
+import { TextSelection, type EditorState } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { GapCursor } from "prosemirror-gapcursor";
 import { api } from "./api";
 import { dialogKeys } from "./dialogKeys";
 import { menuNav, navKey } from "./menuNav";
@@ -34,14 +35,21 @@ export const hooksOf = (view: EditorView) => hooksByView.get(view);
 /// Whether an image can be inserted at the selection (not in a code block).
 export function canInsertImage(state: EditorState): boolean {
   const { $from } = state.selection;
-  return !$from.parent.type.spec.code && $from.parent.inlineContent;
+  return (!$from.parent.type.spec.code && $from.parent.inlineContent) || state.selection instanceof GapCursor;
 }
 
 /// Inserts an inline reference to image attachment `att` at the selection.
 export function insertImage(view: EditorView, att: Attachment) {
   if (!canInsertImage(view.state)) return;
   const node = schema.nodes.image.create({ att: att.id, alt: att.filename });
-  view.dispatch(view.state.tr.replaceSelectionWith(node, false).scrollIntoView());
+  if (view.state.selection instanceof GapCursor) {
+    const pos = view.state.selection.head;
+    const tr = view.state.tr.insert(pos, schema.nodes.paragraph.create(null, [node]));
+    tr.setSelection(TextSelection.create(tr.doc, pos + 2));
+    view.dispatch(tr.scrollIntoView());
+  } else {
+    view.dispatch(view.state.tr.replaceSelectionWith(node, false).scrollIntoView());
+  }
   view.focus();
 }
 

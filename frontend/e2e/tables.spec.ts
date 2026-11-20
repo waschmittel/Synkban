@@ -122,20 +122,29 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
   await insertTable(page);
   await page.keyboard.press("ControlOrMeta+k");
 
-  // Link / code / move / insert / align / delete: six groups, five dividers,
-  // an icon each, no group headings. No text styles: cell blocks are fixed.
+  // Link / code / move / insert / align / paragraph / delete: seven groups,
+  // six dividers, an icon each, no group headings. No text styles: cell blocks are fixed.
   const items = page.locator(".table-menu-item");
-  await expect(items).toHaveCount(18);
-  await expect(page.locator(".table-menu-sep")).toHaveCount(5);
-  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(18);
+  await expect(items).toHaveCount(20);
+  await expect(page.locator(".table-menu-sep")).toHaveCount(6);
+  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(20);
   await expect(page.locator(".table-menu-title")).toHaveCount(0);
   await expect(items.locator(".table-menu-label")).toHaveText([
     "Add link…", "Remove link", "Inline code", "Insert image…",
     "Move row up", "Move row down", "Move column left", "Move column right",
     "Insert row above", "Insert row below", "Insert column left", "Insert column right",
     "Align column left", "Align column center", "Align column right",
+    "Insert paragraph above", "Insert paragraph below",
     "Delete row", "Delete column", "Delete table",
   ]);
+  await expect(page.locator(".table-menu-item", { hasText: "Insert paragraph above" })).toHaveAttribute(
+    "title",
+    /\((?:⇧|Shift\+)P\)$/,
+  );
+  await expect(page.locator(".table-menu-item", { hasText: "Insert paragraph below" })).toHaveAttribute(
+    "title",
+    /\(P\)$/,
+  );
 
   // Clicking an action runs it and closes the menu.
   await page.locator(".table-menu-item", { hasText: "Insert row below" }).click();
@@ -444,4 +453,113 @@ test("matrices: open corner, centered row/col headers, per-cell alignment, trans
   ]);
   expect(await cellAlign(1, 1)).toBe("right");
   expect(await cellAlign(2, 1)).toBe("center");
+});
+
+async function expectVisibleGapCursor(page: Page) {
+  const gap = page.locator(".editor-wrapper .ProseMirror .ProseMirror-gapcursor");
+  await expect(gap).toHaveCount(1);
+  await expect
+    .poll(() =>
+      gap.evaluate((el) => ({
+        display: getComputedStyle(el).display,
+        border: parseFloat(getComputedStyle(el, "::after").borderTopWidth),
+      })),
+    )
+    .toMatchObject({ display: "block" });
+  expect(
+    await gap.evaluate((el) => parseFloat(getComputedStyle(el, "::after").borderTopWidth)),
+  ).toBeGreaterThan(0);
+}
+
+test("escape a leading/trailing table or matrix via arrows, padding clicks, and the menu", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Tables Escape");
+  const pm = page.locator(".editor-wrapper .ProseMirror");
+
+  // Leading table: ArrowUp from row 0 places a visible gap cursor before it.
+  await insertTable(page);
+  await page.keyboard.press("ArrowUp");
+  await expectVisibleGapCursor(page);
+  await page.keyboard.type("before table");
+  await expect(pm.locator(":scope > :first-child")).toHaveText("before table");
+
+  // Delete leading paragraph + trailing paragraph so the table stands alone.
+  await pm.locator(":scope > p").first().click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await insertTable(page);
+  await pm.locator(":scope > p").last().click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await page.keyboard.press("Backspace");
+  await expect(pm.locator(":scope > p")).toHaveCount(0);
+
+  // Save and reopen so the card starts clean before testing padding clicks.
+  await page.locator(".modal-save-btn").click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "Table card" }).click();
+  await expect(pm.locator("table")).toHaveCount(1);
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Clicking padding above a leading table places a gap cursor without marking dirty.
+  const pmBox = (await pm.boundingBox())!;
+  const tblBox = (await pm.locator("table").boundingBox())!;
+  await pm.click({ position: { x: pmBox.width / 2, y: Math.max(2, (tblBox.y - pmBox.y) / 2) } });
+  await expectVisibleGapCursor(page);
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Clicking padding below a trailing table places a gap cursor without marking dirty.
+  await pm.click({
+    position: {
+      x: pmBox.width / 2,
+      y: Math.min(pmBox.height - 2, (tblBox.y + tblBox.height - pmBox.y + pmBox.height) / 2),
+    },
+  });
+  await expectVisibleGapCursor(page);
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // ArrowDown from the last row places a gap cursor; Enter + typing inserts a paragraph below.
+  await clickCell(page, ".editor-wrapper .ProseMirror td", 5);
+  await page.keyboard.press("ArrowDown");
+  await expectVisibleGapCursor(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("below via arrow");
+  await expect(pm.locator(":scope > p").last()).toHaveText("below via arrow");
+
+  // Leading matrix: ArrowLeft from (0, 1) and ArrowUp both escape to a gap cursor.
+  await pm.locator(":scope > p").last().click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await menuKey(page, "x");
+  await pm.locator(":scope > p").last().click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await page.keyboard.press("Backspace");
+  await expect(pm.locator(":scope > p")).toHaveCount(0);
+
+  await clickCell(page, ".editor-wrapper .ProseMirror table[data-matrix] tr:first-child th", 0);
+  await page.keyboard.press("ArrowLeft");
+  await expectVisibleGapCursor(page);
+  await page.keyboard.press("ArrowRight"); // back into (0, 1)
+  await page.keyboard.press("ArrowUp");
+  await expectVisibleGapCursor(page);
+  await page.keyboard.type("above matrix");
+  await expect(pm.locator(":scope > :first-child")).toHaveText("above matrix");
+
+  // Accel+K -> Shift+P and P inside the matrix insert paragraphs above and below it.
+  await pm.locator(":scope > :first-child").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await menuKey(page, "x");
+  await pm.locator(":scope > p").last().click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  await page.keyboard.press("Backspace");
+  await clickCell(page, ".editor-wrapper .ProseMirror table[data-matrix] td", 1);
+  await menuKey(page, "Shift+P");
+  await page.keyboard.type("menu above");
+  await clickCell(page, ".editor-wrapper .ProseMirror table[data-matrix] td", 1);
+  await menuKey(page, "p");
+  await page.keyboard.type("menu below");
+  await expect(pm.locator(":scope > :first-child")).toHaveText("menu above");
+  await expect(pm.locator(":scope > :last-child")).toHaveText("menu below");
 });

@@ -120,6 +120,8 @@ const baseNodes = addListNodes(
   .append(tableNodeSpecs)
   .update("image", imageSpec);
 
+const GAP_CURSOR_BLOCKS = new Set(["code_block", "blockquote", "bullet_list", "ordered_list"]);
+
 const nodes: Record<string, NodeSpec> = {};
 for (const [name, spec] of Object.entries(schemaSpec.nodes as Record<string, JsonNodeSpec>)) {
   const dom = baseNodes.get(name);
@@ -132,6 +134,8 @@ for (const [name, spec] of Object.entries(schemaSpec.nodes as Record<string, Jso
     marks: spec.marks,
     code: spec.code,
     attrs: buildAttrs(spec.attrs),
+    ...(GAP_CURSOR_BLOCKS.has(name) ? { createGapCursor: true } : {}),
+    ...(name === "list_item" ? { allowGapCursor: false } : {}),
   };
 }
 

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { EditorState, TextSelection, type Command } from "prosemirror-state";
+import { GapCursor } from "prosemirror-gapcursor";
 import { CellSelection, selectedRect } from "prosemirror-tables";
 import type { Node as PmNode } from "prosemirror-model";
 import { schema } from "./proseEditor";
 import {
+  arrowOutOfTable,
   createMatrix,
   createTable,
   tablePlugins,
@@ -470,5 +472,61 @@ describe("matrices", () => {
     s = s.apply(s.tr.insertText("oops", cornerPos));
     expect(rows(s)[0][0]).toBe("");
     expect(cellContext(s)).toMatchObject({ row: 0, col: 1 });
+  });
+
+  const atCellEdge = (state: EditorState, text: string, side: "start" | "end") => {
+    let pos = -1;
+    state.doc.descendants((n, p) => {
+      if (n.isText && n.text === text) pos = side === "start" ? p : p + text.length;
+      return true;
+    });
+    if (pos < 0) throw new Error(`no cell ${text}`);
+    return state.apply(state.tr.setSelection(TextSelection.create(state.doc, pos)));
+  };
+
+  it("arrowOutOfTable lands on a GapCursor when no paragraph is adjacent, and yields when one is", () => {
+    // Standalone table: ArrowUp from row 0 and ArrowLeft from (0, 0) reach pos 0.
+    const tOnly = stateWith(filled(2, 2));
+    const up = run(inCell(tOnly, "r0c1"), arrowOutOfTable("vert", -1));
+    expect(up.selection instanceof GapCursor).toBe(true);
+    expect(up.selection.head).toBe(0);
+
+    const left = run(atCellEdge(tOnly, "r0c0", "start"), arrowOutOfTable("horiz", -1));
+    expect(left.selection instanceof GapCursor).toBe(true);
+    expect(left.selection.head).toBe(0);
+
+    // ArrowDown from last row and ArrowRight from last cell reach end of doc.
+    const down = run(inCell(tOnly, "r1c0"), arrowOutOfTable("vert", 1));
+    expect(down.selection instanceof GapCursor).toBe(true);
+    expect(down.selection.head).toBe(tOnly.doc.content.size);
+
+    const right = run(atCellEdge(tOnly, "r1c1", "end"), arrowOutOfTable("horiz", 1));
+    expect(right.selection instanceof GapCursor).toBe(true);
+    expect(right.selection.head).toBe(tOnly.doc.content.size);
+
+    // Mid-table cells or mid-text horizontal positions do not escape.
+    expect(arrowOutOfTable("vert", -1)(inCell(tOnly, "r1c0"))).toBe(false);
+    expect(arrowOutOfTable("vert", 1)(inCell(tOnly, "r0c0"))).toBe(false);
+    expect(arrowOutOfTable("horiz", -1)(inCell(tOnly, "r0c0"))).toBe(false);
+    expect(arrowOutOfTable("horiz", 1)(inCell(tOnly, "r1c1"))).toBe(false);
+
+    // Standalone matrix: ArrowLeft from (0, 1) jumps to pos 0 instead of bouncing off (0, 0).
+    const mOnly = stateWith(filledMatrix(2, 2));
+    const mLeft = run(atCellEdge(mOnly, "r0c1", "start"), arrowOutOfTable("horiz", -1));
+    expect(mLeft.selection instanceof GapCursor).toBe(true);
+    expect(mLeft.selection.head).toBe(0);
+
+    // Adjacent paragraphs: yields false so standard ProseMirror/table navigation applies,
+    // except matrix ArrowLeft which steps into the preceding paragraph instead of (0, 0).
+    const tWrapped = stateWith(para("before"), filled(2, 2), para("after"));
+    expect(arrowOutOfTable("vert", -1)(inCell(tWrapped, "r0c0"))).toBe(false);
+    expect(arrowOutOfTable("vert", 1)(inCell(tWrapped, "r1c1"))).toBe(false);
+    expect(arrowOutOfTable("horiz", -1)(atCellEdge(tWrapped, "r0c0", "start"))).toBe(false);
+    expect(arrowOutOfTable("horiz", 1)(atCellEdge(tWrapped, "r1c1", "end"))).toBe(false);
+
+    const mWrapped = stateWith(para("before"), filledMatrix(2, 2), para("after"));
+    const mLeftToPara = run(atCellEdge(mWrapped, "r0c1", "start"), arrowOutOfTable("horiz", -1));
+    expect(mLeftToPara.selection instanceof GapCursor).toBe(false);
+    expect(mLeftToPara.selection.$from.parent.textContent).toBe("before");
   });
 });
