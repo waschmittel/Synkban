@@ -69,6 +69,7 @@ export default function CardDetail(props: Props) {
   let checklistAddRef!: HTMLInputElement;
   let focusLabels: (() => void) | undefined;
   let attachmentInputRef: HTMLInputElement | undefined;
+  let imageInputRef: HTMLInputElement | undefined;
   let view: EditorView | undefined;
 
   // Saved baseline. Dirtiness = current serialized state differs from it, so
@@ -351,16 +352,11 @@ export default function CardDetail(props: Props) {
     attachFiles(files, false);
   };
 
-  /// File chooser for images to upload and reference at the caret. The input
-  /// is detached: nothing stays in the DOM next to the attachment picker.
+  /// File chooser for images to upload and reference at the caret. Kept in the
+  /// DOM: an ephemeral detached input can be GC'd before `change` fires or
+  /// Playwright's CDP `DOM.resolveNode` resolves it.
   const pickImages = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.multiple = true;
-    input.onchange = () =>
-      attachFiles(Array.from(input.files ?? []).filter((f) => f.type.startsWith("image/")));
-    input.click();
+    imageInputRef?.click();
   };
 
   /// Asks first when the description shows the attachment inline.
@@ -809,6 +805,19 @@ export default function CardDetail(props: Props) {
               const files = Array.from(e.currentTarget.files ?? []);
               e.currentTarget.value = "";
               for (const f of files) uploadFile(f);
+            }}
+          />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            class="image-file-input"
+            hidden
+            ref={(el) => (imageInputRef = el)}
+            onChange={(e) => {
+              const files = Array.from(e.currentTarget.files ?? []).filter((f) => f.type.startsWith("image/"));
+              e.currentTarget.value = "";
+              if (files.length) attachFiles(files);
             }}
           />
         </div>

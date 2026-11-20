@@ -930,7 +930,7 @@ test("card detail layout, both views: icons left of their sections in one column
 
   await check(".notes-detail", 4);
   // With attachments the section appears; its icon sits beside the first tile.
-  await page.locator('.notes-detail input[type="file"]').setInputFiles({
+  await page.locator(".notes-detail .attachment-file-input").setInputFiles({
     name: "a.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("x"),

@@ -332,13 +332,13 @@ test("the toolbar's image button picks an existing attachment or uploads a new o
   await expect(editor(page).locator("img.editor-image")).toHaveCount(1);
 
   // Upload goes through the file chooser, attaches and references.
-  await expect(async () => {
-    if ((await picker.count()) === 0) await page.locator(".image-menu-trigger").click();
-    await expect(picker).toBeVisible();
-  }).toPass();
+  await page.locator(".image-menu-trigger").click();
+  await expect(picker).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
   await page.keyboard.press("u");
-  await (await chooser).setFiles({ name: "up.png", mimeType: "image/png", buffer: PNG });
+  const fc = await chooser;
+  expect(await fc.element().evaluate((el) => el.isConnected)).toBe(true);
+  await fc.setFiles({ name: "up.png", mimeType: "image/png", buffer: PNG });
   await expect(page.locator(".attachment-item")).toHaveCount(2);
   await expect(editor(page).locator("img.editor-image")).toHaveCount(2);
   await expect(page.locator(".attachment-ref")).toHaveCount(2);

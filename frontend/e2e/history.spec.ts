@@ -143,7 +143,7 @@ test("saving through the modal records every tracked field, and the diff shows e
   await page.locator(".card", { hasText: "Original title" }).click();
 
   // Attachments persist immediately (not on Save), so this is its own version.
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator(".attachment-file-input").setInputFiles({
     name: "notes.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("hello"),

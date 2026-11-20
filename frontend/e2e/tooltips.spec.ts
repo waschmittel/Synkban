@@ -96,7 +96,7 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Detail card" }).click();
   await expect(page.locator(".modal-title-input")).toBeVisible();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator(".attachment-file-input").setInputFiles({
     name: "a.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("x"),
