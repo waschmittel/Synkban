@@ -455,6 +455,15 @@ html[data-theme="dark"] .icon-moon { display: none; }
   border-radius: 50%;
 }
 
+.tab-play {
+  flex-shrink: 0;
+  color: var(--brand);
+}
+
+.tab-btn[aria-selected="true"] .tab-play {
+  color: currentColor;
+}
+
 .showcase-stage {
   position: relative;
   background: var(--surface);
@@ -475,6 +484,7 @@ html[data-theme="dark"] .icon-moon { display: none; }
 .showcase-panel img {
   display: block;
   width: 100%;
+  height: auto;
   border-radius: 10px;
   border: 1px solid var(--border);
   cursor: zoom-in;
@@ -488,6 +498,34 @@ html[data-theme="dark"] .icon-moon { display: none; }
   padding: 10px 8px 4px;
   font-size: 13.5px;
   color: var(--muted);
+}
+
+.showcase-caption-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.replay-btn {
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--ink-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.replay-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.replay-btn:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .zoom-hint {
@@ -1369,6 +1407,11 @@ h3[id] {
   }
   .hero {
     padding: 36px 0 42px;
+  }
+  .showcase-caption {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
   .section {
     padding: 52px 0;

@@ -65,6 +65,10 @@
         <div class="showcase">
           <div class="showcase-tabs" role="tablist" aria-label="Workspace previews">
             <button type="button" class="tab-btn" role="tab" aria-selected="true" tabindex="0">
+              <svg class="tab-play" width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><polygon points="2,1 11,6 2,11"/></svg>
+              Live Demo
+            </button>
+            <button type="button" class="tab-btn" role="tab" aria-selected="false" tabindex="-1">
               <span class="tab-dot" style="background:#4f46e5" aria-hidden="true"></span>
               Kanban Mode
             </button>
@@ -83,6 +87,16 @@
           </div>
           <div class="showcase-stage">
             <div class="showcase-panel active" role="tabpanel">
+              <img src="demo.gif" width="960" height="540" alt="Animated walkthrough of Synkban showing Board Overview, custom board colour, Label Drawer, Quick-add, Editor Menu, inline image, Matrix transpose, Due Date Picker, Card History, collapsed lists, Filter Bar, Notes Mode, shortcut help, and Dark Mode" data-zoom data-gif="demo.gif" data-caption="47-second walkthrough — creating boards, Quick-add, inline images, Matrix transpose, collapsed lists, Notes Mode, and Dark Mode.">
+              <div class="showcase-caption">
+                <span>47-second walkthrough — <strong>Quick-add</strong>, inline images, <strong>Matrix</strong> transpose, collapsed lists, <strong>Notes Mode</strong>, and <strong>Dark Mode</strong>.</span>
+                <span class="showcase-caption-actions">
+                  <button type="button" class="replay-btn" data-replay-gif>↺ Replay</button>
+                  <span class="zoom-hint">Click image to zoom</span>
+                </span>
+              </div>
+            </div>
+            <div class="showcase-panel" role="tabpanel">
               <img src="images/kanban-mode.png" alt="Synkban Kanban Mode showing side-by-side lists, a collapsed list, card badges, and the bottom Board Dock" data-zoom data-caption="Kanban Mode — lists side by side, collapsed Done strip, due-date badges, and the bottom Board Dock.">
               <div class="showcase-caption">
                 <span>Side-by-side lists, collapsible lists (<kbd>C</kbd>), due-date &amp; checklist badges, and instant board switching via the bottom <strong>Board Dock</strong>.</span>

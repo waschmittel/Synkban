@@ -48,25 +48,46 @@
   // Hero showcase tabs
   const heroTabs = [...document.querySelectorAll(".showcase-tabs .tab-btn")];
   const heroPanels = [...document.querySelectorAll(".showcase-panel")];
-  const selectHeroTab = (idx) => {
+  const replayGif = (img) => {
+    const base = img?.dataset.gif || img?.getAttribute("src");
+    if (!base) return;
+    img.removeAttribute("src");
+    requestAnimationFrame(() => {
+      img.src = base;
+    });
+  };
+  const selectHeroTab = (idx, replay = false) => {
     heroTabs.forEach((t, i) => {
       const active = i === idx;
       t.setAttribute("aria-selected", String(active));
       t.tabIndex = active ? 0 : -1;
     });
     heroPanels.forEach((p, i) => p.classList.toggle("active", i === idx));
+    if (replay) {
+      const gifImg = heroPanels[idx]?.querySelector("img[data-gif]");
+      if (gifImg) replayGif(gifImg);
+    }
   };
   heroTabs.forEach((tab, idx) => {
-    tab.addEventListener("click", () => selectHeroTab(idx));
+    tab.addEventListener("click", () => selectHeroTab(idx, true));
     tab.addEventListener("keydown", (e) => {
       if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
         e.preventDefault();
         const next = (idx + (e.key === "ArrowRight" ? 1 : -1) + heroTabs.length) % heroTabs.length;
-        selectHeroTab(next);
+        selectHeroTab(next, true);
         heroTabs[next].focus();
       }
     });
   });
+  document.querySelectorAll("[data-replay-gif]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const gifImg = btn.closest(".showcase-panel")?.querySelector("img[data-gif]");
+      replayGif(gifImg);
+    });
+  });
+  if (heroTabs.length > 1 && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    selectHeroTab(1);
+  }
 
   // OS Install tabs
   const osTabs = [...document.querySelectorAll(".os-tab")];
