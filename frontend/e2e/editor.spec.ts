@@ -686,3 +686,106 @@ test("code block: gap cursor navigation, padding clicks, menu escape, triple-Ent
   await expect(pm.locator(":scope > :first-child")).toHaveText("menu top");
   await expect(pm.locator(":scope > :last-child")).toHaveText("menu bottom");
 });
+
+test("code block: Tab indents and Shift+Tab unindents current or highlighted lines", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Editor Code Indent");
+  const pm = editor(page);
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("b");
+  await page.keyboard.type("one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("two");
+
+  // Tab mid-line indents the current line without moving focus out of the editor.
+  await page.keyboard.press("ArrowLeft");
+  await settle(page);
+  await page.keyboard.press("Tab");
+  await expect(pm).toBeFocused();
+  await expect(pm.locator("pre")).toHaveText("one\n  two");
+
+  // Typing continues at the same relative character position after the indent.
+  await page.keyboard.type("X");
+  await expect(pm.locator("pre")).toHaveText("one\n  twXo");
+  await page.keyboard.press("Backspace");
+
+  // Shift+Tab unindents and keeps focus inside the code block.
+  await page.keyboard.press("Shift+Tab");
+  await expect(pm).toBeFocused();
+  await expect(pm.locator("pre")).toHaveText("one\ntwo");
+
+  // Save clean, reopen, and verify Shift+Tab on an unindented line stays focused without dirtying.
+  await page.locator(".modal-save-btn").click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "Editor card" }).click();
+  await pm.locator("pre").click();
+  await settle(page);
+  await page.keyboard.press("Shift+Tab");
+  await expect(pm).toBeFocused();
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Highlight multiple lines and indent / unindent them together, with single-step undo.
+  const preBox = (await pm.locator("pre").boundingBox())!;
+  await pm.locator("pre").click({ position: { x: preBox.width - 4, y: preBox.height - 16 } });
+  await settle(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("three");
+  await page.keyboard.press("Shift+ArrowUp");
+  await page.keyboard.press("Shift+ArrowUp");
+  for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+ArrowLeft");
+  await settle(page);
+  await page.keyboard.press("Tab");
+  await expect(pm.locator("pre")).toHaveText("  one\n  two\n  three");
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(pm.locator("pre")).toHaveText("one\ntwo\nthree");
+
+  // Undo restores the multi-line indent in one step, and once more back to original.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(pm.locator("pre")).toHaveText("  one\n  two\n  three");
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(pm.locator("pre")).toHaveText("one\ntwo\nthree");
+});
+
+test("code blocks and inline code have legible colors without pre/code conflict in light and dark mode", async ({
+  page,
+  request,
+}) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await openEditor(page, request, "Editor Code Theme");
+  const pm = editor(page);
+
+  await page.keyboard.type("inline");
+  for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowLeft");
+  await settle(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("i");
+  await expect(pm.locator("p code")).toHaveText("inline");
+
+  await page.keyboard.press("ArrowRight");
+  await settle(page);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("b");
+  await page.keyboard.type("block");
+  await expect(pm.locator("pre code")).toHaveText("block");
+
+  const stylesOf = (sel: string) =>
+    pm.locator(sel).evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { bg: s.backgroundColor, color: s.color };
+    });
+
+  await expect(page.locator("html")).not.toHaveClass(/theme-dark/);
+  expect(await stylesOf("pre")).toEqual({ bg: "rgb(226, 228, 232)", color: "rgb(0, 0, 0)" });
+  expect((await stylesOf("pre > code")).bg).toBe("rgba(0, 0, 0, 0)");
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveClass(/theme-dark/);
+  expect(await stylesOf("pre")).toEqual({ bg: "rgb(30, 30, 46)", color: "rgb(205, 214, 244)" });
+  expect((await stylesOf("pre > code")).bg).toBe("rgba(0, 0, 0, 0)");
+  expect((await stylesOf("p code")).bg).toBe("rgba(255, 255, 255, 0.08)");
+});

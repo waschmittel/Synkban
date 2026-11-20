@@ -2522,8 +2522,8 @@ html.theme-dark .modal-history-btn:hover {
 }
 
 .editor-wrapper .ProseMirror pre {
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: #e2e4e8;
+  color: #000000;
   padding: 14px 16px;
   border-radius: 6px;
   margin: 0 0 8px;
@@ -4731,8 +4731,13 @@ html.theme-dark .editor-wrapper {
   background: #2a2a20;
 }
 
-html.theme-dark .editor-wrapper .ProseMirror code {
+html.theme-dark .editor-wrapper .ProseMirror :not(pre) > code {
   background: rgba(255, 255, 255, 0.08);
+}
+
+html.theme-dark .editor-wrapper .ProseMirror pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
 }
 
 html.theme-dark .editor-wrapper .ProseMirror a {

@@ -243,6 +243,7 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("↑"), k("↓")], "Past a block's edge (or click outside): cursor before / after"],
           [[k("Enter")], "In a code block on a blank trailing line: exit below"],
           [[k("⌫")], "In an empty code block: turn into plain text"],
+          [[k("Tab"), k("Shift", "Tab")], "In a code block: indent / unindent line(s)"],
         ],
       },
       {

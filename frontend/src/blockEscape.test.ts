@@ -11,6 +11,7 @@ import {
   clearEmptyCodeBlock,
   exitCodeOnTripleEnter,
   inEscapableBlock,
+  indentCodeBlock,
   insertParagraphAbove,
   insertParagraphBelow,
   isValidGapCursor,
@@ -197,5 +198,87 @@ describe("code block Enter / Backspace ergonomics", () => {
     expect(clampGapCursor(1)(atMid)).toBe(false);
     expect(clampGapCursor(-1)(textSel)).toBe(false);
     expect(clampGapCursor(1)(textSel)).toBe(false);
+  });
+});
+
+describe("indentCodeBlock (Tab / Shift+Tab)", () => {
+  it("indents and unindents the current line at start, middle, end, and on an empty line", () => {
+    for (const [text, offset] of [
+      ["", 0],
+      ["abc", 0],
+      ["abc", 1],
+      ["abc", 3],
+    ] as const) {
+      const s0 = stateWith(code(text));
+      const pos0 = 1 + offset;
+      const s = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, pos0)));
+
+      const indented = run(s, indentCodeBlock(1));
+      expect(indented.ok).toBe(true);
+      expect(indented.state.doc.child(0).textContent).toBe(`  ${text}`);
+      expect(indented.state.selection.from).toBe(pos0 + 2);
+
+      const unindented = run(indented.state, indentCodeBlock(-1));
+      expect(unindented.ok).toBe(true);
+      expect(unindented.state.doc.child(0).textContent).toBe(text);
+      expect(unindented.state.selection.from).toBe(pos0);
+    }
+  });
+
+  it("indents and unindents all non-empty selected lines in forward and backward selections", () => {
+    const raw = "one\n\ntwo\nthree";
+    const s0 = stateWith(code(raw));
+    // Forward selection spanning from col 0 of "one" to end of "three".
+    const fwd = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, 1, 1 + raw.length)));
+    const fwdIndented = run(fwd, indentCodeBlock(1));
+    expect(fwdIndented.ok).toBe(true);
+    expect(fwdIndented.state.doc.child(0).textContent).toBe("  one\n\n  two\n  three");
+    expect(fwdIndented.state.selection.anchor).toBe(1);
+    expect(fwdIndented.state.selection.head).toBe(1 + "  one\n\n  two\n  three".length);
+
+    const fwdUnindented = run(fwdIndented.state, indentCodeBlock(-1));
+    expect(fwdUnindented.state.doc.child(0).textContent).toBe(raw);
+    expect(fwdUnindented.state.selection.anchor).toBe(1);
+    expect(fwdUnindented.state.selection.head).toBe(1 + raw.length);
+
+    // Backward selection from end of "three" back to col 0 of "one".
+    const bwd = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, 1 + raw.length, 1)));
+    const bwdIndented = run(bwd, indentCodeBlock(1));
+    expect(bwdIndented.state.doc.child(0).textContent).toBe("  one\n\n  two\n  three");
+    expect(bwdIndented.state.selection.anchor).toBe(1 + "  one\n\n  two\n  three".length);
+    expect(bwdIndented.state.selection.head).toBe(1);
+  });
+
+  it("does not indent a following line when the selection ends right after its newline", () => {
+    const s0 = stateWith(code("line1\nline2"));
+    const s = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, 1, 1 + "line1\n".length)));
+    const res = run(s, indentCodeBlock(1));
+    expect(res.state.doc.child(0).textContent).toBe("  line1\nline2");
+  });
+
+  it("strips 2 spaces, 1 space, or 1 tab, and stays a no-op without dispatching when unindented", () => {
+    const s0 = stateWith(code("  two\n one\n\ttab\nzero"));
+    const s = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, 1, 1 + s0.doc.child(0).content.size)));
+    const res = run(s, indentCodeBlock(-1));
+    expect(res.ok).toBe(true);
+    expect(res.state.doc.child(0).textContent).toBe("two\none\ntab\nzero");
+
+    let dispatched = false;
+    const ok = indentCodeBlock(-1)(res.state, () => {
+      dispatched = true;
+    });
+    expect(ok).toBe(true);
+    expect(dispatched).toBe(false);
+  });
+
+  it("returns false outside a code block or across multiple blocks", () => {
+    const pState = stateWith(p("hello"));
+    const inPara = pState.apply(pState.tr.setSelection(TextSelection.create(pState.doc, 2)));
+    expect(indentCodeBlock(1)(inPara)).toBe(false);
+    expect(indentCodeBlock(-1)(inPara)).toBe(false);
+
+    const multi = stateWith(code("a"), p("b"));
+    const cross = multi.apply(multi.tr.setSelection(TextSelection.create(multi.doc, 1, 5)));
+    expect(indentCodeBlock(1)(cross)).toBe(false);
   });
 });

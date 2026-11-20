@@ -77,6 +77,73 @@ export const clearEmptyCodeBlock: Command = (state, dispatch) => {
   return setBlockType(state.schema.nodes.paragraph)(state, dispatch);
 };
 
+const CODE_INDENT = "  ";
+
+/// Indents (`dir = 1`) or unindents (`dir = -1`) every line touched by the
+/// selection inside a code block. Always returns `true` inside a code block so
+/// a no-op `Shift+Tab` never jumps focus out of the editor.
+export function indentCodeBlock(dir: 1 | -1): Command {
+  return (state, dispatch) => {
+    const sel = state.selection;
+    if (!(sel instanceof TextSelection)) return false;
+    const { $from, $to } = sel;
+    if (!$from.parent.type.spec.code || !$from.sameParent($to)) return false;
+
+    if (dispatch) {
+      const blockStart = $from.start();
+      const text = $from.parent.textContent;
+      const fromOff = sel.from - blockStart;
+      const toOff = sel.to - blockStart;
+      const firstLineStart = fromOff === 0 ? 0 : text.lastIndexOf("\n", fromOff - 1) + 1;
+      const endLimit = toOff > fromOff && text[toOff - 1] === "\n" ? toOff - 1 : toOff;
+      const lineStarts = [firstLineStart];
+      for (let i = firstLineStart; i < endLimit; i++) {
+        if (text[i] === "\n") lineStarts.push(i + 1);
+      }
+
+      const tr = state.tr;
+      let changed = false;
+      for (let i = lineStarts.length - 1; i >= 0; i--) {
+        const start = lineStarts[i];
+        const pos = blockStart + start;
+        if (dir > 0) {
+          if (lineStarts.length > 1 && (start === text.length || text[start] === "\n")) continue;
+          tr.insertText(CODE_INDENT, pos);
+          changed = true;
+        } else {
+          const remove =
+            text[start] === "\t"
+              ? 1
+              : text.startsWith(CODE_INDENT, start)
+                ? CODE_INDENT.length
+                : text[start] === " "
+                  ? 1
+                  : 0;
+          if (remove > 0) {
+            tr.delete(pos, pos + remove);
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        const startPos = blockStart + firstLineStart;
+        const anchorAssoc = !sel.empty && sel.anchor === startPos && sel.anchor < sel.head ? -1 : 1;
+        const headAssoc = !sel.empty && sel.head === startPos && sel.head < sel.anchor ? -1 : 1;
+        tr.setSelection(
+          TextSelection.create(
+            tr.doc,
+            tr.mapping.map(sel.anchor, anchorAssoc),
+            tr.mapping.map(sel.head, headAssoc),
+          ),
+        );
+        dispatch(tr.scrollIntoView());
+      }
+    }
+    return true;
+  };
+}
+
 /// Keeps a boundary gap cursor at the start/end of the document instead of
 /// letting the browser's native arrow fallback pull the caret back into the block.
 export function clampGapCursor(dir: -1 | 1): Command {
@@ -87,6 +154,8 @@ export function clampGapCursor(dir: -1 | 1): Command {
 }
 
 export const blockEscapeKeymap = keymap({
+  Tab: indentCodeBlock(1),
+  "Shift-Tab": indentCodeBlock(-1),
   Enter: exitCodeOnTripleEnter,
   Backspace: chainCommands(undoInputRule, clearEmptyCodeBlock),
   ArrowUp: clampGapCursor(-1),

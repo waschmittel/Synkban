@@ -193,7 +193,7 @@ export function createCardEditor(
   const listItem = schema.nodes.list_item;
   // In a list Tab/Shift+Tab always belong to the editor: an item that can't
   // move (the first one has nothing to nest under) is a no-op, not a focus
-  // jump out of the description. Outside lists and tables Tab moves on.
+  // jump out of the description. Outside lists, tables and code blocks Tab moves on.
   const inList = (state: EditorState) => {
     const { $from } = state.selection;
     for (let d = $from.depth; d > 0; d--) if ($from.node(d).type === listItem) return true;
@@ -222,8 +222,8 @@ export function createCardEditor(
     plugins: [
       tableMenuKeymap,
       ...tablePlugins(),
-      listKeymap,
       blockEscapeKeymap,
+      listKeymap,
       autolinkInputRules(schema),
       ...exampleSetup({ schema, menuBar: true, menuContent }),
     ],
