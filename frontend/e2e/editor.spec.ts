@@ -947,3 +947,99 @@ test("lua block: padding clicks, outside blur/refocus, gap cursors, text style s
   await expect(pm.locator(":scope > p").last()).toHaveText("outside paragraph");
   await expect(typeDropdown(page)).toHaveText("Plain text");
 });
+
+test("find in description: typing multi-char queries, mid-string edit, case sensitivity, regex, navigation and Escape", async ({ page, request }) => {
+  await openEditor(page, request, "Editor Search");
+  const pm = editor(page);
+  await page.keyboard.type("API sync and api SYNC");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("TODO(alpha) and TODO(beta)");
+
+  // Accel+F opens Find and focuses the input.
+  await page.keyboard.press("ControlOrMeta+f");
+  const findInput = page.locator(".editor-search-find-input");
+  await expect(findInput).toBeVisible();
+  await expect(findInput).toBeFocused();
+
+  // Type character-by-character with frame gaps (delay > 16ms) — catches focus/select
+  // regressions that `.fill()` would hide.
+  await page.keyboard.type("sync", { delay: 30 });
+  await expect(findInput).toHaveValue("sync");
+  await expect(findInput).toBeFocused();
+  await expect(page.locator(".editor-search-status")).toHaveText("1 of 2");
+
+  // Mid-string editing keeps caret position (doesn't jump to end or select all).
+  await findInput.fill("ai");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.type("p", { delay: 30 });
+  await expect(findInput).toHaveValue("api");
+  await expect(page.locator(".editor-search-status")).toHaveText("1 of 2");
+  await expect(pm.locator(".pm-search-match")).toHaveCount(2);
+  await expect(pm.locator(".pm-search-match--active")).toHaveCount(1);
+
+  // Enter / Shift+Enter step through matches with wrap-around.
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".editor-search-status")).toHaveText("2 of 2");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".editor-search-status")).toHaveText("1 of 2");
+  await page.keyboard.press("Shift+Enter");
+  await expect(page.locator(".editor-search-status")).toHaveText("2 of 2");
+
+  // Case sensitivity toggle narrows "api" to the lowercase match only.
+  await page.locator(".editor-search-case").click();
+  await expect(page.locator(".editor-search-case")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".editor-search-status")).toHaveText("1 of 1");
+  await page.locator(".editor-search-case").click();
+
+  // Regex toggle + invalid regex feedback.
+  await page.locator(".editor-search-regex").click();
+  await findInput.fill("[unclosed");
+  await expect(page.locator(".editor-search-status")).toHaveText("Invalid");
+  await expect(page.locator(".editor-search-error")).toBeVisible();
+
+  await findInput.fill("TODO\\(\\w+\\)");
+  await expect(page.locator(".editor-search-error")).toHaveCount(0);
+  await expect(page.locator(".editor-search-status")).toHaveText("1 of 2");
+
+  // Escape closes the search bar (not the card modal) and returns focus to the editor.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".editor-search-bar")).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+  await expect(pm).toBeFocused();
+  await expect(pm.locator(".pm-search-match")).toHaveCount(0);
+});
+
+test("find and replace: typed query/replacement, single replace, regex capture replace-all and single undo", async ({ page, request }) => {
+  await openEditor(page, request, "Editor Replace");
+  const pm = editor(page);
+  await page.keyboard.type("TODO(api) and TODO(ui) and TODO(db)");
+
+  // Accel+Shift+H opens Find & Replace directly.
+  await page.keyboard.press("ControlOrMeta+Shift+h");
+  const findInput = page.locator(".editor-search-find-input");
+  const replaceInput = page.locator(".editor-search-replace-input");
+  await expect(findInput).toBeFocused();
+  await expect(replaceInput).toBeVisible();
+
+  // Single literal replace using real character-by-character typing.
+  await page.keyboard.type("TODO(api)", { delay: 25 });
+  await expect(findInput).toHaveValue("TODO(api)");
+  await replaceInput.click();
+  await page.keyboard.type("DONE(api)", { delay: 25 });
+  await expect(replaceInput).toHaveValue("DONE(api)");
+  await page.keyboard.press("Enter");
+  await expect(pm).toContainText("DONE(api) and TODO(ui) and TODO(db)");
+
+  // Regex replace-all with capture group, then single Undo reverts both.
+  await page.locator(".editor-search-regex").click();
+  await findInput.fill("TODO\\(([^)]+)\\)");
+  await replaceInput.fill("DONE($1)");
+  await replaceInput.focus();
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(pm).toContainText("DONE(api) and DONE(ui) and DONE(db)");
+
+  await page.keyboard.press("Escape");
+  await expect(pm).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(pm).toContainText("DONE(api) and TODO(ui) and TODO(db)");
+});

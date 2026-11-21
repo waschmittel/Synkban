@@ -6,6 +6,7 @@ import { test, expect, type Page } from "@playwright/test";
 //
 // Accelerator chords render as "⌘X" on macOS and "Ctrl+X" elsewhere.
 const A = (k: string) => `(?:⌘|Ctrl\\+)${k}`;
+const AS = (k: string) => `(?:⌘⇧|Ctrl\\+Shift\\+)${k}`;
 
 async function expectTitles(page: Page, table: [string, RegExp][]) {
   for (const [selector, re] of table) {
@@ -132,7 +133,23 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],
     [".lua-block-run", new RegExp(`^Run Lua \\(${A("Enter")}\\)$`)],
     [".lua-block-clear", /^Clear output$/],
+    [".editor-find-btn", new RegExp(`^Find in description \\(${A("F")}\\)$`)],
   ]);
+
+  // Open Find & Replace and verify its shortcut tooltips.
+  await page.keyboard.press("ControlOrMeta+Shift+h");
+  await expect(page.locator(".editor-search-bar")).toBeVisible();
+  await expectTitles(page, [
+    [".editor-search-expand", new RegExp(`^Toggle replace \\(${AS("H")}\\)$`)],
+    [".editor-search-prev", /^Previous match \(Shift\+Enter\)$/],
+    [".editor-search-next", /^Next match \(Enter\)$/],
+    [".editor-search-close", /^Close search \(Esc\)$/],
+    [".editor-search-replace-btn", /^Replace \(Enter\)$/],
+    [".editor-search-replace-all-btn", new RegExp(`^Replace all \\(${A("Enter")}\\)$`)],
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".editor-search-bar")).toHaveCount(0);
+
   // The history button carries an icon, not just text.
   await expect(page.locator(".modal-history-btn svg")).toHaveCount(1);
 });

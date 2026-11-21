@@ -1,4 +1,5 @@
 import { onMount, onCleanup, createSignal, createMemo, createEffect, on, Show } from "solid-js";
+import { Portal } from "solid-js/web";
 import { EditorView } from "prosemirror-view";
 import { EditorState } from "prosemirror-state";
 import type { Attachment, Card, ChecklistItem, Draft, DraftContent, Label } from "../types";
@@ -6,11 +7,21 @@ import { checklistOf, contentOf, labelsOf, normLabels, sameContent, serializeChe
 import { timeAgo } from "../timeAgo";
 import { actionError, api, errorMessage, isNetworkError, onReconnect, reportActionError } from "../api";
 import { createCardEditor, docFromDescription, insertImage, removeImages } from "../proseEditor";
+import {
+  EMPTY_SEARCH_STATE,
+  closeSearch,
+  openSearch,
+  replaceActive,
+  replaceAllMatches,
+  stepSearch,
+  updateSearch,
+  type SearchState,
+} from "../editorSearch";
 import { pastedImageFiles } from "../pasteImages";
 import { imageRefIds, stripImageRefs } from "../imageRefs";
 import { focusTrap } from "../focusTrap";
 import { handleMarkdownShortcut } from "../mdInput";
-import { accel, hasAccel, tip } from "../platform";
+import { accel, hasAccel, hasAccelShift, tip } from "../platform";
 import CardLabelSection from "./CardLabelSection";
 import ChecklistSection from "./ChecklistSection";
 import DueDateSection from "./DueDateSection";
@@ -21,6 +32,7 @@ import UnsavedDialog from "./UnsavedDialog";
 import HistoryDialog from "./HistoryDialog";
 import ExportPdfDialog from "./ExportPdfDialog";
 import DetailRow from "./DetailRow";
+import EditorSearchBar from "./EditorSearchBar";
 
 /// Handle the Notes pane hands to its board (ADR-0022).
 export interface CardDetailControl {
@@ -173,6 +185,18 @@ export default function CardDetail(props: Props) {
   const referenced = createMemo(() => imageRefIds(description()));
   const [draggingFile, setDraggingFile] = createSignal(false);
   let dragCounter = 0;
+  const [searchState, setSearchState] = createSignal<SearchState>(EMPTY_SEARCH_STATE);
+  const [searchFocusReq, setSearchFocusReq] = createSignal<{ seq: number; target: "find" | "replace" }>({
+    seq: 0,
+    target: "find",
+  });
+  const [searchHost, setSearchHost] = createSignal<HTMLElement | null>(null);
+
+  const triggerSearch = (replace?: boolean) => {
+    if (!view) return;
+    openSearch(view, { replace });
+    setSearchFocusReq((prev) => ({ seq: prev.seq + 1, target: replace ? "replace" : "find" }));
+  };
 
   onMount(() => {
     view = createCardEditor(editorRef, docFromDescription(start.description), () => {
@@ -199,7 +223,15 @@ export default function CardDetail(props: Props) {
         const att = attachments().find((a) => a.id === id);
         if (att) setPreviewAtt(att);
       },
+      onSearchStateChange: setSearchState,
+      onOpenSearch: () => triggerSearch(),
     });
+    const slot = document.createElement("div");
+    slot.className = "editor-search-slot";
+    const menubar = editorRef.querySelector(".ProseMirror-menubar");
+    if (menubar?.parentElement) menubar.after(slot);
+    else editorRef.prepend(slot);
+    setSearchHost(slot);
     props.control?.({ dirty, confirmLeave, focusDescription: () => view?.focus(), leave: () => guardedClose() });
     // Board.tsx dispatches this when its global Escape handler fires while the
     // modal is open but focus is outside it (e.g. on <body>) — route through
@@ -217,6 +249,7 @@ export default function CardDetail(props: Props) {
   /// Replace the editor content without an undo step back to the old version.
   const setEditorDoc = (description: string) => {
     if (!view) return;
+    setSearchState(EMPTY_SEARCH_STATE);
     view.updateState(EditorState.create({ doc: docFromDescription(description), plugins: view.state.plugins }));
     setDescription(serializeDoc(view.state.doc));
   };
@@ -291,6 +324,10 @@ export default function CardDetail(props: Props) {
     if (showUnsavedDialog() || showHistory() || showExport() || deleteAtt()) return;
     if (previewAtt()) {
       setPreviewAtt(null);
+      return;
+    }
+    if (searchState().open && view) {
+      closeSearch(view, true);
       return;
     }
     guardedClose();
@@ -552,6 +589,12 @@ export default function CardDetail(props: Props) {
         e.stopPropagation();
         return;
       }
+      if (searchState().open && view) {
+        closeSearch(view, true);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       guardedClose();
     }
     // Accelerator section-focus shortcuts. These fire regardless of focus (even
@@ -615,6 +658,16 @@ export default function CardDetail(props: Props) {
         openDuePicker?.();
         return;
       }
+      if (k === "f") {
+        e.preventDefault();
+        triggerSearch(false);
+        return;
+      }
+    }
+    if (hasAccelShift(e) && e.key.toLowerCase() === "h") {
+      e.preventDefault();
+      triggerSearch(true);
+      return;
     }
     const el = e.target as HTMLElement;
     const isTyping =
@@ -755,6 +808,31 @@ export default function CardDetail(props: Props) {
             }
           >
             <div class="editor-wrapper" ref={editorRef!} />
+            <Show when={searchHost()}>
+              {(host) => (
+                <Portal mount={host()}>
+                  <EditorSearchBar
+                    state={searchState()}
+                    focusRequest={searchFocusReq()}
+                    onQueryChange={(q) => view && updateSearch(view, { query: q })}
+                    onToggleCase={() => view && updateSearch(view, { caseSensitive: !searchState().caseSensitive })}
+                    onToggleRegex={() => view && updateSearch(view, { regex: !searchState().regex })}
+                    onToggleReplace={() => {
+                      if (!view) return;
+                      const next = !searchState().replaceOpen;
+                      updateSearch(view, { replaceOpen: next });
+                      if (next) {
+                        setSearchFocusReq((prev) => ({ seq: prev.seq + 1, target: "replace" }));
+                      }
+                    }}
+                    onStep={(delta) => view && stepSearch(view, delta)}
+                    onReplace={(rep) => view && replaceActive(view, rep)}
+                    onReplaceAll={(rep) => view && replaceAllMatches(view, rep)}
+                    onClose={() => view && closeSearch(view, true)}
+                  />
+                </Portal>
+              )}
+            </Show>
           </DetailRow>
           <Show when={showChecklist()}>
             <ChecklistSection

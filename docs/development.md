@@ -246,6 +246,7 @@ tc/
 │       ├── luaWorker.ts              # Module Web Worker running Lua 5.4 WASM
 │       ├── luaRunner.ts              # 1.5s timeout worker manager + Node test fallback
 │       ├── luaSyntax.ts              # Lua tokenizer, syntax decorations, and autocomplete popup
+│       ├── editorSearch.ts           # ProseMirror Find & Replace plugin (regex, case sensitivity, decorations)
 │       ├── luaBlock.ts               # ProseMirror NodeView, Run/Clear controls, and shortcuts
 │       ├── proseEditor.ts            # ProseMirror schema + createCardEditor()
 │       ├── positions.ts              # Fractional indexing math
@@ -314,6 +315,8 @@ Uses native HTML5 drag-and-drop API (no library). Cards store their ID and sourc
 ProseMirror configured in `frontend/src/proseEditor.ts` against `frontend/src/schema.json` (shared with the Rust validator in `backend/src/schema.rs`). The menu is customised via `editorMenu.ts`: Plain/Code/Lua block/H1–H3 styles, inline bold/italic/code, links, inline images, and tables/matrices. Documents are serialised to JSON and stored in the card's `description` field. ProseMirror is inherently safe — it constructs DOM from a schema-validated document model, never from raw HTML strings.
 
 Runnable **`lua_block`** nodes are implemented in native ProseMirror (`luaSyntax.ts` + `luaBlock.ts`, no CodeMirror) so short calculations, scratchpads, and note helpers stay fast and lightweight inside cards and Notes panes. Clicking **Run** or pressing `Cmd/Ctrl + Enter` evaluates Lua 5.4 inside a sandboxed `wasmoon` Web Worker (`luaWorker.ts` + `luaEval.ts` + `luaRunner.ts`) with a 1.5 s wall-clock timeout and persists `{ output, error, ran_hash }` back into the node attributes. See [ADR-0028](adr/0028-lua-blocks.md) for the full design and trade-offs.
+
+In-description **Find & Replace** is implemented as a custom ProseMirror plugin (`editorSearch.ts`) paired with a docked SolidJS bar (`EditorSearchBar.tsx`) mounted inside `.editor-wrapper` beneath `.ProseMirror-menubar`. It computes block-scoped matches with a `charOffset → docPos` map (matching across inline marks, tables, and `lua_block` nodes without crossing block or image boundaries), supports switchable case sensitivity and regular expressions with capture-group replacement, and applies **Replace all** in reverse document order inside a single undoable transaction. See [ADR-0029](adr/0029-editor-search-and-replace.md).
 
 ### Desktop mode
 

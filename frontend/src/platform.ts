@@ -23,6 +23,12 @@ export function hasAccel(e: KeyboardEvent): boolean {
   return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
 }
 
+/// True when the platform accelerator + Shift (and no Alt) are held.
+export function hasAccelShift(e: KeyboardEvent): boolean {
+  if (!e.shiftKey || e.altKey) return false;
+  return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+}
+
 /// Tooltip text that advertises a keyboard shortcut: `tip("Filter cards", "F")`
 /// → "Filter cards (F)". Every control with a shortcut must carry one of these
 /// (see CLAUDE.md, "Shortcut discoverability").
@@ -30,3 +36,6 @@ export const tip = (label: string, keys: string): string => `${label} (${keys})`
 
 /// Accelerator chord text: `accel("S")` → "⌘S" on macOS, "Ctrl+S" elsewhere.
 export const accel = (key: string): string => (isMac ? `⌘${key}` : `${accelLabel}+${key}`);
+
+/// Accelerator + Shift chord text: `accelShift("H")` → "⌘⇧H" on macOS, "Ctrl+Shift+H" elsewhere.
+export const accelShift = (key: string): string => (isMac ? `⌘⇧${key}` : `${accelLabel}+Shift+${key}`);

@@ -1108,3 +1108,18 @@ test("dark mode styles the switch, tabs and banners", async ({ page, request }) 
   expect(await bg(".notes-body")).not.toBe("rgb(255, 255, 255)");
   expect(await bg(".notes-master")).not.toBe("rgb(244, 245, 247)");
 });
+
+test("description search bar closes automatically when switching cards in Notes mode", async ({ page, request }) => {
+  const s = await seed(request, [{ title: "Inbox", cards: ["First note", "Second note"] }]);
+  await page.goto(`/board/${s.boardId}`);
+  await expect(paneTitle(page)).toHaveValue("First note");
+
+  await page.locator(".notes-detail .ProseMirror").click();
+  await page.keyboard.press("ControlOrMeta+f");
+  await expect(page.locator(".editor-search-bar")).toBeVisible();
+
+  // Switching to another card in the master column closes the search bar.
+  await page.locator(".notes-master .card", { hasText: "Second note" }).click();
+  await expect(paneTitle(page)).toHaveValue("Second note");
+  await expect(page.locator(".editor-search-bar")).toHaveCount(0);
+});

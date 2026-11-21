@@ -21,6 +21,7 @@ export const MATRIX_ICON =
 const BAND = 'fill="currentColor" fill-opacity=".28" stroke="none"';
 
 export const ICONS = {
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
   image:
     '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
   // Move: an arrow in the direction of travel.

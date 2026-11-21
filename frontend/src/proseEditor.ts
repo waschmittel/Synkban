@@ -42,7 +42,8 @@ import {
   sanitizeLinkHref,
 } from "./links";
 import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
-import { isMac } from "./platform";
+import { accel, isMac, tip } from "./platform";
+import { editorSearchPlugin, getSearchState, openSearch } from "./editorSearch";
 import {
   MenuItem,
   Dropdown,
@@ -185,11 +186,24 @@ export function createCardEditor(
     run: insertMatrix,
   });
 
+  const searchItem = new MenuItem({
+    title: tip("Find in description", accel("F")),
+    icon: { dom: iconDom(ICONS.search) },
+    class: "editor-find-btn",
+    active: (state) => getSearchState(state).open,
+    run(_state, _dispatch, view) {
+      if (hooks.onOpenSearch) hooks.onOpenSearch();
+      else openSearch(view);
+      return true;
+    },
+  });
+
   const menuContent = inlineMenu
     .concat([[typeDropdown]])
     .concat([[tableItem, matrixItem]])
     .concat([[undoItem, redoItem]])
-    .concat(items.blockMenu);
+    .concat(items.blockMenu)
+    .concat([[searchItem]]);
 
   const listItem = schema.nodes.list_item;
   // In a list Tab/Shift+Tab always belong to the editor: an item that can't
@@ -221,6 +235,7 @@ export function createCardEditor(
   const state = EditorState.create({
     doc: initialDoc,
     plugins: [
+      editorSearchPlugin(hooks.onSearchStateChange),
       ...luaPlugins(),
       tableMenuKeymap,
       ...tablePlugins(),

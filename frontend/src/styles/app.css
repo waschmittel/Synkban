@@ -1178,6 +1178,10 @@ html.electron .app-header .board-color-dropdown {
   padding-inline: 24px;
 }
 
+.modal-content--pane .editor-search-bar {
+  padding-inline: 24px;
+}
+
 .modal-content--pane .editor-wrapper .ProseMirror {
   padding-inline: 24px;
 }
@@ -3111,6 +3115,223 @@ html.theme-dark .modal-history-btn:hover {
   height: 20px;
   background: var(--color-border);
   margin: 0 4px;
+}
+
+/* ═══ Editor Find & Replace Bar (ADR-0029) ═══ */
+.editor-search-slot {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.editor-search-bar {
+  background: #fafbfc;
+  border-bottom: 1px solid var(--color-border);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-search-row,
+.editor-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.editor-replace-row {
+  padding-left: 30px;
+}
+
+.editor-search-input-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1 1 180px;
+  min-width: 140px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.editor-search-input-wrap:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: var(--ring);
+}
+
+.editor-search-input-wrap--error,
+.editor-search-input-wrap--error:focus-within {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 24%, transparent);
+}
+
+.editor-search-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.editor-search-input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.editor-search-toggles {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.editor-search-toggle {
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+
+.editor-search-regex {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.editor-search-toggle:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+.editor-search-toggle:focus {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.editor-search-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+.editor-search-status {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  min-width: 68px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.editor-search-status--error {
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+.editor-search-nav,
+.editor-replace-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.editor-search-icon-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.editor-search-icon-btn:hover:not(:disabled) {
+  background: var(--color-surface-3);
+  color: var(--color-text);
+}
+
+.editor-search-icon-btn:focus {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.editor-search-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.editor-search-expand svg {
+  transition: transform var(--t-fast);
+}
+
+.editor-search-expand--open svg {
+  transform: rotate(90deg);
+}
+
+.editor-search-action {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.editor-search-action:hover:not(:disabled) {
+  background: var(--color-surface-2);
+  border-color: var(--color-accent);
+}
+
+.editor-search-action:focus {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.editor-search-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.editor-search-error {
+  padding-left: 30px;
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+.editor-wrapper .ProseMirror .pm-search-match {
+  background: rgba(250, 204, 21, 0.48);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(202, 138, 4, 0.38);
+}
+
+.editor-wrapper .ProseMirror .pm-search-match--active {
+  background: #f97316;
+  color: #ffffff;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px #ea580c;
 }
 
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-dropdown {
@@ -5155,6 +5376,21 @@ html.theme-dark .editor-wrapper .ProseMirror a {
 
 html.theme-dark .editor-wrapper .ProseMirror-menubar {
   background: #1f242c;
+}
+
+html.theme-dark .editor-search-bar {
+  background: #1f242c;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .pm-search-match {
+  background: rgba(250, 204, 21, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.45);
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .pm-search-match--active {
+  background: #ea580c;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px #fb923c;
 }
 
 html.theme-dark .editor-wrapper .ProseMirror-menu-active {

@@ -13,6 +13,7 @@ import { schema } from "./schema";
 import { ICONS, svg } from "./tableIcons";
 import { tip } from "./platform";
 import type { Attachment } from "./types";
+import type { SearchState } from "./editorSearch";
 
 export interface EditorHooks {
   cardId: string;
@@ -26,6 +27,10 @@ export interface EditorHooks {
   onImageClick: (attId: string) => void;
   /// Copies an attachment of another card onto this one (pasted reference).
   copyAttachment: (fromCard: string, attId: string) => Promise<Attachment | undefined>;
+  /// Fires whenever the description's Find & Replace plugin state changes.
+  onSearchStateChange?: (state: SearchState) => void;
+  /// Toolbar Find button clicked.
+  onOpenSearch?: () => void;
 }
 
 const hooksByView = new WeakMap<EditorView, EditorHooks>();

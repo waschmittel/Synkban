@@ -8,7 +8,7 @@ export type HelpContext = "home" | "board" | "notes" | "card" | "editor";
 
 /// The context for the focused element on a board page.
 export function helpContextOf(el: Element | null, notes: boolean): HelpContext {
-  if (el?.closest(".ProseMirror")) return "editor";
+  if (el?.closest(".ProseMirror, .editor-search-bar")) return "editor";
   if (el?.closest(".modal-content")) return "card";
   return notes ? "notes" : "board";
 }
@@ -230,7 +230,18 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("Shift", "Enter"), k(A, "Enter")], "Line break (code block: exit below)"],
           [[k(A, "Enter")], "In a Lua block: run it (Shift+Enter exits below)"],
           [[k(A, "K"), k("Right-click")], "Editor menu: link, code, image, style, table"],
-          [[k("Esc")], "Close the menu, else leave the card"],
+          [[k("Esc")], "Close the menu / search bar, else leave the card"],
+        ],
+      },
+      {
+        title: "Find & replace",
+        rows: [
+          [[k(A, "F")], "Find in description"],
+          [[k(A, "Shift", "H")], "Find and replace in description"],
+          [[k("Enter"), k("Shift", "Enter")], "In Find: next / previous match"],
+          [[k("Enter")], "In Replace: replace active match and advance"],
+          [[k(A, "Enter")], "In Replace: replace all matches (one Undo step)"],
+          [[k("Esc")], "Close search bar and return to the active match"],
         ],
       },
       {

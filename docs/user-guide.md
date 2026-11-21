@@ -298,7 +298,7 @@ A card's **title, labels, due date, description, and checklist** are edited loca
 
 The description area (styled with a subtle warm note background) gives you structured rich text stored cleanly without raw HTML:
 
-- **Toolbar controls:** Bold, Italic, Inline code, Add or edit link, Insert image, **Text style** dropdown (showing the active style), Insert table, Insert matrix, Undo, Redo, Bulleted list, Numbered list, Quote, Increase/decrease indent.
+- **Toolbar controls:** Bold, Italic, Inline code, Add or edit link, Insert image, **Text style** dropdown (showing the active style), Insert table, Insert matrix, Undo, Redo, Bulleted list, Numbered list, Quote, Increase/decrease indent, and **Find in description** (`Cmd/Ctrl + F`).
 - **Text Styles:** **Plain text**, **Code block**, **Heading 1**, **Heading 2**, **Heading 3** (selectable via the toolbar dropdown, `Ctrl + Shift + 0 / 1 / 2 / 3 / \`, or the Editor Menu).
 - **Markdown typing shortcuts (start of a line):**
   - `# `, `## `, `### ` → Heading 1, 2, 3
@@ -316,6 +316,12 @@ The description area (styled with a subtle warm note background) gives you struc
 - **Context-sensitive Editor Menu (`Cmd/Ctrl + K` or Right-Click):**
   - Opens right beside your caret (or pointer) without losing your text selection or touch keyboard.
   - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
+- **Find & Replace (`Cmd/Ctrl + F` / `Cmd/Ctrl + Shift + H`):**
+  - Press **`Cmd/Ctrl + F`** (or click the magnifying-glass button in the toolbar) to open a compact search bar docked beneath the toolbar. If a single-line phrase is selected in the description, it pre-fills the search box automatically.
+  - Toggle **`Aa`** for case-sensitive matching and **`.*`** for regular expressions (invalid regex patterns show an inline error message).
+  - Press **`Enter`** / **`Shift + Enter`** (or click `↓` / `↑`) to step through highlighted matches across paragraphs, inline formatting, tables, and Lua blocks.
+  - Click the disclosure chevron (`▸`) or press **`Cmd/Ctrl + Shift + H`** to expand **Replace**: press **`Enter`** to replace the active match and advance, or **`Cmd/Ctrl + Enter`** (**Replace all**) to replace every match in one undoable step (`Cmd/Ctrl + Z`). In regex mode, replacement strings support capture groups (`$1`, `$&`, `$$`); in plain mode, `$` is inserted literally.
+  - Press **`Esc`** to close the search bar and return focus to the active match without closing the card. Switching to another card in Notes Mode closes the search bar automatically.
 
 ![Card Modal with the context-sensitive Editor Menu open](images/card-modal-editor-menu.png)
 
