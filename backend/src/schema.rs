@@ -814,6 +814,15 @@ mod tests {
                     "content": [{ "type": "text", "text": "fn main() {}" }]
                 },
                 {
+                    "type": "lua_block",
+                    "content": [{ "type": "text", "text": "return 1 + 2" }]
+                },
+                {
+                    "type": "lua_block",
+                    "attrs": { "output": "=> 3", "error": null, "ran_hash": "deadbeef" },
+                    "content": [{ "type": "text", "text": "return 1 + 2" }]
+                },
+                {
                     "type": "bullet_list",
                     "content": [{
                         "type": "list_item",
@@ -966,12 +975,27 @@ mod tests {
 
     #[test]
     fn rejects_invalid_marks_and_unsafe_links() {
-        // Marks are forbidden inside code_block (`marks: ""`).
+        // Marks are forbidden inside code_block and lua_block (`marks: ""`).
         err(json!({
             "type": "doc",
             "content": [{
                 "type": "code_block",
                 "content": [{ "type": "text", "marks": [{ "type": "strong" }], "text": "x" }]
+            }]
+        }));
+        err(json!({
+            "type": "doc",
+            "content": [{
+                "type": "lua_block",
+                "content": [{ "type": "text", "marks": [{ "type": "strong" }], "text": "x" }]
+            }]
+        }));
+        err(json!({
+            "type": "doc",
+            "content": [{
+                "type": "lua_block",
+                "attrs": { "extra": 1 },
+                "content": [{ "type": "text", "text": "return 1" }]
             }]
         }));
         // Marks are forbidden on block nodes.

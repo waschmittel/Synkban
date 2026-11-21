@@ -169,3 +169,35 @@ describe("descriptionLines images", () => {
     expect(descriptionLines(JSON.stringify(doc))).toEqual(["see [image: shot.png]"]);
   });
 });
+
+describe("descriptionLines lua_block", () => {
+  it("renders lua fence, persisted output, and error lines", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "lua_block",
+          attrs: { output: "hi\n=> 3", error: null, ran_hash: "abcd1234" },
+          content: [{ type: "text", text: "print('hi')\nreturn 1 + 2" }],
+        },
+        {
+          type: "lua_block",
+          attrs: { output: null, error: "boom", ran_hash: "00000000" },
+          content: [{ type: "text", text: "error('boom')" }],
+        },
+      ],
+    };
+    expect(descriptionLines(JSON.stringify(doc))).toEqual([
+      "```lua",
+      "print('hi')",
+      "return 1 + 2",
+      "-- → hi",
+      "-- → => 3",
+      "```",
+      "```lua",
+      "error('boom')",
+      "-- ! boom",
+      "```",
+    ]);
+  });
+});

@@ -41,7 +41,7 @@ test("text style dropdown shows the current style; unavailable choices are greye
   await typeDropdown(page).click();
   const menu = page.locator(".ProseMirror-menu-dropdown-menu");
   await expect(menu.locator("button")).toHaveText([
-    "Plain text", "Code block", "Heading 1", "Heading 2", "Heading 3",
+    "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
   ]);
   await menu.locator("button", { hasText: "Heading 2" }).click();
   await expect(typeDropdown(page)).toHaveText("Heading 2");
@@ -50,7 +50,7 @@ test("text style dropdown shows the current style; unavailable choices are greye
   // The current style is marked; every choice stays listed.
   if (!(await menu.isVisible())) await typeDropdown(page).click();
   await expect(menu.locator("button", { hasText: "Heading 2" })).toHaveClass(/ProseMirror-menu-active/);
-  await expect(menu.locator("button")).toHaveCount(5);
+  await expect(menu.locator("button")).toHaveCount(6);
   await page.keyboard.press("Escape");
 });
 
@@ -176,7 +176,7 @@ test("Accel+K menu is contextual: link, inline code, text style", async ({ page,
   const labels = page.locator(".table-menu-item .table-menu-label");
   await expect(labels).toHaveText([
     "Add link…", "Remove link", "Inline code", "Insert image…",
-    "Plain text", "Code block", "Heading 1", "Heading 2", "Heading 3",
+    "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
     "Insert table (3×3)", "Insert matrix (3×3)",
   ]);
   // No link at the cursor and nothing selected: link actions are greyed out.
@@ -788,4 +788,162 @@ test("code blocks and inline code have legible colors without pre/code conflict 
   expect(await stylesOf("pre")).toEqual({ bg: "rgb(30, 30, 46)", color: "rgb(205, 214, 244)" });
   expect((await stylesOf("pre > code")).bg).toBe("rgba(0, 0, 0, 0)");
   expect((await stylesOf("p code")).bg).toBe("rgba(255, 255, 255, 0.08)");
+});
+
+test("lua block: fence & menu creation, syntax highlight, autocomplete, worker run, persistence, stale & timeout", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Editor Lua");
+  const pm = editor(page);
+
+  // ```lua converts immediately without waiting for Space, and consumes an optional trailing Space.
+  await page.keyboard.type("```lua");
+  await expect(pm.locator(".lua-block")).toHaveCount(1);
+  await expect(typeDropdown(page)).toHaveText("Lua block");
+  await page.keyboard.type(" ");
+  await expect(pm.locator(".lua-block-code")).toHaveText("");
+  await page.keyboard.press("Backspace");
+  await expect(pm.locator(".lua-block")).toHaveCount(0);
+  await expect(pm.locator("p")).toHaveCount(1);
+
+  // Accel+K -> E creates a Lua block and TypeDropdown shows "Lua block".
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("e");
+  const block = pm.locator(".lua-block");
+  await expect(block).toHaveCount(1);
+  await expect(typeDropdown(page)).toHaveText("Lua block");
+
+  // Type code with syntax highlighting and trigger stdlib autocomplete (`math.fl` -> Tab).
+  await page.keyboard.type("local qty = 3\nreturn math.fl");
+  const ac = page.locator(".lua-autocomplete");
+  await expect(ac).toBeVisible();
+  await expect(ac.locator(".lua-autocomplete-item")).toHaveText(/floor/);
+  await page.keyboard.press("Tab");
+  await expect(ac).toHaveCount(0);
+  await expect(pm).toBeFocused();
+  await page.keyboard.type("(qty * 2.9)");
+
+  // Trigger local-variable autocomplete and dismiss it with Escape without closing the modal.
+  await page.keyboard.type("\n-- qt");
+  await expect(ac).toHaveCount(0); // suppressed inside comments
+  for (let i = 0; i < 5; i++) await page.keyboard.press("Backspace");
+  await page.keyboard.type("local x = qt");
+  await expect(ac).toBeVisible();
+  await expect(ac.locator(".lua-autocomplete-item").first()).toContainText("qty");
+  await page.keyboard.press("Escape");
+  await expect(ac).toHaveCount(0);
+  await expect(page.locator(".modal-overlay")).toBeVisible();
+  // Remove the extra line so code stays `local qty = 3\nreturn math.floor(qty * 2.9)`.
+  for (let i = 0; i < 13; i++) await page.keyboard.press("Backspace");
+
+  // Syntax highlight tokens exist inside the code view.
+  await expect(block.locator(".lua-tok-keyword").first()).toHaveText("local");
+  await expect(block.locator(".lua-tok-number").first()).toHaveText("3");
+  await expect(block.locator(".lua-tok-builtin").first()).toHaveText("math");
+
+  // Mod-Enter evaluates in the wasmoon Web Worker and persists result in the doc.
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(block.locator(".lua-block-status")).toHaveText("Ran");
+  await expect(block.locator(".lua-block-output")).toHaveText("=> 8");
+
+  // Save and reopen: output appears immediately without re-running.
+  await page.locator(".modal-save-btn").click();
+  await expect(page.locator(".modal-overlay")).toHaveCount(0);
+  await page.locator(".card", { hasText: "Editor card" }).click();
+  await expect(block.locator(".lua-block-status")).toHaveText("Ran");
+  await expect(block.locator(".lua-block-output")).toHaveText("=> 8");
+  await expect(page.locator(".unsaved-indicator")).toHaveCount(0);
+
+  // Editing code marks the persisted output Outdated until re-run via Run button.
+  await block.locator(".lua-block-code").click({ position: { x: 10, y: 6 } });
+  await settle(page);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("End");
+  await page.keyboard.type(" + 1");
+  await expect(block.locator(".lua-block-status")).toHaveText("Outdated");
+  await expect(page.locator(".unsaved-indicator")).toBeVisible();
+  await block.locator(".lua-block-run").click();
+  await expect(block.locator(".lua-block-status")).toHaveText("Ran");
+  await expect(block.locator(".lua-block-output")).toHaveText("=> 9");
+
+  // Clear removes persisted output.
+  await block.locator(".lua-block-clear").click();
+  await expect(block.locator(".lua-block-result")).toBeHidden();
+  await expect(block.locator(".lua-block-status")).toHaveText("");
+
+  // Infinite loops time out, then subsequent blocks still recover cleanly.
+  await block.locator(".lua-block-code").click();
+  await settle(page);
+  await page.keyboard.press("Shift+Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("e");
+  const loopBlock = pm.locator(".lua-block").nth(1);
+  await page.keyboard.type("while true do end");
+  await loopBlock.locator(".lua-block-run").click();
+  await expect(loopBlock.locator(".lua-block-status")).toHaveText("Error", { timeout: 5000 });
+  await expect(loopBlock.locator(".lua-block-error")).toContainText("timed out");
+  const firstBlock = block.first();
+  await firstBlock.locator(".lua-block-run").click();
+  await expect(firstBlock.locator(".lua-block-status")).toHaveText("Ran");
+  await expect(firstBlock.locator(".lua-block-output")).toHaveText("=> 9");
+});
+
+test("lua block: padding clicks, outside blur/refocus, gap cursors, text style sync & Enter ergonomics", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Editor Lua Corners");
+  const pm = editor(page);
+
+  await page.keyboard.type("```lua");
+  await expect(typeDropdown(page)).toHaveText("Lua block");
+  // Enter after ```lua starts on line 1 (no extra leading blank line).
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("local tab = 1");
+  await page.keyboard.press("Enter");
+  // Keyword `else` and passive autocomplete on `ta` do not swallow Enter.
+  await page.keyboard.type("if tab then");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("else");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".lua-autocomplete")).toHaveCount(0);
+  await page.keyboard.type("end");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("return ta");
+  const ac = page.locator(".lua-autocomplete");
+  await expect(ac).toBeVisible();
+  await page.keyboard.press("Enter"); // passive popup lets Enter insert a newline
+  await expect(ac).toHaveCount(0);
+  await page.keyboard.type("b");
+
+  // Click outside into the card title (blurs ProseMirror), then click the right-side padding
+  // inside `.lua-block-pre` to refocus: text style must say "Lua block" and multi-line Enter works.
+  await page.locator(".modal-title-input").click();
+  await settle(page);
+  const preBox = (await pm.locator(".lua-block-code").boundingBox())!;
+  await page.mouse.click(preBox.x + preBox.width - 12, preBox.y + preBox.height - 8);
+  await settle(page);
+  await expect(pm).toBeFocused();
+  await expect(typeDropdown(page)).toHaveText("Lua block");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("-- extra line");
+  await expect(pm.locator(".lua-block-code")).toContainText("-- extra line");
+
+  // Clicking editor padding below a standalone lua_block places a gap cursor and leaves the Lua block.
+  const pmBox = (await pm.boundingBox())!;
+  const blockBox = (await pm.locator(".lua-block").boundingBox())!;
+  await pm.click({
+    position: {
+      x: pmBox.width / 2,
+      y: Math.min(pmBox.height - 2, (blockBox.y + blockBox.height - pmBox.y + pmBox.height) / 2),
+    },
+  });
+  await expectGapCursor(page);
+  await expect(typeDropdown(page)).toHaveText("Text style");
+  await expect(typeDropdown(page)).toBeEnabled();
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("outside paragraph");
+  await expect(pm.locator(":scope > p").last()).toHaveText("outside paragraph");
+  await expect(typeDropdown(page)).toHaveText("Plain text");
 });

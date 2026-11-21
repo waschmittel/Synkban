@@ -52,6 +52,7 @@ export const ICONS = {
   unlink: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1M4 4l16 16"/>',
   code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
   codeBlock: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l-3 3 3 3M14 9l3 3-3 3"/>',
+  luaBlock: '<rect x="3" y="4" width="18" height="16" rx="2"/><polygon points="10 9 16 12 10 15"/>',
   paragraph: '<path d="M4 7h16M4 12h16M4 17h10"/>',
   paraAbove: '<path d="M4 6h6M7 3v6M13 6h7"/><rect x="4" y="13" width="16" height="7" rx="1.5"/>',
   paraBelow: '<rect x="4" y="4" width="16" height="7" rx="1.5"/><path d="M4 18h6M7 15v6M13 18h7"/>',

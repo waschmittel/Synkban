@@ -17,6 +17,7 @@ test("home controls show their shortcuts", async ({ page, request }) => {
   await request.post("/api/boards", { data: { title: "Tooltip Home" } });
   await page.goto("/");
   await expect(page.locator(".board-card-link", { hasText: "Tooltip Home" })).toBeVisible();
+
   await expectTitles(page, [
     [".btn-header-shortcuts", /\(\?\)$/],
     [".board-archive-toggle", /\(A\)$/],
@@ -34,6 +35,7 @@ test("board controls show their shortcuts", async ({ page, request }) => {
 
   await page.goto(`/board/${board.id}`);
   await expect(page.locator(".card", { hasText: "Tip card" })).toBeVisible();
+
   await expectTitles(page, [
     [".app-logo-home", /\(B\)$/],
     [".btn-header-labels", /\(G\)$/],
@@ -62,6 +64,7 @@ test("notes view controls show their shortcuts", async ({ page, request }) => {
 
   await page.goto(`/board/${board.id}`);
   await expect(page.locator(".notes-detail")).toBeVisible();
+
   await expectTitles(page, [
     [".notes-tab:not(.notes-tab--active) .notes-tab-btn", /\(← \/ →\)$/],
     [".notes-tab--active .notes-tab-btn", /click to rename \(R\)$/],
@@ -103,6 +106,13 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
   });
   await expect(page.locator(".attachment-item").first()).toBeVisible();
 
+  await page.locator(".editor-wrapper .ProseMirror").click();
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("e");
+  await page.keyboard.type("return 1");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.locator(".lua-block-status")).toHaveText("Ran");
+
   await expectTitles(page, [
     [".modal-title-input", new RegExp(`${A("E")}\\)$`)],
     [".modal-close", /\(Esc\)$/],
@@ -120,6 +130,8 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
     [".modal-save-btn", new RegExp(`${A("S")}\\)$`)],
     [".modal-export-btn", new RegExp(`${A("P")}\\)$`)],
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],
+    [".lua-block-run", new RegExp(`^Run Lua \\(${A("Enter")}\\)$`)],
+    [".lua-block-clear", /^Clear output$/],
   ]);
   // The history button carries an icon, not just text.
   await expect(page.locator(".modal-history-btn svg")).toHaveCount(1);

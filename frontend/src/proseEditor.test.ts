@@ -60,6 +60,26 @@ describe("image nodes", () => {
   });
 });
 
+describe("lua_block nodes", () => {
+  it("round-trips through JSON and <pre data-lua> HTML", () => {
+    const json = {
+      type: "doc",
+      content: [{
+        type: "lua_block",
+        attrs: { output: "=> 3", error: null, ran_hash: "deadbeef" },
+        content: [{ type: "text", text: "return 1 + 2" }],
+      }],
+    };
+    const doc = docFromDescription(JSON.stringify(json));
+    expect(doc.toJSON()).toEqual(json);
+
+    const el = document.createElement("div");
+    el.innerHTML = '<pre data-lua="" data-output="=> 3" data-ran-hash="deadbeef"><code>return 1 + 2</code></pre>';
+    const parsed = DOMParser.fromSchema(schema).parse(el);
+    expect(parsed.toJSON()).toEqual(json);
+  });
+});
+
 describe("shared schema.json parity and validation", () => {
   it("compiled ProseMirror schema matches schema.json 1-to-1", () => {
     expect(schema.topNodeType.name).toBe(schemaSpec.topNode);

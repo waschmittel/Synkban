@@ -18,7 +18,7 @@
 ///
 ///   always            l link (add/edit) · u remove link · i inline code · m image
 ///                     ↑ ↓ Home End move a highlight, Enter runs it
-///   outside a table   0 plain · b code block · 1/2/3 heading · t table · x matrix
+///   outside a table   0 plain · b code block · e lua block · 1/2/3 heading · t table · x matrix
 ///   in a block/table  Shift+P / P … insert paragraph above / below
 ///   inside a table    w s / a d … move the row up, down / column left, right
 ///                     x … transpose (matrix only)
@@ -141,7 +141,7 @@ const IMAGE_ITEM: Item = {
   },
 };
 
-const STYLE_ICONS = [ICONS.paragraph, ICONS.codeBlock, ICONS.heading1, ICONS.heading2, ICONS.heading3];
+const STYLE_ICONS = [ICONS.paragraph, ICONS.codeBlock, ICONS.luaBlock, ICONS.heading1, ICONS.heading2, ICONS.heading3];
 const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
   label: t.label,
   icon: STYLE_ICONS[i],

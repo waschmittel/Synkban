@@ -880,6 +880,7 @@ impl Layout {
                 self.gap(5.0);
             }
             "code_block" => self.code_block(content, x, w),
+            "lua_block" => self.lua_block(node, content, x, w),
             "bullet_list" | "ordered_list" => {
                 let ordered = kind == "ordered_list";
                 let start = node
@@ -1043,6 +1044,118 @@ impl Layout {
             self.rect(x, y, w, line_h, CODE_BG);
             self.emit_line_at(line, x + 5.0, y, w - 10.0, size, Align::Left);
             self.y += line_h;
+        }
+        self.gap(7.0);
+    }
+
+    fn lua_block(&mut self, node: &Value, content: &[Value], x: f32, w: f32) {
+        let size = 9.0;
+        let line_h = size * 1.4;
+        let raw_text: String = content
+            .iter()
+            .filter_map(|c| c.get("text").and_then(Value::as_str))
+            .collect();
+        let output = node.pointer("/attrs/output").and_then(Value::as_str);
+        let error = node.pointer("/attrs/error").and_then(Value::as_str);
+        let ran_hash = node.pointer("/attrs/ran_hash").and_then(Value::as_str);
+        let has_result = output.is_some() || error.is_some();
+        let stale = has_result && ran_hash != Some(fnv1a_32_hex(&raw_text).as_str());
+
+        let header = if stale { "Lua (outdated)" } else { "Lua" };
+        let header_sanitized = self.fonts.sanitize(Face::Mono, header);
+        let header_w = self.fonts.width(Face::Mono, &header_sanitized, size);
+
+        let code_text = self.fonts.sanitize(Face::Mono, &raw_text);
+        let code_span = [Span {
+            text: code_text,
+            code: true,
+            ..Span::default()
+        }];
+        let code_lines = self.wrap_code(&code_span, size, w - 10.0);
+
+        let mut res_lines: Vec<(Vec<Seg>, Rgb)> = Vec::new();
+        if let Some(out) = output.filter(|s| !s.is_empty() || error.is_none()) {
+            let body = if out.is_empty() {
+                "\u{2192} (no output)".to_string()
+            } else {
+                out.split('\n')
+                    .map(|l| format!("\u{2192} {l}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            let clean = self.fonts.sanitize(Face::Mono, &body);
+            let span = [Span {
+                text: clean,
+                code: true,
+                ..Span::default()
+            }];
+            for l in self.wrap_code(&span, size, w - 10.0) {
+                res_lines.push((l, INK));
+            }
+        }
+        if let Some(err) = error {
+            let body = err
+                .split('\n')
+                .map(|l| format!("! {l}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let clean = self.fonts.sanitize(Face::Mono, &body);
+            let span = [Span {
+                text: clean,
+                code: true,
+                ..Span::default()
+            }];
+            for l in self.wrap_code(&span, size, w - 10.0) {
+                res_lines.push((l, [0xb9, 0x1c, 0x1c]));
+            }
+        }
+
+        let total = 1 + code_lines.len() + res_lines.len();
+        self.gap(2.0);
+        let mut idx = 0;
+
+        self.ensure(lines_to_keep(idx, total) as f32 * line_h);
+        let y = self.y;
+        self.rect(x, y, w, line_h, HEAD_BG);
+        let header_line = [Seg {
+            text: header_sanitized,
+            face: Face::Mono,
+            w: header_w,
+            lead: 0.0,
+            link: None,
+            color: MUTED,
+        }];
+        self.emit_line_at(&header_line, x + 5.0, y, w - 10.0, size, Align::Left);
+        self.y += line_h;
+        idx += 1;
+
+        for line in &code_lines {
+            self.ensure(lines_to_keep(idx, total) as f32 * line_h);
+            let y = self.y;
+            self.rect(x, y, w, line_h, CODE_BG);
+            self.emit_line_at(line, x + 5.0, y, w - 10.0, size, Align::Left);
+            self.y += line_h;
+            idx += 1;
+        }
+
+        for (line, color) in &res_lines {
+            self.ensure(lines_to_keep(idx, total) as f32 * line_h);
+            let y = self.y;
+            self.rect(x, y, w, line_h, HEAD_BG);
+            let colored: Vec<Seg> = line
+                .iter()
+                .map(|s| Seg {
+                    text: s.text.clone(),
+                    face: s.face,
+                    w: s.w,
+                    lead: s.lead,
+                    link: s.link.clone(),
+                    color: *color,
+                })
+                .collect();
+            self.emit_line_at(&colored, x + 5.0, y, w - 10.0, size, Align::Left);
+            self.y += line_h;
+            idx += 1;
         }
         self.gap(7.0);
     }
@@ -1471,6 +1584,15 @@ fn is_safe_url(u: &str) -> bool {
     ["http://", "https://", "mailto:"]
         .iter()
         .any(|p| u.len() > p.len() && u[..p.len()].eq_ignore_ascii_case(p))
+}
+
+fn fnv1a_32_hex(s: &str) -> String {
+    let mut h: u32 = 0x811c_9dc5;
+    for c in s.encode_utf16() {
+        h ^= u32::from(c);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    format!("{h:08x}")
 }
 
 fn hex_color(s: &str) -> Rgb {

@@ -28,3 +28,4 @@ validity, margins/page bounds, no empty pages and determinism.
 | `15-orphans-and-widows` | A long paragraph, code block and table split with no single line/row left alone at a page edge |
 | `16-attachments` | Attachment list (long names, sizes) and thumbnails |
 | `17-matrix` | Matrix with open top-left corner, centred top/left headers, per-cell alignment, and page break |
+| `18-lua-blocks` | Runnable Lua blocks with evaluated output, outdated indicator, and runtime error |

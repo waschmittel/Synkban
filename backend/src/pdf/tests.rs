@@ -1048,6 +1048,39 @@ fn code_blocks_preserve_indentation_and_wrap_long_lines() {
 }
 
 #[test]
+fn lua_blocks_render_header_code_output_outdated_and_errors() {
+    let fresh_code = "return 1 + 2";
+    let fresh_hash = fnv1a_32_hex(fresh_code);
+    let e = with_description(vec![
+        json!({
+            "type": "lua_block",
+            "attrs": { "output": "=> 3", "error": null, "ran_hash": fresh_hash },
+            "content": [text_node(fresh_code)]
+        }),
+        json!({
+            "type": "lua_block",
+            "attrs": { "output": "=> 3", "error": null, "ran_hash": "00000000" },
+            "content": [text_node("return 2 + 2")]
+        }),
+        json!({
+            "type": "lua_block",
+            "attrs": { "output": null, "error": "boom", "ran_hash": "ffffffff" },
+            "content": [text_node("error('boom')")]
+        }),
+        json!({ "type": "lua_block" }),
+    ]);
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    let txt = pdf_text(&pdf);
+    assert!(txt.contains("Lua"), "{txt}");
+    assert!(txt.contains("return 1 + 2"), "{txt}");
+    assert!(txt.contains("=> 3"), "{txt}");
+    assert!(txt.contains("Lua (outdated)"), "{txt}");
+    assert!(txt.contains("! boom"), "{txt}");
+}
+
+#[test]
 fn heading_levels_and_empty_headings() {
     let e = with_description(vec![
         json!({"type": "heading", "attrs": {"level": 1}, "content": [text_node("H1")]}),

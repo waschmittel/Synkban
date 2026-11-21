@@ -27,6 +27,17 @@
       "marks": "",
       "code": true
     },
+    "lua_block": {
+      "content": "text*",
+      "group": "block",
+      "marks": "",
+      "code": true,
+      "attrs": {
+        "output": { "default": null, "type": "string|null" },
+        "error": { "default": null, "type": "string|null" },
+        "ran_hash": { "default": null, "type": "string|null" }
+      }
+    },
     "text": {
       "group": "inline"
     },

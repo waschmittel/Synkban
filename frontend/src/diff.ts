@@ -132,6 +132,18 @@ export function descriptionLines(description: string): string[] {
         for (const l of inline(node).split("\n")) lines.push(indent + l);
         lines.push(indent + "```");
         return;
+      case "lua_block": {
+        lines.push(indent + (marker ?? "") + "```lua");
+        for (const l of inline(node).split("\n")) lines.push(indent + l);
+        if (typeof node.attrs?.output === "string" && node.attrs.output.length > 0) {
+          for (const l of node.attrs.output.split("\n")) lines.push(indent + "-- → " + l);
+        }
+        if (typeof node.attrs?.error === "string" && node.attrs.error.length > 0) {
+          for (const l of node.attrs.error.split("\n")) lines.push(indent + "-- ! " + l);
+        }
+        lines.push(indent + "```");
+        return;
+      }
       case "blockquote":
         (node.content ?? []).forEach((child: any) => block(child, indent + "> ", null));
         return;

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { EditorState, TextSelection } from "prosemirror-state";
+import { AllSelection, EditorState, TextSelection } from "prosemirror-state";
+import { GapCursor } from "prosemirror-gapcursor";
 import { schema, TEXT_STYLES } from "./schema";
 import { linkTarget } from "./links";
 
@@ -47,7 +48,7 @@ describe("linkTarget", () => {
 describe("TEXT_STYLES", () => {
   it("names headings 'Heading n'", () => {
     expect(TEXT_STYLES.map((t) => t.label)).toEqual([
-      "Plain text", "Code block", "Heading 1", "Heading 2", "Heading 3",
+      "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
     ]);
   });
 
@@ -59,5 +60,35 @@ describe("TEXT_STYLES", () => {
     expect(active).toEqual(["Heading 2"]);
     expect(TEXT_STYLES.find((t) => t.label === "Plain text")!.command(state)).toBe(true);
     expect(TEXT_STYLES.find((t) => t.label === "Heading 2")!.command(state)).toBe(false);
+  });
+
+  it("merges multi-paragraph selections into one lua_block, splits multi-line lua_block, and handles GapCursor", () => {
+    const style = (label: string) => TEXT_STYLES.find((t) => t.label === label)!;
+    const p1 = schema.node("paragraph", null, [schema.text("local a = 1")]);
+    const p2 = schema.node("paragraph", null, [schema.text("return a")]);
+    const multiDoc = schema.node("doc", null, [p1, p2]);
+    const multiState = EditorState.create({ doc: multiDoc, selection: new AllSelection(multiDoc) });
+    expect(style("Plain text").active(multiState)).toBe(true);
+
+    let toLua!: EditorState;
+    expect(style("Lua block").command(multiState, (tr) => (toLua = multiState.apply(tr)))).toBe(true);
+    expect(toLua.doc.childCount).toBe(1);
+    expect(toLua.doc.firstChild!.type.name).toBe("lua_block");
+    expect(toLua.doc.firstChild!.textContent).toBe("local a = 1\nreturn a");
+    expect(style("Lua block").active(toLua)).toBe(true);
+
+    let toPlain!: EditorState;
+    expect(style("Plain text").command(toLua, (tr) => (toPlain = toLua.apply(tr)))).toBe(true);
+    expect(toPlain.doc.childCount).toBe(2);
+    expect(toPlain.doc.child(0).textContent).toBe("local a = 1");
+    expect(toPlain.doc.child(1).textContent).toBe("return a");
+
+    const gapDoc = schema.node("doc", null, [schema.node("lua_block", null, [schema.text("1")])]);
+    const gapState = EditorState.create({ doc: gapDoc, selection: new GapCursor(gapDoc.resolve(gapDoc.content.size)) });
+    expect(TEXT_STYLES.some((t) => t.active(gapState))).toBe(false);
+    let fromGap!: EditorState;
+    expect(style("Plain text").command(gapState, (tr) => (fromGap = gapState.apply(tr)))).toBe(true);
+    expect(fromGap.doc.childCount).toBe(2);
+    expect(fromGap.doc.child(1).type.name).toBe("paragraph");
   });
 });

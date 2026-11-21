@@ -540,6 +540,21 @@ test("generate user-guide screenshots", async ({ page, browser, request }) => {
         ],
       ),
       codeBlock("HOST=127.0.0.1 PORT=8080 DATA_DIR=~/Sync/synkban ./synkban"),
+      ((code: string, output: string) => {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < code.length; i++) {
+          h ^= code.charCodeAt(i);
+          h = Math.imul(h, 0x01000193);
+        }
+        return {
+          type: "lua_block",
+          attrs: { output, error: null, ran_hash: (h >>> 0).toString(16).padStart(8, "0") },
+          content: [{ type: "text", text: code }],
+        };
+      })(
+        'local cards, avg_kb = 120, 4.5\nreturn string.format("%.0f KB", cards * avg_kb)',
+        "=> 540 KB",
+      ),
     ),
     checklist: [
       { id: "n-1", text: "Verify atomic write-and-rename on Windows", done: true },
@@ -805,6 +820,19 @@ test("generate user-guide screenshots", async ({ page, browser, request }) => {
   await page.screenshot({
     path: join(OUT_DIR, "matrix.png"),
     clip: paddedBox(matrixClipBox, { top: 14, right: 14, bottom: 20, left: 4 }),
+  });
+
+  // 15b. lua-block.png (tight crop around runnable Lua block inside Notes Mode pane)
+  await page.locator(".notes-master .card").first().click();
+  const luaLocator = page.locator(".notes-detail .lua-block").first();
+  await expect(luaLocator).toBeVisible();
+  await luaLocator.scrollIntoViewIfNeeded();
+  await settleUi(page, 250);
+  const luaBox = await luaLocator.boundingBox();
+  if (!luaBox) throw new Error("Missing .lua-block for screenshot");
+  await page.screenshot({
+    path: join(OUT_DIR, "lua-block.png"),
+    clip: paddedBox(luaBox, { top: 14, right: 14, bottom: 14, left: 14 }),
   });
 
   // 16. pdf-export-preview.png (rendered from real GET /api/cards/:id/pdf)

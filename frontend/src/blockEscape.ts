@@ -16,7 +16,7 @@ export function isValidGapCursor($pos: ResolvedPos): boolean {
   return (GapCursor as unknown as { valid($pos: ResolvedPos): boolean }).valid($pos);
 }
 
-const ESCAPABLE_BLOCKS = new Set(["table", "code_block", "blockquote", "bullet_list", "ordered_list"]);
+const ESCAPABLE_BLOCKS = new Set(["table", "code_block", "lua_block", "blockquote", "bullet_list", "ordered_list"]);
 
 /// True when the selection sits inside a single top-level block that cannot
 /// naturally be escaped by typing/splitting (table, code block, quote, list).
@@ -69,11 +69,11 @@ export const exitCodeOnTripleEnter: Command = (state, dispatch) => {
   return true;
 };
 
-/// Backspace inside an empty code block converts it to a plain paragraph.
+/// Backspace inside an empty code or Lua block converts it to a plain paragraph.
 export const clearEmptyCodeBlock: Command = (state, dispatch) => {
   if (!(state.selection instanceof TextSelection) || !state.selection.empty) return false;
   const { $from } = state.selection;
-  if ($from.parent.type !== state.schema.nodes.code_block || $from.parent.content.size !== 0) return false;
+  if (!$from.parent.type.spec.code || $from.parent.content.size !== 0) return false;
   return setBlockType(state.schema.nodes.paragraph)(state, dispatch);
 };
 

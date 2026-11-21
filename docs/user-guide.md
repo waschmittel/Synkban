@@ -315,7 +315,7 @@ The description area (styled with a subtle warm note background) gives you struc
   - Plain click opens the link (new tab in Web Mode, default browser in Desktop Mode). **`Cmd/Ctrl + Click`** edits or removes the link (editing always targets the whole link cleanly rather than splitting it).
 - **Context-sensitive Editor Menu (`Cmd/Ctrl + K` or Right-Click):**
   - Opens right beside your caret (or pointer) without losing your text selection or touch keyboard.
-  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `0` plain, `B` code block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
+  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
 
 ![Card Modal with the context-sensitive Editor Menu open](images/card-modal-editor-menu.png)
 
@@ -344,6 +344,17 @@ Insert structured data directly in any card description using the **Insert table
 In the **Card Modal**, tables span the full editor width; in **Notes Mode**, tables and code blocks grow cleanly to fit their content (scrolling horizontally inside the description if wider than the pane).
 
 ![Matrix in the description editor with open top-left corner, centred headers, and per-cell alignment](images/matrix.png)
+
+### Lua Blocks (Calculations & Scratchpads)
+
+Synkban lets you embed runnable **Lua 5.4** blocks directly inside a card or note description. **Lua blocks are intentionally designed for short calculations, quick scratchpads, and inline note helpers** — estimating totals, formatting numbers, checking formulas, or verifying small bits of logic right beside your notes — rather than acting as a full code IDE or running external I/O. Because output is saved inside the card itself, exported PDFs, offline reading, and mobile/desktop syncing always preserve your last computed result without needing to re-run code automatically.
+
+- **Insert or convert:** Type ```` ```lua ```` at the start of a line (converts immediately and consumes an optional `Space` or `Enter`), or open the Editor Menu (`Cmd/Ctrl + K`) and press **`E`** (Lua block) to insert a block or switch the current block to Lua. Pressing `Shift + Enter` inside the block exits into a normal paragraph below; pressing `Backspace` inside an empty block turns it back into plain text.
+- **Syntax highlighting & autocomplete:** Native editor styling highlights keywords, strings, numbers, comments, and functions. As you type identifiers (at least two characters) outside strings and comments, a completion popup suggests matching local variables, Lua keywords, built-in globals, and standard library functions (`math.*`, `string.*`, `table.*`, `os.*`). Press **`Tab`** to accept the top suggestion, navigate with **`↑` / `↓`** and press **`Enter`** to accept a selected item (`Enter` without arrow selection inserts a newline as usual), or dismiss with **`Esc`** (dismissing the popup keeps the card open).
+- **Run & persist output:** Press **`Cmd/Ctrl + Enter`** inside a Lua block or click **Run** to execute the snippet manually — Lua blocks **never run automatically** when opening a card. Both `print(...)` lines and any returned value (`return ...`) appear in the output tray (`=> ...`), alongside **`Ran`** when up to date or **`Outdated`** if you have edited the code since the last run. Click **Clear** to discard saved output.
+- **Sandboxed execution:** Code runs locally and offline inside a dedicated Lua 5.4 WebAssembly Web Worker with dangerous globals (`io`, `package`, `require`, `debug`, `dofile`, `loadfile`, process control) removed, read-only `os.time` / `os.date` / `os.clock` / `os.difftime`, a 16 MB memory limit, and a **1.5 s timeout** so infinite loops cannot freeze the app.
+
+![Lua block showing syntax highlighting, Run and Clear controls, and persisted calculation output](images/lua-block.png)
 
 ### Inline Images
 
@@ -434,7 +445,7 @@ Each card can hold file attachments up to **50 MB** per file.
 Press **`Cmd/Ctrl + J`** (or click the clock/history button in the card footer) to inspect the card's version **History**:
 
 - Automatically records up to the **last 100 saved content versions** of the card (title, labels, due date, description, checklist, and attachment filenames). Moving a card between lists, reordering it, or archiving it does not clutter history with no-op entries.
-- Select versions on the left (newest at the top; navigate with `↑` / `↓`, `PgUp` / `PgDn` by 10, `Home` / `End`) to view a **field-by-field diff** on the right showing exactly what was added (`+`) or removed (`−`) in that version — including row-by-row diffs for tables and `[image: filename]` markers for inline images.
+- Select versions on the left (newest at the top; navigate with `↑` / `↓`, `PgUp` / `PgDn` by 10, `Home` / `End`) to view a **field-by-field diff** on the right showing exactly what was added (`+`) or removed (`−`) in that version — including row-by-row diffs for tables, fenced `lua` blocks with saved output/error lines, and `[image: filename]` markers for inline images.
 - History is read-only. Press `Cmd/Ctrl + J` or `Esc` to close.
 
 ![Card History dialog showing version list and field-by-field diffs](images/card-history.png)
@@ -443,7 +454,7 @@ Press **`Cmd/Ctrl + J`** (or click the clock/history button in the card footer) 
 
 Press **`Cmd/Ctrl + P`** (or click the **PDF** button in the card footer) to download a self-contained **PDF/A-2u** archive of the card, named automatically from the card's title.
 
-- **What gets included:** Formatted title, board name and card creation timestamp (UTC), label chips, due date, full rich-text description (headings, formatted text, clickable links, nested lists, quotes, code blocks, tables & matrices with repeating headers, inline images), checklist (`☑` / `☐`), and remaining attachments (with thumbnails for non-inline images).
+- **What gets included:** Formatted title, board name and card creation timestamp (UTC), label chips, due date, full rich-text description (headings, formatted text, clickable links, nested lists, quotes, code blocks, Lua blocks with their saved output/errors, tables & matrices with repeating headers, inline images), checklist (`☑` / `☐`), and remaining attachments (with thumbnails for non-inline images).
 - **Clean pagination:** Sections, blocks up to half a page, and checklist/attachment groups are kept together where they fit, and paragraphs/tables split without leaving orphaned single lines or stranded table headers.
 - **Unsaved edits prompt:** PDFs always render the *saved* card on disk. If you have unsaved changes when exporting, Synkban asks whether to **Save & export**, **Export saved version**, or **Cancel**.
 - **Self-contained offline fonts:** Bundles DejaVu Sans, DejaVu Sans Mono, monochrome Noto Emoji, and Noto Sans Arabic, Hebrew, Devanagari, and Thai directly inside the app — zero reliance on system fonts or external browsers. *(To keep the app lightweight, CJK fonts are not bundled and appear as `?` in exported PDFs, though they display normally in the app.)*
@@ -502,7 +513,7 @@ Because every board, list, card, and attachment lives as plain files inside your
 
 **Sync tips:**
 - **Sync only your Data Directory** — leave your machine's `~/.config/synkban/` folder unsynced so local settings and crash recovery stay per-computer.
-- **Keep Synkban up to date on all devices** so newer card features (such as tables, matrices, or inline images) render identically everywhere.
+- **Keep Synkban up to date on all devices** so newer card features (such as tables, matrices, Lua blocks, or inline images) render identically everywhere.
 - **Automatic live updates:** Open boards check for external file changes every **15 seconds** and refresh automatically while keeping your cursor, open quick-add drafts, and card focus intact.
 
 ### Backups & Moving to a New Computer

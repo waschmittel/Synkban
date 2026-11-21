@@ -16,6 +16,7 @@ import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
 import { blockEscapeKeymap, gapPosAtY } from "./blockEscape";
+import { createLuaBlockView, luaPlugins } from "./luaBlock";
 import { insertMatrix, insertTable, tablePlugins } from "./tables";
 import { schema, TEXT_STYLES, validateDescription } from "./schema";
 import { api } from "./api";
@@ -220,6 +221,7 @@ export function createCardEditor(
   const state = EditorState.create({
     doc: initialDoc,
     plugins: [
+      ...luaPlugins(),
       tableMenuKeymap,
       ...tablePlugins(),
       blockEscapeKeymap,
@@ -257,6 +259,7 @@ export function createCardEditor(
       return autolinkPaste(view, event);
     },
     nodeViews: {
+      lua_block: createLuaBlockView,
       image(node) {
         const img = document.createElement("img");
         img.className = "editor-image";

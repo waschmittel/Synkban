@@ -300,6 +300,33 @@ fn corner_cases() -> Vec<(&'static str, CardExport)> {
             nodes.push(json!({"type": "table", "attrs": {"matrix": true}, "content": long_matrix}));
             with_description(nodes)
         }),
+        ("18-lua-blocks", {
+            let calc = "local seats = 8\nlocal months = 3\nlocal total = seats * 19 * months\nprint(string.format(\"Q3: $%d\", total))\nreturn total";
+            let calc_hash = fnv1a_32_hex(calc);
+            let stale_code = "return 42";
+            let err_code = "error(\"missing rate\")";
+            let err_hash = fnv1a_32_hex(err_code);
+            with_description(vec![
+                para("Evaluated Lua calculation:"),
+                json!({
+                    "type": "lua_block",
+                    "attrs": { "output": "Q3: $456\n=> 456", "error": null, "ran_hash": calc_hash },
+                    "content": [text_node(calc)]
+                }),
+                para("Edited after last run (marked outdated):"),
+                json!({
+                    "type": "lua_block",
+                    "attrs": { "output": "=> 10", "error": null, "ran_hash": "00000000" },
+                    "content": [text_node(stale_code)]
+                }),
+                para("Block with saved runtime error:"),
+                json!({
+                    "type": "lua_block",
+                    "attrs": { "output": null, "error": "=[lua_block]:1: missing rate", "ran_hash": err_hash },
+                    "content": [text_node(err_code)]
+                }),
+            ])
+        }),
     ];
     // Unless a case sets its own title, the file name is the title.
     cases

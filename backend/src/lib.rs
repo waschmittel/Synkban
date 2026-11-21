@@ -187,19 +187,24 @@ fn pwa_headers(path: &str) -> Option<(&'static str, Option<(&'static str, &'stat
     }
 }
 
+fn embedded_mime(path: &str) -> String {
+    // mime_guess has no entry for `.webmanifest` and some platforms omit `.wasm`.
+    if path.ends_with(".webmanifest") {
+        "application/manifest+json".to_string()
+    } else if path.ends_with(".wasm") {
+        "application/wasm".to_string()
+    } else {
+        mime_guess::from_path(path)
+            .first_or_octet_stream()
+            .to_string()
+    }
+}
+
 async fn serve_embedded(req: HttpRequest) -> HttpResponse {
     let path = req.path().trim_start_matches('/');
 
     if let Some(file) = STATIC_DIR.get_file(path) {
-        // mime_guess has no entry for `.webmanifest`; browsers require the
-        // proper type or they reject the PWA manifest.
-        let mime = if path.ends_with(".webmanifest") {
-            "application/manifest+json".to_string()
-        } else {
-            mime_guess::from_path(path)
-                .first_or_octet_stream()
-                .to_string()
-        };
+        let mime = embedded_mime(path);
         let mut res = HttpResponse::Ok();
         res.content_type(mime);
         if let Some((cache_control, extra)) = pwa_headers(path) {
@@ -429,5 +434,14 @@ mod tests {
             Some(("public, max-age=86400", None))
         );
         assert_eq!(pwa_headers("index.html"), None);
+    }
+
+    #[test]
+    fn embedded_mime_handles_wasm_and_webmanifest() {
+        assert_eq!(
+            embedded_mime("manifest.webmanifest"),
+            "application/manifest+json"
+        );
+        assert_eq!(embedded_mime("assets/glue-123.wasm"), "application/wasm");
     }
 }

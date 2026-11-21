@@ -1139,11 +1139,12 @@ html.electron .app-header .board-color-dropdown {
 }
 
 .modal-content--pane .editor-wrapper .ProseMirror > table,
-.modal-content--pane .editor-wrapper .ProseMirror > pre {
+.modal-content--pane .editor-wrapper .ProseMirror > pre,
+.modal-content--pane .editor-wrapper .ProseMirror > .lua-block {
   margin-inline: auto;
 }
 
-.modal-content--pane .editor-wrapper .ProseMirror > :not(table):not(pre) {
+.modal-content--pane .editor-wrapper .ProseMirror > :not(table):not(pre):not(.lua-block) {
   margin-right: auto;
 }
 
@@ -2540,6 +2541,267 @@ html.theme-dark .modal-history-btn:hover {
   font-size: inherit;
 }
 
+/* ── Runnable Lua blocks & autocomplete (ADR-0028) ── */
+.editor-wrapper .ProseMirror .lua-block {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  margin: 0 0 8px;
+  overflow: hidden;
+  background: #f4f5f7;
+}
+
+.editor-wrapper .ProseMirror .lua-block-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: #e2e4e8;
+  border-bottom: 1px solid var(--color-border-strong);
+  font-size: 12px;
+  line-height: 1.3;
+  user-select: none;
+}
+
+.lua-block-badge {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #5b21b6;
+  background: rgba(124, 58, 237, 0.12);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.lua-block-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.lua-block-status:empty {
+  display: none;
+}
+
+.lua-block-status--running {
+  background: rgba(12, 102, 228, 0.14);
+  color: #0c66e4;
+}
+
+.lua-block-status--ran {
+  background: rgba(21, 128, 61, 0.14);
+  color: #15803d;
+}
+
+.lua-block-status--stale {
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+}
+
+.lua-block-status--error {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+
+.lua-block-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lua-block-run,
+.lua-block-clear {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.lua-block-run {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.lua-block-run:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.lua-block-clear {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.lua-block-clear:hover:not(:disabled) {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+
+.lua-block-run:disabled,
+.lua-block-clear:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.editor-wrapper .ProseMirror .lua-block .lua-block-pre {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  background: #f4f5f7;
+  color: #172b4d;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.editor-wrapper .ProseMirror .lua-block-result {
+  border-top: 1px solid var(--color-border-strong);
+  background: #ffffff;
+  padding: 8px 14px;
+}
+
+.editor-wrapper .ProseMirror .lua-block-result--stale {
+  opacity: 0.72;
+}
+
+.editor-wrapper .ProseMirror .lua-block .lua-block-output,
+.editor-wrapper .ProseMirror .lua-block .lua-block-error {
+  background: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.editor-wrapper .ProseMirror .lua-block .lua-block-output {
+  color: #166534;
+}
+
+.editor-wrapper .ProseMirror .lua-block .lua-block-error {
+  color: #b91c1c;
+}
+
+.editor-wrapper .ProseMirror .lua-block .lua-block-output:not([hidden]) + .lua-block-error:not([hidden]) {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.lua-tok-keyword {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.lua-tok-builtin {
+  color: #0369a1;
+}
+
+.lua-tok-string {
+  color: #15803d;
+}
+
+.lua-tok-number {
+  color: #c2410c;
+}
+
+.lua-tok-comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.lua-autocomplete {
+  position: fixed;
+  z-index: 315;
+  min-width: 220px;
+  max-width: 340px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 12.5px;
+}
+
+.lua-autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lua-autocomplete-item:hover,
+.lua-autocomplete-item--hi {
+  background: var(--color-surface-3);
+}
+
+.lua-autocomplete-item--hi {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.lua-ac-kind {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.lua-ac-kind--keyword {
+  background: rgba(124, 58, 237, 0.14);
+  color: #7c3aed;
+}
+
+.lua-ac-kind--builtin {
+  background: rgba(3, 105, 161, 0.14);
+  color: #0369a1;
+}
+
+.lua-ac-kind--local {
+  background: rgba(21, 128, 61, 0.14);
+  color: #15803d;
+}
+
+.lua-ac-label {
+  font-family: "SF Mono", "Fira Code", "Menlo", monospace;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.lua-ac-detail {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .editor-wrapper .ProseMirror hr {
   border: none;
   border-top: 2px solid var(--color-border);
@@ -2571,7 +2833,7 @@ html.theme-dark .modal-history-btn:hover {
   --text-measure: 90ch;
 }
 
-.editor-wrapper .ProseMirror > :not(table):not(pre) {
+.editor-wrapper .ProseMirror > :not(table):not(pre):not(.lua-block) {
   max-width: var(--text-measure);
 }
 
@@ -2594,7 +2856,8 @@ html.theme-dark .modal-history-btn:hover {
   overflow-wrap: break-word;
 }
 
-.modal-content--pane .editor-wrapper .ProseMirror pre {
+.modal-content--pane .editor-wrapper .ProseMirror > pre,
+.modal-content--pane .editor-wrapper .ProseMirror > .lua-block {
   width: fit-content;
   min-width: min(100%, var(--text-measure));
   max-width: 100%;
@@ -4738,6 +5001,101 @@ html.theme-dark .editor-wrapper .ProseMirror :not(pre) > code {
 html.theme-dark .editor-wrapper .ProseMirror pre {
   background: #1e1e2e;
   color: #cdd6f4;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .lua-block {
+  border-color: #313244;
+  background: #1e1e2e;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .lua-block-header {
+  background: #181825;
+  border-bottom-color: #313244;
+}
+
+html.theme-dark .lua-block-badge {
+  background: #313244;
+  color: #cba6f7;
+}
+
+html.theme-dark .lua-block-status--running {
+  background: rgba(137, 180, 250, 0.18);
+  color: #89b4fa;
+}
+
+html.theme-dark .lua-block-status--ran {
+  background: rgba(166, 227, 161, 0.18);
+  color: #a6e3a1;
+}
+
+html.theme-dark .lua-block-status--stale {
+  background: rgba(249, 226, 175, 0.18);
+  color: #f9e2af;
+}
+
+html.theme-dark .lua-block-status--error {
+  background: rgba(243, 139, 168, 0.18);
+  color: #f38ba8;
+}
+
+html.theme-dark .lua-block-clear {
+  background: #313244;
+  border-color: #45475a;
+  color: #cdd6f4;
+}
+
+html.theme-dark .lua-block-clear:hover:not(:disabled) {
+  background: #45475a;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .lua-block .lua-block-pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .lua-block-result {
+  background: #14141f;
+  border-top-color: #313244;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .lua-block .lua-block-output {
+  color: #a6e3a1;
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .lua-block .lua-block-error {
+  color: #f38ba8;
+}
+
+html.theme-dark .lua-tok-keyword {
+  color: #cba6f7;
+}
+
+html.theme-dark .lua-tok-builtin {
+  color: #89b4fa;
+}
+
+html.theme-dark .lua-tok-string {
+  color: #a6e3a1;
+}
+
+html.theme-dark .lua-tok-number {
+  color: #fab387;
+}
+
+html.theme-dark .lua-tok-comment {
+  color: #6c7086;
+}
+
+html.theme-dark .lua-ac-kind--keyword {
+  color: #cba6f7;
+}
+
+html.theme-dark .lua-ac-kind--builtin {
+  color: #89b4fa;
+}
+
+html.theme-dark .lua-ac-kind--local {
+  color: #a6e3a1;
 }
 
 html.theme-dark .editor-wrapper .ProseMirror a {

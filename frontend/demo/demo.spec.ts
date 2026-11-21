@@ -203,6 +203,22 @@ test("record demo", async ({ page }) => {
   await expect(matrix.locator("th").first()).toHaveText("Sync");
   await pause(page, 850);
 
+  // Embedded Lua block calculation below the matrix
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu")).toBeVisible();
+  await page.keyboard.press("p");
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu")).toBeVisible();
+  await page.keyboard.press("e");
+  const luaBlock = page.locator(".editor-wrapper .ProseMirror .lua-block");
+  await expect(luaBlock).toBeVisible();
+  await luaBlock.scrollIntoViewIfNeeded();
+  await page.keyboard.type("local seats = 8 * 19\nreturn seats * 3", { delay: TYPE_DELAY });
+  await pause(page, 350);
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(luaBlock.locator(".lua-block-output")).toHaveText("=> 456");
+  await pause(page, 1000);
+
   // Keyboard-first Due Date Picker
   const dueChip = page.locator(".modal-content .due-chip");
   await dueChip.scrollIntoViewIfNeeded();
@@ -211,11 +227,11 @@ test("record demo", async ({ page }) => {
   await pause(page, 550);
   const dueInput = page.locator(".due-picker-input");
   await dueInput.fill("");
-  await dueInput.pressSequentially("tomorrow", { delay: TYPE_DELAY });
+  await dueInput.pressSequentially("today", { delay: TYPE_DELAY });
   await pause(page, 650);
   await dueInput.press("Enter");
   await expect(page.locator(".due-picker")).toHaveCount(0);
-  await expect(dueChip).toContainText(/tomorrow/i);
+  await expect(dueChip).toContainText(/today/i);
   await pause(page, 450);
 
   // Checklist + Save (Cmd/Ctrl+S)

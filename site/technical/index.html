@@ -190,7 +190,7 @@ last_board_id = "..."      # maintained automatically</code></pre>
           <li><strong>15-second change polling:</strong> The UI polls <code>GET /api/changes</code> every 15 seconds and refreshes only changed boards while keeping open forms and keyboard focus intact.</li>
           <li><strong>5-minute attachment GC grace window:</strong> Startup cleanup ignores partial/orphaned attachment files newer than 5 minutes so active syncs are never mistaken for leftovers.</li>
           <li><strong>Desktop local auth:</strong> Desktop Mode spawns the Rust binary on a random <code>127.0.0.1</code> port with a per-launch UUID token so other local apps cannot reach your boards.</li>
-          <li><strong>Version alignment:</strong> Keep all synced devices on the same Synkban version so newer card features (tables, matrices, inline images) render consistently everywhere.</li>
+          <li><strong>Version alignment:</strong> Keep all synced devices on the same Synkban version so newer card features (tables, matrices, Lua blocks, inline images) render consistently everywhere.</li>
         </ul>
 
         <h2 id="developer-docs">Building from Source &amp; Developer Docs</h2>

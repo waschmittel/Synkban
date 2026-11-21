@@ -19,6 +19,7 @@ import {
 
 const p = (text = "") => schema.node("paragraph", null, text ? [schema.text(text)] : []);
 const code = (text = "") => schema.node("code_block", null, text ? [schema.text(text)] : []);
+const lua = (text = "") => schema.node("lua_block", null, text ? [schema.text(text)] : []);
 const quote = (text = "q") => schema.node("blockquote", null, [p(text)]);
 const list = (ordered: boolean, text = "item") =>
   schema.node(ordered ? "ordered_list" : "bullet_list", null, [schema.node("list_item", null, [p(text)])]);
@@ -43,9 +44,10 @@ function caretAtText(state: EditorState, needle: string, offsetFromEnd = 0): Edi
 }
 
 describe("GapCursor rules on schema blocks", () => {
-  it("allows gap cursors before and after code_block, blockquote, lists, and table", () => {
+  it("allows gap cursors before and after code_block, lua_block, blockquote, lists, and table", () => {
     for (const node of [
       code("x"),
+      lua("x"),
       quote("x"),
       list(false, "x"),
       list(true, "x"),
@@ -80,9 +82,10 @@ describe("GapCursor rules on schema blocks", () => {
 });
 
 describe("insertParagraphAbove / insertParagraphBelow", () => {
-  it("works on code_block, blockquote, bullet_list, ordered_list, table, and matrix", () => {
+  it("works on code_block, lua_block, blockquote, bullet_list, ordered_list, table, and matrix", () => {
     for (const node of [
       code("abc"),
+      lua("abc"),
       quote("abc"),
       list(false, "abc"),
       list(true, "abc"),

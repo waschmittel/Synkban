@@ -21,6 +21,7 @@ const URL_WHOLE = /^(https?:\/\/\S+|www\.\S+)$/;
 export function autolinkInputRules(schema: Schema): Plugin {
   const linkType = schema.marks.link;
   const rule = new InputRule(URL_INPUT, (state, match, start, end) => {
+    if (!state.selection.$from.parent.type.allowsMarkType(linkType)) return null;
     const url = match[1];
     const href = sanitizeLinkHref(url);
     if (!href) return null;
@@ -40,6 +41,7 @@ export function autolinkInputRules(schema: Schema): Plugin {
 export function handleAutolinkPaste(schema: Schema): (view: EditorView, event: ClipboardEvent) => boolean {
   const linkType: MarkType = schema.marks.link;
   return (view, event) => {
+    if (!view.state.selection.$from.parent.type.allowsMarkType(linkType)) return false;
     const text = event.clipboardData?.getData("text/plain")?.trim();
     if (!text || !URL_WHOLE.test(text)) return false;
     const href = sanitizeLinkHref(text);

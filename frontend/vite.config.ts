@@ -12,6 +12,9 @@ export default defineConfig({
       "/api": "http://localhost:8080",
     },
   },
+  worker: {
+    format: "es",
+  },
   build: {
     target: "esnext",
   },

@@ -10,12 +10,14 @@ import {
   type Attrs,
   type MarkSpec,
   type NodeSpec,
+  type NodeType,
 } from "prosemirror-model";
-import type { EditorState } from "prosemirror-state";
+import { type Command, type EditorState, type Selection, TextSelection } from "prosemirror-state";
 import { setBlockType } from "prosemirror-commands";
+import { GapCursor } from "prosemirror-gapcursor";
 import { schema as basicSchema } from "prosemirror-schema-basic";
 import { addListNodes } from "prosemirror-schema-list";
-import { blockTypeItem } from "prosemirror-menu";
+import { MenuItem } from "prosemirror-menu";
 import { tableNodeSpecs } from "./tables";
 import { isValidLinkHref } from "./links";
 import schemaSpec from "./schema.json";
@@ -112,15 +114,40 @@ const imageSpec: NodeSpec = {
   toDOM: (node) => ["img", { "data-att": node.attrs.att, alt: node.attrs.alt }],
 };
 
+const luaBlockSpec: NodeSpec = {
+  defining: true,
+  selectable: false,
+  parseDOM: [
+    {
+      tag: "pre[data-lua]",
+      preserveWhitespace: "full",
+      priority: 60,
+      getAttrs: (dom) => ({
+        output: (dom as HTMLElement).getAttribute("data-output"),
+        error: (dom as HTMLElement).getAttribute("data-error"),
+        ran_hash: (dom as HTMLElement).getAttribute("data-ran-hash"),
+      }),
+    },
+  ],
+  toDOM(node) {
+    const attrs: Record<string, string> = { "data-lua": "" };
+    if (node.attrs.output !== null) attrs["data-output"] = node.attrs.output;
+    if (node.attrs.error !== null) attrs["data-error"] = node.attrs.error;
+    if (node.attrs.ran_hash !== null) attrs["data-ran-hash"] = node.attrs.ran_hash;
+    return ["pre", attrs, ["code", 0]];
+  },
+};
+
 const baseNodes = addListNodes(
   basicSchema.spec.nodes,
   schemaSpec.nodes.list_item.content,
   schemaSpec.nodes.ordered_list.group,
 )
   .append(tableNodeSpecs)
+  .append({ lua_block: luaBlockSpec })
   .update("image", imageSpec);
 
-const GAP_CURSOR_BLOCKS = new Set(["code_block", "blockquote", "bullet_list", "ordered_list"]);
+const GAP_CURSOR_BLOCKS = new Set(["code_block", "lua_block", "blockquote", "bullet_list", "ordered_list"]);
 
 const nodes: Record<string, NodeSpec> = {};
 for (const [name, spec] of Object.entries(schemaSpec.nodes as Record<string, JsonNodeSpec>)) {
@@ -233,10 +260,145 @@ export function validateDescription(description: string): PmNode | null {
   return doc;
 }
 
+function selectionEnd(state: EditorState): number {
+  const { from, to, $to } = state.selection;
+  return $to.parentOffset === 0 && to > from ? Math.max(from, $to.before()) : to;
+}
+
+function isTextStyleActive(state: EditorState, nodeType: NodeType, attrs: Attrs | null): boolean {
+  const sel = state.selection as Selection & { node?: PmNode };
+  if (sel.node) return sel.node.hasMarkup(nodeType, attrs);
+  if (sel instanceof GapCursor) return false;
+  const { from, $from, $to } = sel;
+  if ($from.sameParent($to) && $from.parent.isTextblock) {
+    return $from.parent.hasMarkup(nodeType, attrs);
+  }
+  const end = selectionEnd(state);
+  let saw = false;
+  let all = true;
+  state.doc.nodesBetween(from, end, (node) => {
+    if (!node.isTextblock) return true;
+    saw = true;
+    if (!node.hasMarkup(nodeType, attrs)) all = false;
+    return false;
+  });
+  return saw && all;
+}
+
+function splitCodeBlockToTextblocks(
+  state: EditorState,
+  dispatch: ((tr: any) => void) | undefined,
+  nodeType: NodeType,
+  attrs: Attrs | null,
+): boolean {
+  const sel = state.selection;
+  if (!(sel instanceof TextSelection)) return false;
+  const { $from, $to } = sel;
+  if (!$from.sameParent($to) || !$from.parent.type.spec.code || nodeType.spec.code) return false;
+  const text = $from.parent.textContent;
+  if (!text.includes("\n") || $from.depth < 1) return false;
+  const parent = $from.node($from.depth - 1);
+  const idx = $from.index($from.depth - 1);
+  if (!parent.canReplaceWith(idx, idx + 1, nodeType)) return false;
+
+  if (dispatch) {
+    const lines = text.split("\n");
+    const blockStart = $from.before();
+    const blockEnd = $from.after();
+    const fromOff = sel.from - $from.start();
+    const toOff = sel.to - $from.start();
+    const paraType = state.schema.nodes.paragraph;
+    const nodes: PmNode[] = [];
+
+    let offset = 0;
+    let outPos = blockStart;
+    let newFrom = blockStart + 1;
+    let newTo = blockStart + 1;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineStart = offset;
+      const lineEnd = offset + line.length;
+      const touched = fromOff <= lineEnd && toOff >= lineStart;
+      const type = nodeType === paraType || touched ? nodeType : paraType;
+      const node = type.create(type === nodeType ? attrs : null, line ? [state.schema.text(line)] : undefined);
+      nodes.push(node);
+      if (fromOff >= lineStart && fromOff <= lineEnd) newFrom = outPos + 1 + (fromOff - lineStart);
+      if (toOff >= lineStart && toOff <= lineEnd) newTo = outPos + 1 + (toOff - lineStart);
+      outPos += node.nodeSize;
+      offset = lineEnd + 1;
+    }
+
+    const forward = sel.anchor <= sel.head;
+    const tr = state.tr.replaceWith(blockStart, blockEnd, nodes);
+    tr.setSelection(TextSelection.create(tr.doc, forward ? newFrom : newTo, forward ? newTo : newFrom));
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+function mergeSiblingBlocksToCode(
+  state: EditorState,
+  dispatch: ((tr: any) => void) | undefined,
+  nodeType: NodeType,
+  attrs: Attrs | null,
+): boolean {
+  if (!nodeType.spec.code) return false;
+  const { from } = state.selection;
+  const end = selectionEnd(state);
+  if (from >= end) return false;
+  const $start = state.doc.resolve(from);
+  const $end = state.doc.resolve(end);
+  const shared = $start.sharedDepth(end);
+  const parent = $start.node(shared);
+  const startIdx = $start.index(shared);
+  const endIdx = $end.depth > shared ? $end.index(shared) + 1 : $end.index(shared);
+  if (endIdx - startIdx < 2) return false;
+  for (let i = startIdx; i < endIdx; i++) {
+    if (!parent.child(i).isTextblock) return false;
+  }
+  if (!parent.canReplaceWith(startIdx, endIdx, nodeType)) return false;
+
+  if (dispatch) {
+    const replaceFrom = $start.posAtIndex(startIdx, shared);
+    const replaceTo = $start.posAtIndex(endIdx, shared);
+    const lines: string[] = [];
+    for (let i = startIdx; i < endIdx; i++) lines.push(parent.child(i).textContent);
+    const joined = lines.join("\n");
+    const node = nodeType.create(attrs, joined ? [state.schema.text(joined)] : undefined);
+    const tr = state.tr.replaceWith(replaceFrom, replaceTo, node);
+    tr.setSelection(TextSelection.create(tr.doc, replaceFrom + 1, replaceFrom + 1 + joined.length));
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+function setTextStyle(nodeType: NodeType, attrs: Attrs | null): Command {
+  const baseCmd = setBlockType(nodeType, attrs);
+  return (state, dispatch, view) => {
+    if (state.selection instanceof GapCursor) {
+      const { $from } = state.selection;
+      if (!$from.parent.canReplaceWith($from.index(), $from.index(), nodeType)) return false;
+      if (dispatch) {
+        const pos = $from.pos;
+        const tr = state.tr.insert(pos, nodeType.create(attrs));
+        tr.setSelection(TextSelection.create(tr.doc, pos + 1));
+        dispatch(tr.scrollIntoView());
+      }
+      return true;
+    }
+    if (isTextStyleActive(state, nodeType, attrs)) return false;
+    if (splitCodeBlockToTextblocks(state, dispatch, nodeType, attrs)) return true;
+    if (mergeSiblingBlocksToCode(state, dispatch, nodeType, attrs)) return true;
+    return baseCmd(state, dispatch, view);
+  };
+}
+
 /// The text styles of the toolbar dropdown and the Accel+K menu.
 export const TEXT_STYLES = [
   { label: "Plain text", short: "Plain text", node: schema.nodes.paragraph, attrs: null, key: "0" },
   { label: "Code block", short: "Code block", node: schema.nodes.code_block, attrs: null, key: "b" },
+  { label: "Lua block", short: "Lua block", node: schema.nodes.lua_block, attrs: null, key: "e" },
   ...[1, 2, 3].map((level) => ({
     label: `Heading ${level}`,
     short: `Heading ${level}`,
@@ -247,20 +409,19 @@ export const TEXT_STYLES = [
 ].map((t) => ({
   ...t,
   /// Possible right now (false in table cells, and for the current style).
-  command: setBlockType(t.node, t.attrs),
+  command: setTextStyle(t.node, t.attrs),
   /// Whether the selection's block already has this style.
   active(state: EditorState) {
-    const { $from, to, node } = state.selection as any;
-    if (node) return node.hasMarkup(t.node, t.attrs);
-    return to <= $from.end() && $from.parent.hasMarkup(t.node, t.attrs);
+    return isTextStyleActive(state, t.node, t.attrs);
   },
   item() {
-    return blockTypeItem(t.node, {
+    return new MenuItem({
       title: t.label,
       label: t.label,
-      attrs: t.attrs,
+      run: (state, dispatch, view) => this.command(state, dispatch, view),
       // The current style stays a (checked) choice instead of greying out.
       enable: (state: EditorState) => this.command(state) || this.active(state),
+      active: (state: EditorState) => this.active(state),
     });
   },
 }));
