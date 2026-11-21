@@ -53,6 +53,7 @@
 | **Editor Menu** | The context-sensitive `Accel+K` popup in the description editor: link, code, text style, table (ADR-0016) | Table menu, command palette |
 | **Text Style** | Block type of a description paragraph: Plain text, Code block, Lua block, Heading 1–3 (never "H1") | Block type, format |
 | **Lua Block** | Runnable Lua 5.4 scratchpad block (`lua_block`, ADR-0028) for short calculations and note helpers; runs on demand in a sandboxed Web Worker and persists `{ output, error, ran_hash }` | Script block, macro |
+| **Footnote** | A numbered reference (`footnote_ref`) in the description linked by id to a definition (`footnote_def`) pinned at the bottom (`footnote_list`); ordered by first reference in the editor, restarting per page in exported PDFs (ADR-0030) | Endnote |
 | **Header Row** | First row of a description table; always the header, source of column alignment (ADR-0017) | Table head |
 | **Matrix** | A description table (`attrs.matrix`) with an empty, uneditable top-left corner, centred headers on both the first row and first column, per-cell alignment, and a transpose action (ADR-0017) | Grid |
 | **Overlay Layer** | An entry in the open-order stack of overlays; traps yield to higher layers (ADR-0009) | Modal stack |

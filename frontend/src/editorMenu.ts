@@ -38,6 +38,12 @@ import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
 import { menuNav, navKey } from "./menuNav";
 import { canInsertImage, hooksOf, openImagePicker } from "./imagePicker";
 import { inEscapableBlock, insertParagraphAbove, insertParagraphBelow } from "./blockEscape";
+import {
+  deleteCurrentFootnote,
+  footnoteDefAt,
+  footnoteMenuCommand,
+  footnoteMenuLabel,
+} from "./footnotes";
 
 import {
   cellContext,
@@ -141,6 +147,25 @@ const IMAGE_ITEM: Item = {
   },
 };
 
+const FOOTNOTE_ITEM: Item = {
+  label: footnoteMenuLabel,
+  icon: ICONS.footnote,
+  group: 1,
+  hint: "F",
+  match: letter("f"),
+  command: footnoteMenuCommand,
+};
+
+const DELETE_FOOTNOTE_ITEM: Item = {
+  label: "Delete footnote",
+  icon: ICONS.deleteTable,
+  group: 7,
+  danger: true,
+  hint: "D",
+  match: letter("d"),
+  command: deleteCurrentFootnote,
+};
+
 const STYLE_ICONS = [ICONS.paragraph, ICONS.codeBlock, ICONS.luaBlock, ICONS.heading1, ICONS.heading2, ICONS.heading3];
 const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
   label: t.label,
@@ -230,15 +255,17 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
         ...LINK_ITEMS,
         CODE_ITEM,
         IMAGE_ITEM,
+        FOOTNOTE_ITEM,
         ...STYLE_ITEMS,
         ...INSERT_ITEMS,
         ...(inEscapableBlock(view.state) ? PARAGRAPH_ITEMS : []),
+        ...(footnoteDefAt(view.state) ? [DELETE_FOOTNOTE_ITEM] : []),
       ];
     }
     const tableItems = isMatrix(ctx.table)
       ? [...MOVE_ITEMS, TRANSPOSE_ITEM, ...TABLE_REST_ITEMS]
       : [...MOVE_ITEMS, ...TABLE_REST_ITEMS];
-    return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, ...tableItems, ...PARAGRAPH_ITEMS, ...TABLE_DELETE_ITEMS];
+    return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, FOOTNOTE_ITEM, ...tableItems, ...PARAGRAPH_ITEMS, ...TABLE_DELETE_ITEMS];
   };
 
   const nav = menuNav(menu);

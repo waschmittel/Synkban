@@ -4,7 +4,7 @@
   "allowedAlignments": ["left", "center", "right"],
   "nodes": {
     "doc": {
-      "content": "block+"
+      "content": "block+ footnote_list?"
     },
     "paragraph": {
       "content": "inline*",
@@ -94,6 +94,25 @@
         "att": { "type": "non_empty_string" },
         "alt": { "default": "", "type": "string" }
       }
+    },
+    "footnote_ref": {
+      "group": "inline",
+      "inline": true,
+      "attrs": {
+        "id": { "type": "non_empty_string" }
+      }
+    },
+    "footnote_list": {
+      "content": "footnote_def*"
+    },
+    "footnote_def": {
+      "content": "footnote_paragraph+",
+      "attrs": {
+        "id": { "type": "non_empty_string" }
+      }
+    },
+    "footnote_paragraph": {
+      "content": "(text | hard_break)*"
     }
   },
   "marks": {

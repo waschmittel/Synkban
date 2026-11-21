@@ -8,7 +8,7 @@ Archivable output without a headless browser or system libraries. **Conformance 
 
 ## Content and rules
 
-- Title (bold/italic), `Board: … · Status: <creation date> UTC`, label chips, due date, description (headings, paragraphs with marks/links, nested lists, quote, code block, tables), checklist (☑/☐), attachment list and image thumbnails.
+- Title (bold/italic), `Board: … · Status: <creation date> UTC`, label chips, due date, description (headings, paragraphs with marks/links, nested lists, quote, code block, Lua blocks, tables, footnotes), checklist (☑/☐), attachment list and image thumbnails.
 - PDF/A constraints: all fonts embedded and subsetted; unknown characters become `?` (`.notdef` is forbidden); no image interpolation; no embedded files.
 - **Fonts are in the binary** (`include_bytes!` from `backend/fonts/`, licences alongside; the `Dockerfile` copies the dir): DejaVu Sans ×4 + Mono, Noto Emoji (monochrome), Noto Sans Arabic/Hebrew/Devanagari/Thai. **No CJK** (10–18 MB per language) — it prints `?`. Variable Noto fonts are pinned to wght 400 for drawing and measuring.
 - **Fallback per character:** script font → the style's face → `FALLBACKS` → `?`. ZWJ, variation selectors and skin-tone modifiers are dropped. Widths come from rustybuzz shaping. RTL runs draw right-to-left; a paragraph that starts RTL is right-aligned; mixed lines are not full bidi.
@@ -29,4 +29,5 @@ Golden layouts in `tests/golden/*.txt` (`UPDATE_GOLDEN=1 cargo test --lib pdf` a
 - **Blocks:** paragraphs, lists, quotes, code blocks and tables up to **half a page** (`KEEP_MAX`) are kept whole; bigger ones split. Paragraphs with inline images follow the same rule (images are at most `KEEP_MAX` high, ADR-0020).
 - **No orphans/widows:** when splitting, no single line (paragraph, code) or row (table) is left alone at a page's top or bottom; a table header keeps two rows company and is repeated on each page.
 - **Checklist** (title and items) moves as a unit when it fits a page.
-- Implemented by `Layout::keep_together_up_to`: build, and if the output was split but fits a fresh page, roll back and rebuild on a new page. Tests sweep the offset on the page (`tests.rs`, "page-break rules"); examples 14 and 15.
+- **Footnotes (ADR-0030):** printed at the bottom of every page that references them (short muted rule, raised black `[k]` markers, per-page numbering restart, `NOTE_BUDGET` half-page cap with `carry` spill onto subsequent pages); unreferenced orphans are omitted.
+- Implemented by `Layout::keep_together_up_to`: build, and if the output was split but fits a fresh page, roll back and rebuild on a new page. Tests sweep the offset on the page (`tests.rs`, "page-break rules"); examples 14, 15 and 19.

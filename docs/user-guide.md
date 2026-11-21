@@ -298,7 +298,7 @@ A card's **title, labels, due date, description, and checklist** are edited loca
 
 The description area (styled with a subtle warm note background) gives you structured rich text stored cleanly without raw HTML:
 
-- **Toolbar controls:** Bold, Italic, Inline code, Add or edit link, Insert image, **Text style** dropdown (showing the active style), Insert table, Insert matrix, Undo, Redo, Bulleted list, Numbered list, Quote, Increase/decrease indent, and **Find in description** (`Cmd/Ctrl + F`).
+- **Toolbar controls:** Bold, Italic, Inline code, Add or edit link, **Text style** dropdown (showing the active style), **Insert** dropdown (icon + text: **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**), Undo, Redo, and **Find in description** (`Cmd/Ctrl + F`).
 - **Text Styles:** **Plain text**, **Code block**, **Heading 1**, **Heading 2**, **Heading 3** (selectable via the toolbar dropdown, `Ctrl + Shift + 0 / 1 / 2 / 3 / \`, or the Editor Menu).
 - **Markdown typing shortcuts (start of a line):**
   - `# `, `## `, `### ` → Heading 1, 2, 3
@@ -315,7 +315,13 @@ The description area (styled with a subtle warm note background) gives you struc
   - Plain click opens the link (new tab in Web Mode, default browser in Desktop Mode). **`Cmd/Ctrl + Click`** edits or removes the link (editing always targets the whole link cleanly rather than splitting it).
 - **Context-sensitive Editor Menu (`Cmd/Ctrl + K` or Right-Click):**
   - Opens right beside your caret (or pointer) without losing your text selection or touch keyboard.
-  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
+  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `F` insert or jump footnote, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
+- **Footnotes:**
+  - Insert numbered footnotes from **Insert → Footnote** or via the Editor Menu (`Cmd/Ctrl + K`, then `F`). Footnote definitions always remain pinned at the bottom of the description, automatically numbered and sorted (`[1]`, `[2]`, …) by order of first reference in the text.
+  - Press **`Cmd/Ctrl + Enter`** when the cursor is next to or selecting a reference (`[1]`) to jump down to its definition, and press **`Cmd/Ctrl + Enter`** again (or activate the marker / `↩` button via click or keyboard) inside a definition to jump right back to the reference you came from.
+  - Inside a footnote definition, open the Editor Menu (`Cmd/Ctrl + K`) and press **`D`** (*Delete footnote*) — or activate the `×` button via click or keyboard — to remove the footnote and its references in one undoable step.
+  - Deleting the last reference to an empty footnote removes it automatically; deleting the last reference to a non-empty footnote keeps the definition dimmed at the bottom as `[—]` so prose is not lost (click `×` to delete it). Orphaned definitions are omitted from exported PDFs.
+  - In exported PDFs, footnotes appear at the bottom of every page that references them (below a short rule), with numbering restarting at `[1]` on each page.
 - **Find & Replace (`Cmd/Ctrl + F` / `Cmd/Ctrl + Shift + H`):**
   - Press **`Cmd/Ctrl + F`** (or click the magnifying-glass button in the toolbar) to open a compact search bar docked beneath the toolbar. If a single-line phrase is selected in the description, it pre-fills the search box automatically.
   - Toggle **`Aa`** for case-sensitive matching and **`.*`** for regular expressions (invalid regex patterns show an inline error message).
@@ -327,7 +333,7 @@ The description area (styled with a subtle warm note background) gives you struc
 
 ### Tables & Matrices
 
-Insert structured data directly in any card description using the **Insert table** / **Insert matrix** toolbar buttons or **`Cmd/Ctrl + K`** (`T` for a 3×3 table, `X` for a 3×3 matrix).
+Insert structured data directly in any card description using **Insert → Table** / **Insert → Matrix** in the toolbar or **`Cmd/Ctrl + K`** (`T` for a 3×3 table, `X` for a 3×3 matrix).
 
 - **Tables:**
   - The first row is always the centred **Header Row** (cannot be deleted past being replaced or moved down).
@@ -460,7 +466,7 @@ Press **`Cmd/Ctrl + J`** (or click the clock/history button in the card footer) 
 
 Press **`Cmd/Ctrl + P`** (or click the **PDF** button in the card footer) to download a self-contained **PDF/A-2u** archive of the card, named automatically from the card's title.
 
-- **What gets included:** Formatted title, board name and card creation timestamp (UTC), label chips, due date, full rich-text description (headings, formatted text, clickable links, nested lists, quotes, code blocks, Lua blocks with their saved output/errors, tables & matrices with repeating headers, inline images), checklist (`☑` / `☐`), and remaining attachments (with thumbnails for non-inline images).
+- **What gets included:** Formatted title, board name and card creation timestamp (UTC), label chips, due date, full rich-text description (headings, formatted text, clickable links, nested lists, quotes, code blocks, Lua blocks with their saved output/errors, tables & matrices with repeating headers, inline images, and same-page footnotes with per-page numbering), checklist (`☑` / `☐`), and remaining attachments (with thumbnails for non-inline images).
 - **Clean pagination:** Sections, blocks up to half a page, and checklist/attachment groups are kept together where they fit, and paragraphs/tables split without leaving orphaned single lines or stranded table headers.
 - **Unsaved edits prompt:** PDFs always render the *saved* card on disk. If you have unsaved changes when exporting, Synkban asks whether to **Save & export**, **Export saved version**, or **Cancel**.
 - **Self-contained offline fonts:** Bundles DejaVu Sans, DejaVu Sans Mono, monochrome Noto Emoji, and Noto Sans Arabic, Hebrew, Devanagari, and Thai directly inside the app — zero reliance on system fonts or external browsers. *(To keep the app lightweight, CJK fonts are not bundled and appear as `?` in exported PDFs, though they display normally in the app.)*

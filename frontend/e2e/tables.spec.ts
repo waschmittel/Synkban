@@ -125,12 +125,12 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
   // Link / code / move / insert / align / paragraph / delete: seven groups,
   // six dividers, an icon each, no group headings. No text styles: cell blocks are fixed.
   const items = page.locator(".table-menu-item");
-  await expect(items).toHaveCount(20);
+  await expect(items).toHaveCount(21);
   await expect(page.locator(".table-menu-sep")).toHaveCount(6);
-  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(20);
+  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(21);
   await expect(page.locator(".table-menu-title")).toHaveCount(0);
   await expect(items.locator(".table-menu-label")).toHaveText([
-    "Add link…", "Remove link", "Inline code", "Insert image…",
+    "Add link…", "Remove link", "Inline code", "Insert image…", "Insert footnote",
     "Move row up", "Move row down", "Move column left", "Move column right",
     "Insert row above", "Insert row below", "Insert column left", "Insert column right",
     "Align column left", "Align column center", "Align column right",
@@ -151,12 +151,14 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
   await expect(page.locator(".table-menu")).toHaveCount(0);
   await expect(page.locator(".editor-wrapper .ProseMirror tr")).toHaveCount(4);
 
-  // Both insert toolbar buttons are icons, not text.
-  for (const sel of [".insert-table-btn", ".insert-matrix-btn"]) {
+  // Insert menu items for table and matrix carry both icon and text.
+  await page.locator(".ProseMirror-menu-dropdown.insert-dropdown").click();
+  for (const [sel, label] of [[".insert-table-btn", "Table"], [".insert-matrix-btn", "Matrix"]] as const) {
     const btn = page.locator(sel);
     await expect(btn.locator("svg")).toHaveCount(1);
-    expect(((await btn.textContent()) ?? "").trim()).toBe("");
+    await expect(btn).toHaveText(label);
   }
+  await page.locator(".ProseMirror-menu-dropdown.insert-dropdown").click();
 });
 
 test("table menu: move, insert, delete with keys; each action closes the menu", async ({
@@ -229,32 +231,34 @@ test("the first row stays the header", async ({ page, request }) => {
   await page.keyboard.press("Escape");
 });
 
-test("toolbar buttons insert table/matrix directly, disable when invalid, Escape closes menu, and tables persist", async ({
+test("insert menu inserts table/matrix, disables when invalid, Escape closes menu, and tables persist", async ({
   page,
   request,
 }) => {
   await openEditor(page, request, "Tables Persist");
 
+  const insertDrop = page.locator(".ProseMirror-menu-dropdown.insert-dropdown");
   const tableBtn = page.locator(".insert-table-btn");
   const matrixBtn = page.locator(".insert-matrix-btn");
+
+  await insertDrop.click();
   await expect(tableBtn).toHaveAttribute("title", "Insert table");
   await expect(matrixBtn).toHaveAttribute("title", "Insert matrix");
-  await expect(tableBtn).toHaveAttribute("aria-disabled", "false");
-  await expect(matrixBtn).toHaveAttribute("aria-disabled", "false");
+  await expect(tableBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(matrixBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
 
   await tableBtn.click();
   await expect(page.locator(".table-menu")).toHaveCount(0);
   await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(1);
 
   // Inside a table, neither a table nor a matrix can be inserted.
+  await insertDrop.click();
   await expect(tableBtn).toHaveClass(/ProseMirror-menu-disabled/);
-  await expect(tableBtn).toHaveAttribute("aria-disabled", "true");
-  await expect(tableBtn).toBeDisabled();
   await expect(matrixBtn).toHaveClass(/ProseMirror-menu-disabled/);
-  await expect(matrixBtn).toHaveAttribute("aria-disabled", "true");
-  await expect(matrixBtn).toBeDisabled();
   await matrixBtn.click({ force: true });
   await expect(page.locator(".editor-wrapper .ProseMirror table")).toHaveCount(1);
+  // Close dropdown
+  await insertDrop.click();
 
   await fill(page, ["Name", "Qty", "Note"]);
   await page.keyboard.press("ControlOrMeta+k");
@@ -263,15 +267,18 @@ test("toolbar buttons insert table/matrix directly, disable when invalid, Escape
   // Escape closed only the menu, not the card modal.
   await expect(page.locator(".modal-overlay")).toBeVisible();
 
-  // Moving outside the table re-enables both buttons; clicking Insert matrix inserts a matrix.
+  // Moving outside the table re-enables both items; clicking Matrix inserts a matrix.
   await page.locator(".editor-wrapper .ProseMirror > p").last().click();
   await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
-  await expect(tableBtn).toHaveAttribute("aria-disabled", "false");
-  await expect(matrixBtn).toHaveAttribute("aria-disabled", "false");
+  await insertDrop.click();
+  await expect(tableBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(matrixBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
   await matrixBtn.click();
   await expect(page.locator(".editor-wrapper .ProseMirror table[data-matrix]")).toHaveCount(1);
-  await expect(tableBtn).toHaveAttribute("aria-disabled", "true");
-  await expect(matrixBtn).toHaveAttribute("aria-disabled", "true");
+  await insertDrop.click();
+  await expect(tableBtn).toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(matrixBtn).toHaveClass(/ProseMirror-menu-disabled/);
+  await insertDrop.click();
 
   await page.locator(".modal-save-btn").click();
   await expect(page.locator(".modal-overlay")).toHaveCount(0);

@@ -80,10 +80,35 @@ export function descriptionLines(description: string): string[] {
   }
   const lines: string[] = [];
 
+  // Assign 1-based numbers to footnotes by order of first reference in the body.
+  const fnNumbers = new Map<string, number>();
+  const fnDefs = new Set<string>();
+  const rawContent: any[] = (doc as any)?.content ?? [];
+  const fnList = rawContent.find((n) => n?.type === "footnote_list");
+  for (const d of fnList?.content ?? []) {
+    if (typeof d?.attrs?.id === "string") fnDefs.add(d.attrs.id);
+  }
+  const scanRefs = (node: any) => {
+    if (!node || node.type === "footnote_list") return;
+    if (node.type === "footnote_ref") {
+      const id = node.attrs?.id;
+      if (typeof id === "string" && fnDefs.has(id) && !fnNumbers.has(id)) {
+        fnNumbers.set(id, fnNumbers.size + 1);
+      }
+      return;
+    }
+    for (const c of node.content ?? []) scanRefs(c);
+  };
+  for (const n of rawContent) scanRefs(n);
+
   const inline = (node: any): string => {
     if (typeof node?.text === "string") return node.text;
     if (node?.type === "hard_break") return " ";
     if (node?.type === "image") return `[image: ${node.attrs?.alt ?? ""}]`;
+    if (node?.type === "footnote_ref") {
+      const n = fnNumbers.get(node.attrs?.id);
+      return n !== undefined ? `[${n}]` : "[?]";
+    }
     return (node?.content ?? []).map(inline).join("");
   };
 
@@ -146,6 +171,16 @@ export function descriptionLines(description: string): string[] {
       }
       case "blockquote":
         (node.content ?? []).forEach((child: any) => block(child, indent + "> ", null));
+        return;
+      case "footnote_list":
+        (node.content ?? []).forEach((def: any) => {
+          const id = def?.attrs?.id;
+          const n = fnNumbers.get(id);
+          const tag = n !== undefined ? `[${n}] ` : "[—] ";
+          (def?.content ?? []).forEach((para: any, pi: number) => {
+            lines.push((pi === 0 ? tag : " ".repeat(tag.length)) + inline(para));
+          });
+        });
         return;
       default: {
         if (node?.content?.some((c: any) => c?.content && !("text" in c) && c.type !== "hard_break")) {

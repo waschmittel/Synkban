@@ -327,6 +327,49 @@ fn corner_cases() -> Vec<(&'static str, CardExport)> {
                 }),
             ])
         }),
+        ("19-footnotes", {
+            let fn_ref = |id: &str| json!({"type": "footnote_ref", "attrs": {"id": id}});
+            let fn_def = |id: &str, text: &str| {
+                json!({
+                    "type": "footnote_def",
+                    "attrs": {"id": id},
+                    "content": [{"type": "footnote_paragraph", "content": [text_node(text)]}]
+                })
+            };
+            let mut nodes = vec![
+                h(1, "Storage & Sync"),
+                p(vec![
+                    text_node("Cards are stored as atomic JSON files"),
+                    fn_ref("fn-a"),
+                    text_node(" and attachments live as sidecars"),
+                    fn_ref("fn-b"),
+                    text_node(" alongside the card directory."),
+                ]),
+            ];
+            for i in 1..=26 {
+                nodes.push(para(&format!(
+                    "Filler paragraph {i} pushing the next section onto page two so per-page footnote numbering restarts."
+                )));
+            }
+            nodes.push(h(2, "Second Page"));
+            nodes.push(p(vec![
+                text_node("On page two, a new note"),
+                fn_ref("fn-c"),
+                text_node(" restarts at [1], and referencing the first note again"),
+                fn_ref("fn-a"),
+                text_node(" prints it on this page too as [2]."),
+            ]));
+            nodes.push(json!({
+                "type": "footnote_list",
+                "content": [
+                    fn_def("fn-a", "Writes go to a temporary file and atomically rename over the target."),
+                    fn_def("fn-b", "Stored under attachments/{card-id}/{att-id} with a companion JSON metadata sidecar."),
+                    fn_def("fn-c", "Numbering restarts at [1] on every page of the exported PDF."),
+                    fn_def("fn-orphan", "Unreferenced orphaned definitions are omitted from the PDF."),
+                ]
+            }));
+            with_description(nodes)
+        }),
     ];
     // Unless a case sets its own title, the file name is the title.
     cases

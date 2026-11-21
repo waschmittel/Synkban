@@ -6,12 +6,13 @@
 
 ## The menu
 
-`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, dedicated **Insert table** and **Insert matrix** buttons insert a 3×3 table/matrix directly and disable when insertion is invalid (e.g. inside a table or matrix). Groups, divided by separators, no headings, an icon each:
+`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a flat **`+ Insert`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, and **Blockquote** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices inside a table, or footnotes inside a footnote/code block). Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
 
 | Group | Items (key) | Availability |
 |---|---|---|
 | Link | Add/Edit link… (`L`), Remove link (`U`) | greyed when not applicable |
-| Code | Inline code (`I`) | always |
+| Code / Inline | Inline code (`I`), Insert image… (`M`), Insert/Jump footnote (`F`) | greyed when not applicable |
+| Footnote | Delete footnote (`D`; tinted danger) | inside a footnote definition |
 | Text style | Plain (`0`), Code block (`B`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
 | Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`) | outside tables |
 | Block | Insert paragraph above (`Shift+P`), Insert paragraph below (`P`) | inside tables, code blocks, quotes, lists (before Delete inside tables) |

@@ -138,13 +138,63 @@ const luaBlockSpec: NodeSpec = {
   },
 };
 
+const footnoteRefSpec: NodeSpec = {
+  atom: true,
+  selectable: true,
+  parseDOM: [
+    {
+      tag: "sup.footnote-ref[data-fn-id]",
+      getAttrs: (dom) => {
+        const id = (dom as HTMLElement).getAttribute("data-fn-id");
+        return id ? { id } : false;
+      },
+    },
+  ],
+  toDOM: (node) => ["sup", { class: "footnote-ref", "data-fn-id": node.attrs.id }, "[?]"],
+};
+
+const footnoteListSpec: NodeSpec = {
+  defining: true,
+  isolating: true,
+  selectable: false,
+  parseDOM: [{ tag: "section.footnote-list" }],
+  toDOM: () => ["section", { class: "footnote-list" }, 0],
+};
+
+const footnoteDefSpec: NodeSpec = {
+  defining: true,
+  isolating: true,
+  selectable: false,
+  parseDOM: [
+    {
+      tag: "div.footnote-def[data-fn-id]",
+      getAttrs: (dom) => {
+        const id = (dom as HTMLElement).getAttribute("data-fn-id");
+        return id ? { id } : false;
+      },
+    },
+  ],
+  toDOM: (node) => ["div", { class: "footnote-def", "data-fn-id": node.attrs.id }, 0],
+};
+
+const footnoteParagraphSpec: NodeSpec = {
+  parseDOM: [{ tag: "p.footnote-para", priority: 60 }],
+  toDOM: () => ["p", { class: "footnote-para" }, 0],
+};
+
 const baseNodes = addListNodes(
   basicSchema.spec.nodes,
   schemaSpec.nodes.list_item.content,
   schemaSpec.nodes.ordered_list.group,
 )
   .append(tableNodeSpecs)
-  .append({ lua_block: luaBlockSpec })
+  .append({
+    lua_block: luaBlockSpec,
+    footnote_ref: footnoteRefSpec,
+    footnote_list: footnoteListSpec,
+    footnote_def: footnoteDefSpec,
+    footnote_paragraph: footnoteParagraphSpec,
+  })
   .update("image", imageSpec);
 
 const GAP_CURSOR_BLOCKS = new Set(["code_block", "lua_block", "blockquote", "bullet_list", "ordered_list"]);
@@ -162,7 +212,10 @@ for (const [name, spec] of Object.entries(schemaSpec.nodes as Record<string, Jso
     code: spec.code,
     attrs: buildAttrs(spec.attrs),
     ...(GAP_CURSOR_BLOCKS.has(name) ? { createGapCursor: true } : {}),
-    ...(name === "list_item" ? { allowGapCursor: false } : {}),
+    ...(name === "doc" ? { allowGapCursor: true } : {}),
+    ...(name === "list_item" || name === "footnote_list" || name === "footnote_def"
+      ? { allowGapCursor: false }
+      : {}),
   };
 }
 

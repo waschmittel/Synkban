@@ -29,3 +29,4 @@ validity, margins/page bounds, no empty pages and determinism.
 | `16-attachments` | Attachment list (long names, sizes) and thumbnails |
 | `17-matrix` | Matrix with open top-left corner, centred top/left headers, per-cell alignment, and page break |
 | `18-lua-blocks` | Runnable Lua blocks with evaluated output, outdated indicator, and runtime error |
+| `19-footnotes` | Numbered footnotes with same-page placement, per-page numbering restart, repeated references across pages, and omitted unreferenced orphans |

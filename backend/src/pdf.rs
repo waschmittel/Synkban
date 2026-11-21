@@ -89,7 +89,18 @@ const MAX_IMAGE_H: f32 = KEEP_MAX;
 /// Space a section heading takes: gap, 12pt line, rule, gap.
 const HEADING_H: f32 = 36.0;
 
+/// Footnote area metrics (aligned with tct's PDF renderer).
+const BODY_SIZE: f32 = 10.5;
+const NOTE_SIZE: f32 = 8.5;
+const NOTE_LINE: f32 = 11.5;
+const NOTE_GAP: f32 = 12.0;
+const NOTE_BETWEEN: f32 = 4.0;
+const NOTE_MARKER_GAP: f32 = 4.0;
+const NOTE_BUDGET: f32 = (BOTTOM - TOP) / 2.0;
+const SUP_SCALE: f32 = 0.68;
+
 type Rgb = [u8; 3];
+const BLACK: Rgb = [0x00, 0x00, 0x00];
 const INK: Rgb = [0x1f, 0x23, 0x28];
 const MUTED: Rgb = [0x6b, 0x72, 0x80];
 const LINK: Rgb = [0x00, 0x55, 0xaa];
@@ -366,6 +377,8 @@ struct Span {
     bold: bool,
     italic: bool,
     code: bool,
+    sup: bool,
+    fn_num: Option<usize>,
     link: Option<String>,
 }
 
@@ -424,13 +437,30 @@ fn plain_md(s: &str) -> String {
 
 /// One styled run on a laid-out line. `lead` is the gap before it (a space
 /// when it follows another run on the same line).
+#[derive(Clone)]
 struct Seg {
     text: String,
     face: Face,
     w: f32,
     lead: f32,
+    sup: bool,
+    fn_num: Option<usize>,
     link: Option<String>,
     color: Rgb,
+}
+
+#[derive(Clone)]
+struct FootnoteDef {
+    paragraphs: Vec<Vec<Span>>,
+}
+
+#[derive(Clone)]
+struct NoteItem {
+    /// 1-based index into `Layout.notes`.
+    num: usize,
+    lines: Vec<Vec<Seg>>,
+    /// Continuation carried from the previous page (marker is not repeated).
+    cont: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -449,6 +479,8 @@ struct Mark {
     images: usize,
     y: f32,
     marker: Option<(String, f32)>,
+    page_notes: Vec<Vec<NoteItem>>,
+    carry: Vec<NoteItem>,
 }
 
 struct Layout {
@@ -462,6 +494,16 @@ struct Layout {
     y: f32,
     /// List marker waiting for the next line emitted: (text, x).
     marker: Option<(String, f32)>,
+    /// Referenced footnotes in document order of first reference.
+    notes: Vec<FootnoteDef>,
+    /// Maps footnote_def id -> 1-based index in `notes`.
+    fn_map: HashMap<String, usize>,
+    /// Conservative wrap indent for the widest marker in the document.
+    note_wrap_indent: f32,
+    /// Footnotes assigned to each page (in order of first reference on that page).
+    page_notes: Vec<Vec<NoteItem>>,
+    /// Footnote lines that overflowed a page's `NOTE_BUDGET` and carry forward.
+    carry: Vec<NoteItem>,
 }
 
 impl Layout {
@@ -474,6 +516,293 @@ impl Layout {
             thumb_idx: HashMap::new(),
             y: TOP,
             marker: None,
+            notes: Vec::new(),
+            fn_map: HashMap::new(),
+            note_wrap_indent: 0.0,
+            page_notes: vec![Vec::new()],
+            carry: Vec::new(),
+        }
+    }
+
+    fn load_footnotes(&mut self, defs_node: Option<&Value>, body: &[Value]) {
+        let mut raw_defs: HashMap<&str, &Value> = HashMap::new();
+        if let Some(list) = defs_node {
+            for def in list
+                .get("content")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                if def.get("type").and_then(Value::as_str) == Some("footnote_def") {
+                    if let Some(id) = def.pointer("/attrs/id").and_then(Value::as_str) {
+                        raw_defs.entry(id).or_insert(def);
+                    }
+                }
+            }
+        }
+        if raw_defs.is_empty() {
+            return;
+        }
+        // Discover referenced footnotes in body document order.
+        let mut referenced: Vec<String> = Vec::new();
+        fn walk_refs(node: &Value, raw_defs: &HashMap<&str, &Value>, out: &mut Vec<String>) {
+            match node.get("type").and_then(Value::as_str) {
+                Some("footnote_list") => return,
+                Some("footnote_ref") => {
+                    if let Some(id) = node.pointer("/attrs/id").and_then(Value::as_str) {
+                        if raw_defs.contains_key(id) && !out.iter().any(|x| x == id) {
+                            out.push(id.to_string());
+                        }
+                    }
+                    return;
+                }
+                _ => {}
+            }
+            for child in node
+                .get("content")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                walk_refs(child, raw_defs, out);
+            }
+        }
+        for b in body {
+            walk_refs(b, &raw_defs, &mut referenced);
+        }
+
+        let empty_map = HashMap::new();
+        for (i, id) in referenced.into_iter().enumerate() {
+            let def = raw_defs[id.as_str()];
+            let mut paragraphs = Vec::new();
+            for p in def
+                .get("content")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let mut spans = Vec::new();
+                inline(
+                    p.get("content")
+                        .and_then(Value::as_array)
+                        .map_or(&[][..], Vec::as_slice),
+                    &mut spans,
+                    false,
+                    &empty_map,
+                );
+                paragraphs.push(spans);
+            }
+            self.fn_map.insert(id, i + 1);
+            self.notes.push(FootnoteDef { paragraphs });
+        }
+
+        if !self.notes.is_empty() {
+            let max_marker = format!("[{}]", self.notes.len());
+            let w = self
+                .fonts
+                .width(Face::Regular, &max_marker, BODY_SIZE * SUP_SCALE);
+            self.note_wrap_indent = (w + NOTE_MARKER_GAP).min(CONTENT_W / 3.0);
+        }
+    }
+
+    fn notes_height(items: &[NoteItem]) -> f32 {
+        if items.is_empty() {
+            return 0.0;
+        }
+        let lines: usize = items.iter().map(|i| i.lines.len()).sum();
+        NOTE_GAP + lines as f32 * NOTE_LINE + (items.len() - 1) as f32 * NOTE_BETWEEN
+    }
+
+    fn note_head(first: bool) -> f32 {
+        if first {
+            NOTE_GAP
+        } else {
+            NOTE_BETWEEN
+        }
+    }
+
+    fn lines_fitting(height: f32) -> usize {
+        (height / NOTE_LINE).floor().max(0.0) as usize
+    }
+
+    fn reserved(&self) -> f32 {
+        Self::notes_height(self.page_notes.last().expect("at least one page"))
+    }
+
+    fn bottom(&self) -> f32 {
+        BOTTOM - self.reserved()
+    }
+
+    fn note_lines(&self, num: usize) -> Vec<Vec<Seg>> {
+        let width = CONTENT_W - self.note_wrap_indent;
+        self.notes[num - 1]
+            .paragraphs
+            .iter()
+            .flat_map(|spans| self.wrap(spans, NOTE_SIZE, width, INK))
+            .collect()
+    }
+
+    fn line_refs(line: &[Seg]) -> Vec<usize> {
+        line.iter().filter_map(|s| s.fn_num).collect()
+    }
+
+    fn new_notes(&self, nums: &[usize]) -> Vec<usize> {
+        let shown = self.page_notes.last().expect("at least one page");
+        let mut new = Vec::new();
+        for &n in nums {
+            if !new.contains(&n) && !shown.iter().any(|i| !i.cont && i.num == n) {
+                new.push(n);
+            }
+        }
+        new
+    }
+
+    fn page_note_display_num(&self, fn_num: usize) -> usize {
+        let shown = self.page_notes.last().expect("at least one page");
+        let mut k = 0;
+        for item in shown {
+            if !item.cont {
+                k += 1;
+                if item.num == fn_num {
+                    return k;
+                }
+            }
+        }
+        fn_num
+    }
+
+    fn fits_notes(&self, height: f32, nums: &[usize]) -> bool {
+        let new = self.new_notes(nums);
+        let mut extra = 0.0;
+        if !new.is_empty() {
+            let mut first = self.page_notes.last().is_some_and(Vec::is_empty);
+            for &n in &new {
+                extra += Self::note_head(first) + self.note_lines(n).len() as f32 * NOTE_LINE;
+                first = false;
+            }
+            if self.reserved() + extra > NOTE_BUDGET {
+                return false;
+            }
+        }
+        self.y + height + self.reserved() + extra <= BOTTOM
+    }
+
+    fn register_notes(&mut self, height: f32, nums: &[usize]) {
+        for num in self.new_notes(nums) {
+            let page = self.page_notes.last().expect("at least one page");
+            let used = Self::notes_height(page);
+            let free = (BOTTOM - self.y - height - used).min(NOTE_BUDGET - used);
+            let room = Self::lines_fitting(free - Self::note_head(page.is_empty()));
+            let mut lines = self.note_lines(num);
+            let rest = lines.split_off(room.min(lines.len()));
+            let placed = !lines.is_empty();
+            if placed {
+                self.page_notes
+                    .last_mut()
+                    .expect("at least one page")
+                    .push(NoteItem {
+                        num,
+                        lines,
+                        cont: false,
+                    });
+            }
+            if !rest.is_empty() {
+                self.carry.push(NoteItem {
+                    num,
+                    lines: rest,
+                    cont: placed,
+                });
+            }
+        }
+    }
+
+    fn finish_notes(&mut self) {
+        while !self.carry.is_empty() {
+            self.new_page();
+        }
+        let page_notes = std::mem::take(&mut self.page_notes);
+        for (page, mut items) in page_notes.into_iter().enumerate() {
+            if items.is_empty() {
+                continue;
+            }
+            // Carried continuations first, then this page's notes in order of
+            // first reference on this page (numbered 1, 2, ... per page).
+            items.sort_by_key(|i| !i.cont);
+            let top = BOTTOM - Self::notes_height(&items);
+            let count = items.iter().filter(|i| !i.cont).count();
+            let marker_size = BODY_SIZE * SUP_SCALE;
+            let longest = (1..=count)
+                .map(|k| {
+                    self.fonts
+                        .width(Face::Regular, &format!("[{k}]"), marker_size)
+                })
+                .fold(0.0, f32::max);
+            let indent = (longest + NOTE_MARKER_GAP).min(CONTENT_W / 3.0);
+
+            let mut ops = Vec::new();
+            ops.push(Op::Rect {
+                x: MARGIN,
+                y: top + 2.0,
+                w: CONTENT_W / 4.0,
+                h: 0.6,
+                color: MUTED,
+            });
+            let mut y = top + NOTE_GAP;
+            let mut display_k = 0usize;
+            for (k, item) in items.iter().enumerate() {
+                if k > 0 {
+                    y += NOTE_BETWEEN;
+                }
+                if !item.cont {
+                    display_k += 1;
+                }
+                for (i, line) in item.lines.iter().enumerate() {
+                    if i == 0 && !item.cont {
+                        let label = format!("[{display_k}]");
+                        let base = y + NOTE_SIZE * 1.05 - (BODY_SIZE - NOTE_SIZE) * 0.8;
+                        ops.push(Op::Text {
+                            x: MARGIN,
+                            y: base,
+                            face: Face::Regular,
+                            size: marker_size,
+                            color: BLACK,
+                            text: label,
+                        });
+                    }
+                    let mut cx = MARGIN + indent;
+                    let base = y + NOTE_SIZE * 1.05;
+                    for seg in line {
+                        cx += seg.lead;
+                        ops.push(Op::Text {
+                            x: cx,
+                            y: base,
+                            face: seg.face,
+                            size: NOTE_SIZE,
+                            color: seg.color,
+                            text: seg.text.clone(),
+                        });
+                        if let Some(url) = &seg.link {
+                            ops.push(Op::Rect {
+                                x: cx,
+                                y: base + 1.4,
+                                w: seg.w,
+                                h: 0.5,
+                                color: LINK,
+                            });
+                            ops.push(Op::Link {
+                                x: cx,
+                                y,
+                                w: seg.w,
+                                h: NOTE_LINE,
+                                url: url.clone(),
+                            });
+                        }
+                        cx += seg.w;
+                    }
+                    y += NOTE_LINE;
+                }
+            }
+            self.pages[page].extend(ops);
         }
     }
 
@@ -483,11 +812,33 @@ impl Layout {
 
     fn new_page(&mut self) {
         self.pages.push(Vec::new());
+        self.page_notes.push(Vec::new());
         self.y = TOP;
+        let page = self.page_notes.last_mut().expect("just pushed");
+        while !self.carry.is_empty() {
+            let used = Self::notes_height(page);
+            let room = Self::lines_fitting(NOTE_BUDGET - used - Self::note_head(page.is_empty()));
+            if room == 0 {
+                break;
+            }
+            let mut item = self.carry.remove(0);
+            let rest = item.lines.split_off(room.min(item.lines.len()));
+            if !rest.is_empty() {
+                self.carry.insert(
+                    0,
+                    NoteItem {
+                        num: item.num,
+                        lines: rest,
+                        cont: true,
+                    },
+                );
+            }
+            page.push(item);
+        }
     }
 
     fn ensure(&mut self, h: f32) {
-        if self.y + h > BOTTOM && self.y > TOP {
+        if self.y + h > self.bottom() && self.y > TOP {
             self.new_page();
         }
     }
@@ -499,6 +850,8 @@ impl Layout {
             images: self.images.len(),
             y: self.y,
             marker: self.marker.clone(),
+            page_notes: self.page_notes.clone(),
+            carry: self.carry.clone(),
         }
     }
 
@@ -509,6 +862,8 @@ impl Layout {
         self.thumb_idx.retain(|_, i| *i < m.images);
         self.y = m.y;
         self.marker = m.marker.clone();
+        self.page_notes = m.page_notes.clone();
+        self.carry = m.carry.clone();
     }
 
     /// Runs `build` so that its output starts on a fresh page if it would
@@ -526,7 +881,7 @@ impl Layout {
             self.new_page();
             let fresh = self.mark();
             build(self);
-            if self.pages.len() == fresh.pages && self.y - TOP <= max {
+            if self.pages.len() == fresh.pages && (self.y - TOP + self.reserved()) <= max {
                 return;
             }
             self.rollback(&m);
@@ -559,6 +914,8 @@ impl Layout {
                             text,
                             face,
                             lead_face: primary,
+                            sup: span.sup,
+                            fn_num: span.fn_num,
                             link: span.link.clone(),
                             space: space && ri == 0,
                         }));
@@ -579,15 +936,17 @@ impl Layout {
                 }
                 Tok::Word(w) => w,
             };
-            let ww = self.fonts.width(w.face, &w.text, size);
+            let eff_size = if w.sup { size * SUP_SCALE } else { size };
+            let ww = self.fonts.width(w.face, &w.text, eff_size);
             // Words of one style run share a segment, with a real space glyph
             // from that run's face in between (copy/paste, correct shaping).
             let merge = w.space
+                && !w.sup
+                && w.fn_num.is_none()
                 && self.fonts.has(w.face, ' ')
-                && buf
-                    .cur
-                    .last()
-                    .is_some_and(|l| l.face == w.face && l.link == w.link);
+                && buf.cur.last().is_some_and(|l| {
+                    l.face == w.face && l.link == w.link && !l.sup && l.fn_num.is_none()
+                });
             let mut lead = match (w.space && !buf.cur.is_empty(), merge) {
                 (false, _) => 0.0,
                 (true, true) => self.fonts.width(w.face, " ", size),
@@ -600,7 +959,7 @@ impl Layout {
                 merge = false;
             }
             if ww > width {
-                self.split_long(&w, size, width, color, &mut buf);
+                self.split_long(&w, eff_size, width, color, &mut buf);
             } else {
                 buf.push_word(w, lead, ww, color, merge);
             }
@@ -620,6 +979,8 @@ impl Layout {
             face: word.face,
             w,
             lead: 0.0,
+            sup: word.sup,
+            fn_num: word.fn_num,
             link: word.link.clone(),
             color,
         };
@@ -671,25 +1032,40 @@ impl Layout {
         }
         for seg in line {
             cx += seg.lead;
+            let (draw_size, draw_y) = if seg.sup {
+                (size * SUP_SCALE, base - size * 0.34)
+            } else {
+                (size, base)
+            };
+            let text = if let Some(fn_num) = seg.fn_num {
+                format!("[{}]", self.page_note_display_num(fn_num))
+            } else {
+                seg.text.clone()
+            };
+            let draw_w = if seg.fn_num.is_some() {
+                self.fonts.width(seg.face, &text, draw_size)
+            } else {
+                seg.w
+            };
             self.page().push(Op::Text {
                 x: cx,
-                y: base,
+                y: draw_y,
                 face: seg.face,
-                size,
+                size: draw_size,
                 color: seg.color,
-                text: seg.text.clone(),
+                text,
             });
             if let Some(url) = &seg.link {
-                self.rect(cx, base + 1.6, seg.w, 0.6, LINK);
+                self.rect(cx, base + 1.6, draw_w, 0.6, LINK);
                 self.page().push(Op::Link {
                     x: cx,
                     y: top,
-                    w: seg.w,
+                    w: draw_w,
                     h: line_h,
                     url: url.clone(),
                 });
             }
-            cx += seg.w;
+            cx += draw_w;
         }
     }
 
@@ -709,7 +1085,10 @@ impl Layout {
         let line_h = size * 1.4;
         let total = lines.len() as f32 * line_h;
         if keep && total <= KEEP_MAX {
-            self.ensure(total);
+            let all_refs: Vec<usize> = lines.iter().flat_map(|l| Self::line_refs(l)).collect();
+            if !self.fits_notes(total, &all_refs) && self.y > TOP {
+                self.new_page();
+            }
         }
         // A paragraph that starts in a right-to-left script is right-aligned.
         let rtl = lines
@@ -722,7 +1101,16 @@ impl Layout {
             align
         };
         for (i, line) in lines.iter().enumerate() {
-            self.ensure(lines_to_keep(i, lines.len()) as f32 * line_h);
+            let keep_n = lines_to_keep(i, lines.len());
+            let group_refs: Vec<usize> = lines[i..(i + keep_n).min(lines.len())]
+                .iter()
+                .flat_map(|l| Self::line_refs(l))
+                .collect();
+            while !self.fits_notes(keep_n as f32 * line_h, &group_refs) && self.y > TOP {
+                self.new_page();
+            }
+            let refs = Self::line_refs(line);
+            self.register_notes(line_h, &refs);
             let y = self.y;
             self.emit_line_at(line, x, y, width, size, align);
             self.y += line_h;
@@ -866,7 +1254,7 @@ impl Layout {
                     _ => 13.0,
                 };
                 let mut spans = Vec::new();
-                inline(content, &mut spans, true);
+                inline(content, &mut spans, true, &self.fn_map);
                 self.ensure(hs * 1.4 + 9.0 + 2.0 * size * 1.4);
                 self.gap(4.0);
                 self.flow(
@@ -912,7 +1300,11 @@ impl Layout {
                 for (offset, page) in self.pages[start.0..=end.0].iter_mut().enumerate() {
                     let p = start.0 + offset;
                     let y0 = if p == start.0 { start.1 } else { TOP };
-                    let y1 = if p == end.0 { end.1 } else { BOTTOM };
+                    let y1 = if p == end.0 {
+                        end.1
+                    } else {
+                        BOTTOM - Self::notes_height(&self.page_notes[p])
+                    };
                     if y1 > y0 {
                         page.push(Op::Rect {
                             x: x + 2.0,
@@ -924,6 +1316,7 @@ impl Layout {
                     }
                 }
             }
+            "footnote_list" => {}
             "table" => {
                 let matrix = node
                     .pointer("/attrs/matrix")
@@ -936,7 +1329,7 @@ impl Layout {
                     self.blocks(content, x, w, size, color);
                 } else if node.get("text").is_some() {
                     let mut spans = Vec::new();
-                    inline(std::slice::from_ref(node), &mut spans, false);
+                    inline(std::slice::from_ref(node), &mut spans, false, &self.fn_map);
                     self.flow(&spans, x, w, TextStyle { size, color }, Align::Left, true);
                 }
             }
@@ -955,7 +1348,7 @@ impl Layout {
         skip_blank: bool,
     ) {
         let mut spans = Vec::new();
-        inline(nodes, &mut spans, false);
+        inline(nodes, &mut spans, false, &self.fn_map);
         if spans.iter().all(|s| s.text.trim().is_empty()) {
             if !skip_blank {
                 self.gap(size * 0.7);
@@ -1122,6 +1515,8 @@ impl Layout {
             face: Face::Mono,
             w: header_w,
             lead: 0.0,
+            sup: false,
+            fn_num: None,
             link: None,
             color: MUTED,
         }];
@@ -1149,6 +1544,8 @@ impl Layout {
                     face: s.face,
                     w: s.w,
                     lead: s.lead,
+                    sup: s.sup,
+                    fn_num: s.fn_num,
                     link: s.link.clone(),
                     color: *color,
                 })
@@ -1175,6 +1572,8 @@ impl Layout {
                         face: Face::Mono,
                         w: cw,
                         lead: 0.0,
+                        sup: false,
+                        fn_num: None,
                         link: None,
                         color: INK,
                     }]);
@@ -1191,6 +1590,8 @@ impl Layout {
                     face: Face::Mono,
                     w: cw,
                     lead: 0.0,
+                    sup: false,
+                    fn_num: None,
                     link: None,
                     color: INK,
                 }]
@@ -1211,7 +1612,7 @@ impl Layout {
         let grid: Vec<Vec<Cell>> = rows
             .iter()
             .enumerate()
-            .map(|(ri, r)| table_cells(r, ri, matrix))
+            .map(|(ri, r)| table_cells(r, ri, matrix, &self.fn_map))
             .collect();
         let ncols = grid.iter().map(Vec::len).max().unwrap_or(0);
         if ncols == 0 {
@@ -1253,6 +1654,13 @@ impl Layout {
             matrix,
             has_body: grid.len() > 1,
         };
+        let row_refs = |ri: usize| -> Vec<usize> {
+            wrapped[ri]
+                .iter()
+                .flatten()
+                .flat_map(|l| Self::line_refs(l))
+                .collect()
+        };
         self.gap(3.0);
         for ri in 0..grid.len() {
             // No single row alone at a page's top or bottom; the header
@@ -1262,13 +1670,19 @@ impl Layout {
             } else {
                 lines_to_keep(ri, grid.len())
             };
-            let need: f32 = heights[ri..(ri + keep).min(grid.len())].iter().sum();
-            if self.y + need > BOTTOM && self.y > TOP {
+            let end = (ri + keep).min(grid.len());
+            let need: f32 = heights[ri..end].iter().sum();
+            let group_refs: Vec<usize> = (ri..end).flat_map(&row_refs).collect();
+            if !self.fits_notes(need, &group_refs) && self.y > TOP {
                 self.new_page();
-                if ri > 0 && heights[0] + heights[ri] <= BOTTOM - TOP {
+                if ri > 0 && heights[0] + heights[ri] <= self.bottom() - TOP {
+                    let hdr_refs = row_refs(0);
+                    self.register_notes(heights[0], &hdr_refs);
                     self.table_row(&grid[0], &wrapped[0], &geom, heights[0], size, true);
                 }
             }
+            let rrefs = row_refs(ri);
+            self.register_notes(heights[ri], &rrefs);
             self.table_row(&grid[ri], &wrapped[ri], &geom, heights[ri], size, ri == 0);
         }
         self.gap(8.0);
@@ -1396,7 +1810,7 @@ fn indent_for(width: f32, indent: f32) -> f32 {
 
 const MIN_TEXT_W: f32 = 120.0;
 
-fn table_cells(row: &Value, ri: usize, matrix: bool) -> Vec<Cell> {
+fn table_cells(row: &Value, ri: usize, matrix: bool, fn_map: &HashMap<String, usize>) -> Vec<Cell> {
     let cells = row
         .get("content")
         .and_then(Value::as_array)
@@ -1430,6 +1844,7 @@ fn table_cells(row: &Value, ri: usize, matrix: bool) -> Vec<Cell> {
                             .map_or(&[][..], Vec::as_slice),
                         &mut spans,
                         header,
+                        fn_map,
                     );
                 }
             }
@@ -1478,6 +1893,8 @@ struct Word {
     face: Face,
     /// Style face of the surrounding span; measures the space before the word.
     lead_face: Face,
+    sup: bool,
+    fn_num: Option<usize>,
     link: Option<String>,
     space: bool,
 }
@@ -1516,6 +1933,8 @@ impl LineBuf {
                 face: w.face,
                 w: ww,
                 lead,
+                sup: w.sup,
+                fn_num: w.fn_num,
                 link: w.link,
                 color,
             }),
@@ -1524,13 +1943,25 @@ impl LineBuf {
     }
 }
 
-fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool) {
+fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool, fn_map: &HashMap<String, usize>) {
     for n in nodes {
         match n.get("type").and_then(Value::as_str) {
             Some("hard_break") => out.push(Span {
                 text: "\n".into(),
                 ..Span::default()
             }),
+            Some("footnote_ref") => {
+                if let Some(id) = n.pointer("/attrs/id").and_then(Value::as_str) {
+                    if let Some(&num) = fn_map.get(id) {
+                        out.push(Span {
+                            text: format!("[{num}]"),
+                            sup: true,
+                            fn_num: Some(num),
+                            ..Span::default()
+                        });
+                    }
+                }
+            }
             // Image attachments aren't embedded; their file name stands in.
             Some("image") => out.push(Span {
                 text: format!(
@@ -1745,27 +2176,40 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
     let plain_desc = doc.is_none() && !card.description.trim().is_empty();
     if has_doc || plain_desc {
         if let Some(d) = doc.filter(|_| has_doc) {
-            let content = d
+            let mut content = d
                 .get("content")
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default();
-            // The title is kept with the first heading's section, or else with
-            // the first block only (a big first block must not drag it away).
-            let by_heading = heading_level(&content[0]).is_some();
-            let first = &content[..if by_heading {
-                section_end(&content, 0)
+            let fn_list = if content
+                .last()
+                .and_then(|n| n.get("type"))
+                .and_then(Value::as_str)
+                == Some("footnote_list")
+            {
+                content.pop()
             } else {
-                1
-            }];
-            // A first block over half a page (e.g. a paragraph of big images)
-            // flows from where the title is instead of moving as a whole.
-            let max = if by_heading { f32::MAX } else { KEEP_MAX };
-            l.keep_together_up_to(max, &|l| {
-                l.heading_rule("Description", 0.0);
-                l.blocks_inner(first, MARGIN, CONTENT_W, 10.5, INK, true);
-            });
-            l.blocks(&content[first.len()..], MARGIN, CONTENT_W, 10.5, INK);
+                None
+            };
+            l.load_footnotes(fn_list.as_ref(), &content);
+            if !content.is_empty() {
+                // The title is kept with the first heading's section, or else with
+                // the first block only (a big first block must not drag it away).
+                let by_heading = heading_level(&content[0]).is_some();
+                let first = &content[..if by_heading {
+                    section_end(&content, 0)
+                } else {
+                    1
+                }];
+                // A first block over half a page (e.g. a paragraph of big images)
+                // flows from where the title is instead of moving as a whole.
+                let max = if by_heading { f32::MAX } else { KEEP_MAX };
+                l.keep_together_up_to(max, &|l| {
+                    l.heading_rule("Description", 0.0);
+                    l.blocks_inner(first, MARGIN, CONTENT_W, 10.5, INK, true);
+                });
+                l.blocks(&content[first.len()..], MARGIN, CONTENT_W, 10.5, INK);
+            }
         } else {
             l.heading_rule("Description", 0.0);
             for para in card.description.split("\n\n") {
@@ -1854,6 +2298,9 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
         l.gap(6.0);
         place_images(&mut l, &attachments);
     }
+
+    // Flush carried footnotes and render each page's footnote area above the footer.
+    l.finish_notes();
 
     // Footer on every page.
     let total = l.pages.len();

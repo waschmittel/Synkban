@@ -175,7 +175,7 @@ test("Accel+K menu is contextual: link, inline code, text style", async ({ page,
   await page.keyboard.press("ControlOrMeta+k");
   const labels = page.locator(".table-menu-item .table-menu-label");
   await expect(labels).toHaveText([
-    "Add link…", "Remove link", "Inline code", "Insert image…",
+    "Add link…", "Remove link", "Inline code", "Insert image…", "Insert footnote",
     "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
     "Insert table (3×3)", "Insert matrix (3×3)",
   ]);
@@ -309,20 +309,25 @@ test("attached images can be inserted, previewed and vanish from the text when d
 
 // ── image picker, copy across cards, references stay valid (ADR-0020) ────
 
-test("the toolbar's image button picks an existing attachment or uploads a new one", async ({ page, request }) => {
+test("the toolbar's insert menu image item picks an existing attachment or uploads a new one", async ({ page, request }) => {
   await openEditor(page, request, "Editor Image Picker");
   await pastePng(page, ".modal-title-input"); // attached only
   await expect(page.locator(".attachment-item")).toHaveCount(1);
 
+  const openImageFromInsert = async () => {
+    await page.locator(".ProseMirror-menu-dropdown.insert-dropdown").click();
+    await page.locator(".image-menu-trigger").click();
+  };
+
   const picker = page.locator(".image-menu");
-  await page.locator(".image-menu-trigger").click();
+  await openImageFromInsert();
   await expect(picker.locator(".table-menu-item")).toHaveText([/pasted-\d+-1\.png/, /Upload image…/]);
-  // Toggle: the same button closes it again.
-  await page.locator(".image-menu-trigger").click();
+  // Escape closes the image picker.
+  await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
 
   // Arrow keys + Enter.
-  await page.locator(".image-menu-trigger").click();
+  await openImageFromInsert();
   await expect(picker.locator(".table-menu-item--hi")).toHaveText(/pasted/); // first is highlighted
   await page.keyboard.press("ArrowDown");
   await expect(picker.locator(".table-menu-item--hi")).toHaveText(/Upload/);
@@ -332,7 +337,7 @@ test("the toolbar's image button picks an existing attachment or uploads a new o
   await expect(editor(page).locator("img.editor-image")).toHaveCount(1);
 
   // Upload goes through the file chooser, attaches and references.
-  await page.locator(".image-menu-trigger").click();
+  await openImageFromInsert();
   await expect(picker).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
   await page.keyboard.press("u");

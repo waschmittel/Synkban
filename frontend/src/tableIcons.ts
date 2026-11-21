@@ -21,7 +21,16 @@ export const MATRIX_ICON =
 const BAND = 'fill="currentColor" fill-opacity=".28" stroke="none"';
 
 export const ICONS = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>',
+  footnote:
+    '<path d="M5 18h14M7 14h6M16 5l2-1v8M16 12h4"/>',
+  bulletList:
+    '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/>',
+  orderedList:
+    '<path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v4M4 11.5c0-.8.7-1.3 1.5-1.3s1.5.5 1.5 1.3c0 1-3 2-3 3h3M4 17.5h2c.6 0 1 .4 1 1s-.4 1-1 1H4"/>',
+  blockquote:
+    '<path d="M5 6v12M10 8h9M10 12h9M10 16h6"/>',
   image:
     '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
   // Move: an arrow in the direction of travel.

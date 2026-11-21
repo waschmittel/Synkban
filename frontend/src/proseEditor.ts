@@ -3,7 +3,7 @@
 /// and a Trello-style menu (text-style dropdown + inline marks + custom link
 /// dialog).
 
-import { EditorState, TextSelection } from "prosemirror-state";
+import { EditorState, TextSelection, type Command } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { GapCursor } from "prosemirror-gapcursor";
 import {
@@ -11,11 +11,19 @@ import {
   DOMSerializer,
   Node as PmNode,
 } from "prosemirror-model";
-import { sinkListItem, liftListItem } from "prosemirror-schema-list";
+import { wrapIn } from "prosemirror-commands";
+import { sinkListItem, liftListItem, wrapInList } from "prosemirror-schema-list";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
 import { blockEscapeKeymap, gapPosAtY } from "./blockEscape";
+import {
+  canInsertFootnote,
+  createFootnoteDefView,
+  createFootnoteRefView,
+  footnotePlugins,
+  insertFootnote,
+} from "./footnotes";
 import { createLuaBlockView, luaPlugins } from "./luaBlock";
 import { insertMatrix, insertTable, tablePlugins } from "./tables";
 import { schema, TEXT_STYLES, validateDescription } from "./schema";
@@ -124,6 +132,69 @@ class TypeDropdown extends Dropdown {
   }
 }
 
+/// Renders an Insert-dropdown item with both icon and text label.
+function insertDropdownItem(opts: {
+  label: string;
+  title: string;
+  icon: string;
+  className: string;
+  enable?: (state: EditorState) => boolean;
+  run: Command;
+}): MenuItem<HTMLButtonElement> {
+  return new MenuItem({
+    label: opts.label,
+    title: opts.title,
+    class: opts.className,
+    enable: opts.enable,
+    run: opts.run,
+    render() {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = `insert-menu-item ${opts.className}`;
+      el.title = opts.title;
+      el.innerHTML =
+        `<span class="insert-menu-icon">${svg(opts.icon, 15)}</span>` +
+        `<span class="insert-menu-label">${opts.label}</span>`;
+      return el;
+    },
+  });
+}
+
+class InsertDropdown extends Dropdown {
+  constructor(items: readonly MenuItem<any>[]) {
+    super(items, { label: "Insert", title: "Insert", class: "insert-dropdown" });
+  }
+  render(view: EditorView) {
+    const r = super.render(view);
+    const btn = r.focusable as HTMLButtonElement;
+    // Render as a "+ Insert" menu trigger rather than a plain text select box.
+    btn.innerHTML =
+      `<span class="insert-trigger-icon" aria-hidden="true">${svg(ICONS.plus, 14)}</span>` +
+      `<span>Insert</span>`;
+    // prosemirror-menu's 100ms `isMenuEvent` window skips auto-closing when an
+    // item is clicked immediately after opening; close it explicitly on item click.
+    // Check disabled state in capture phase before MenuItem's handler runs the command
+    // (which may immediately disable the item, e.g. inserting a table).
+    let closeAfterClick = false;
+    r.dom.addEventListener(
+      "click",
+      (e) => {
+        const item = (e.target as HTMLElement | null)?.closest(".insert-menu-item");
+        closeAfterClick = !!(item && !item.classList.contains("ProseMirror-menu-disabled"));
+      },
+      true,
+    );
+    r.dom.addEventListener("click", () => {
+      if (!closeAfterClick) return;
+      closeAfterClick = false;
+      queueMicrotask(() => {
+        if (r.dom.querySelector(".ProseMirror-menu-dropdown-menu")) btn.click();
+      });
+    });
+    return r;
+  }
+}
+
 /// Creates an `EditorView` bound to `target`. Transactions go through
 /// `onChange` (called with the new doc — used to mark the form dirty).
 /// Stands in for an image whose attachment is gone (broken data, manual edit).
@@ -149,42 +220,80 @@ export function createCardEditor(
     run(_state, _dispatch, view) { return openLinkEditor(view, linkType); },
   });
 
-  const imageItem = new MenuItem({
-    title: "Insert image",
-    icon: { dom: iconDom(ICONS.image) },
-    class: "image-menu-trigger",
-    enable: (state) => canInsertImage(state),
-    run(_state, _dispatch, view) {
-      openImagePicker(view);
-      return true;
-    },
-  });
-
   const inlineMenu = [[
     items.toggleStrong,
     items.toggleEm,
     items.toggleCode,
     customLinkItem,
-    imageItem,
   ].filter(Boolean) as any[]];
 
   const typeDropdown = new TypeDropdown(TEXT_STYLES.map((t) => t.item()));
 
-  const tableItem = new MenuItem({
-    title: "Insert table",
-    icon: { dom: iconDom(TABLE_ICON) },
-    class: "insert-table-btn",
-    enable: (state) => insertTable(state),
-    run: insertTable,
-  });
+  const bulletListCmd = wrapInList(schema.nodes.bullet_list);
+  const orderedListCmd = wrapInList(schema.nodes.ordered_list);
+  const blockquoteCmd = wrapIn(schema.nodes.blockquote);
 
-  const matrixItem = new MenuItem({
-    title: "Insert matrix",
-    icon: { dom: iconDom(MATRIX_ICON) },
-    class: "insert-matrix-btn",
-    enable: (state) => insertMatrix(state),
-    run: insertMatrix,
-  });
+  const insertDropdown = new InsertDropdown([
+    insertDropdownItem({
+      label: "Footnote",
+      title: "Insert footnote",
+      icon: ICONS.footnote,
+      className: "insert-footnote-btn",
+      enable: canInsertFootnote,
+      run: insertFootnote,
+    }),
+    insertDropdownItem({
+      label: "Image",
+      title: "Insert image",
+      icon: ICONS.image,
+      className: "image-menu-trigger",
+      enable: canInsertImage,
+      run(_state, _dispatch, view) {
+        if (view) setTimeout(() => openImagePicker(view), 0);
+        return true;
+      },
+    }),
+    insertDropdownItem({
+      label: "Table",
+      title: "Insert table",
+      icon: TABLE_ICON,
+      className: "insert-table-btn",
+      enable: (state) => insertTable(state),
+      run: insertTable,
+    }),
+    insertDropdownItem({
+      label: "Matrix",
+      title: "Insert matrix",
+      icon: MATRIX_ICON,
+      className: "insert-matrix-btn",
+      enable: (state) => insertMatrix(state),
+      run: insertMatrix,
+    }),
+    insertDropdownItem({
+      label: "Bullet list",
+      title: "Bullet list",
+      icon: ICONS.bulletList,
+      className: "insert-bullet-list-btn",
+      enable: (state) => bulletListCmd(state),
+      run: bulletListCmd,
+    }),
+    insertDropdownItem({
+      label: "Ordered list",
+      title: "Ordered list",
+      icon: ICONS.orderedList,
+      className: "insert-ordered-list-btn",
+      enable: (state) => orderedListCmd(state),
+      run: orderedListCmd,
+    }),
+    insertDropdownItem({
+      label: "Blockquote",
+      title: "Blockquote",
+      icon: ICONS.blockquote,
+      className: "insert-blockquote-btn",
+      enable: (state) => blockquoteCmd(state),
+      run: blockquoteCmd,
+    }),
+  ]);
 
   const searchItem = new MenuItem({
     title: tip("Find in description", accel("F")),
@@ -200,9 +309,8 @@ export function createCardEditor(
 
   const menuContent = inlineMenu
     .concat([[typeDropdown]])
-    .concat([[tableItem, matrixItem]])
+    .concat([[insertDropdown]])
     .concat([[undoItem, redoItem]])
-    .concat(items.blockMenu)
     .concat([[searchItem]]);
 
   const listItem = schema.nodes.list_item;
@@ -236,6 +344,7 @@ export function createCardEditor(
     doc: initialDoc,
     plugins: [
       editorSearchPlugin(hooks.onSearchStateChange),
+      ...footnotePlugins(),
       ...luaPlugins(),
       tableMenuKeymap,
       ...tablePlugins(),
@@ -275,6 +384,8 @@ export function createCardEditor(
     },
     nodeViews: {
       lua_block: createLuaBlockView,
+      footnote_ref: createFootnoteRefView,
+      footnote_def: createFootnoteDefView,
       image(node) {
         const img = document.createElement("img");
         img.className = "editor-image";

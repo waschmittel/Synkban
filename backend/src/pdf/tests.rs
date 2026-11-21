@@ -2250,4 +2250,105 @@ fn labels(n: usize) -> Vec<Label> {
         .collect()
 }
 
+#[test]
+fn footnotes_render_on_same_page_restart_numbering_per_page_and_omit_orphans() {
+    let fn_ref = |id: &str| json!({"type": "footnote_ref", "attrs": {"id": id}});
+    let fn_def = |id: &str, text: &str| {
+        json!({
+            "type": "footnote_def",
+            "attrs": {"id": id},
+            "content": [{"type": "footnote_paragraph", "content": [text_node(text)]}]
+        })
+    };
+    let mut nodes = vec![json!({
+        "type": "paragraph",
+        "content": [
+            text_node("Page one A"),
+            fn_ref("a"),
+            text_node(" and B"),
+            fn_ref("b"),
+            text_node(".")
+        ]
+    })];
+    for i in 0..32 {
+        nodes.push(para(&format!("Filler line {i} to force page two.")));
+    }
+    nodes.push(json!({
+        "type": "paragraph",
+        "content": [
+            text_node("Page two C"),
+            fn_ref("c"),
+            text_node(" and A again"),
+            fn_ref("a"),
+            text_node(".")
+        ]
+    }));
+    nodes.push(json!({
+        "type": "footnote_list",
+        "content": [
+            fn_def("a", "NOTE_ALPHA"),
+            fn_def("b", "NOTE_BETA"),
+            fn_def("c", "NOTE_GAMMA"),
+            fn_def("orphan", "NOTE_ORPHAN_SECRET"),
+        ]
+    }));
+    let e = with_description(nodes);
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    assert!(l.pages.len() >= 2, "expected at least 2 pages");
+
+    let page_texts = |page: &[Op]| -> Vec<String> {
+        page.iter()
+            .filter_map(|op| match op {
+                Op::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+
+    let p0 = page_texts(&l.pages[0]).join(" ");
+    let p1 = page_texts(&l.pages[1]).join(" ");
+    assert!(p0.contains("NOTE_ALPHA") && p0.contains("NOTE_BETA"));
+    assert!(!p0.contains("NOTE_GAMMA"));
+    assert!(p1.contains("NOTE_GAMMA") && p1.contains("NOTE_ALPHA"));
+    assert!(!p1.contains("NOTE_BETA"));
+    assert!(!p0.contains("NOTE_ORPHAN_SECRET") && !p1.contains("NOTE_ORPHAN_SECRET"));
+    // Per-page numbering restarts at [1] on page 2 (no [3] anywhere).
+    assert!(p0.contains("[1]") && p0.contains("[2]"));
+    assert!(p1.contains("[1]") && p1.contains("[2]"));
+    assert!(!p1.contains("[3]"));
+}
+
+#[test]
+fn giant_footnote_splits_across_pages_without_exceeding_bounds() {
+    let huge = "long footnote sentence ".repeat(140);
+    let nodes = vec![
+        json!({
+            "type": "paragraph",
+            "content": [
+                text_node("Body with huge footnote"),
+                {"type": "footnote_ref", "attrs": {"id": "big"}},
+                text_node(".")
+            ]
+        }),
+        json!({
+            "type": "footnote_list",
+            "content": [{
+                "type": "footnote_def",
+                "attrs": {"id": "big"},
+                "content": [{"type": "footnote_paragraph", "content": [text_node(&huge)]}]
+            }]
+        }),
+    ];
+    let e = with_description(nodes);
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    assert!(
+        l.pages.len() >= 2,
+        "expected carried footnote overflow page"
+    );
+}
+
 mod examples;
