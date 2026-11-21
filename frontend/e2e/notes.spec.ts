@@ -516,12 +516,30 @@ test("a new list from the tab strip becomes the active tab", async ({ page, requ
   const s = await seed(request, []);
   await page.goto(`/board/${s.boardId}`);
   await expect(page.locator(".notes-placeholder", { hasText: "No lists yet" })).toBeVisible();
+  const emptyBodyTop = (await page.locator(".notes-body").boundingBox())!.y;
   await page.locator(".board-page").focus();
   await page.keyboard.press("l");
+  await expect(page.locator(".notes-tabs .add-form input")).toBeFocused();
+  expect((await page.locator(".notes-body").boundingBox())!.y).toBe(emptyBodyTop);
   await page.locator(".notes-tabs .add-form input").fill("Journal");
   await page.keyboard.press("Enter");
   await expect(tab(page, "Journal")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator(".notes-master .list-empty")).toBeVisible();
+
+  // Opening/closing the add-list form or renaming a tab must not shift .notes-body at all.
+  const bodyTopBefore = (await page.locator(".notes-body").boundingBox())!.y;
+  expect(bodyTopBefore).toBe(emptyBodyTop);
+  await page.locator(".notes-tabs .add-list-wrapper .add-trigger").click();
+  const input = page.locator(".notes-tabs .add-form input");
+  await expect(input).toBeFocused();
+  expect((await page.locator(".notes-body").boundingBox())!.y).toBe(bodyTopBefore);
+  const inputBox = (await input.boundingBox())!;
+  const submitBox = (await page.locator(".notes-tabs .add-form .btn-primary").boundingBox())!;
+  expect(submitBox.x).toBeGreaterThanOrEqual(inputBox.x + inputBox.width);
+  expect(Math.abs(submitBox.y + submitBox.height / 2 - (inputBox.y + inputBox.height / 2))).toBeLessThan(4);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".notes-tabs .add-form")).toHaveCount(0);
+  expect((await page.locator(".notes-body").boundingBox())!.y).toBe(bodyTopBefore);
 });
 
 test("filter: tabs count matches, the master filters, the open card stays", async ({ page, request }) => {

@@ -154,7 +154,14 @@ export default function NotesView(props: Props) {
             );
           }}
         </For>
-        <div class="add-list-wrapper">
+        <div
+          class="add-list-wrapper"
+          onFocusIn={(e) => {
+            if ((e.target as HTMLElement).matches(".add-form input")) {
+              e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }
+          }}
+        >
           <AddForm
             placeholder="List title..."
             buttonText="Add list"
