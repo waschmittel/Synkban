@@ -111,6 +111,22 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ### ⭐️ Features
+
+            - ...
+
+            ### 📈 Improvements
+
+            - ...
+
+            ### 🐞 Bugfixes
+
+            - ...
+
+            ### ⚙️ Internals
+
+            - ...
 
   docker:
     name: Publish Docker Image (GHCR)
