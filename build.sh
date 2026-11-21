@@ -61,6 +61,22 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     
     mkdir -p "$ROOT/backend/target/release"
     rm -f "$ROOT/backend/target/release/synkban" && cp "$ROOT/backend/target/aarch64-apple-darwin/release/synkban" "$ROOT/backend/target/release/synkban"
+elif [[ "$OSTYPE" == "linux"* ]]; then
+    case "$(uname -m)" in
+        x86_64) LINUX_TARGET="x86_64-unknown-linux-musl" ;;
+        aarch64) LINUX_TARGET="aarch64-unknown-linux-musl" ;;
+        *) LINUX_TARGET="" ;;
+    esac
+    if [ -n "$LINUX_TARGET" ]; then
+        echo "Building Linux musl binary ($LINUX_TARGET)..."
+        rustup target add "$LINUX_TARGET" || true
+        cargo build --release --target "$LINUX_TARGET"
+
+        mkdir -p "$ROOT/backend/target/release"
+        rm -f "$ROOT/backend/target/release/synkban" && cp "$ROOT/backend/target/$LINUX_TARGET/release/synkban" "$ROOT/backend/target/release/synkban"
+    else
+        cargo build --release
+    fi
 else
     cargo build --release
 fi

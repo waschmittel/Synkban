@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
 const ws = require('./window-state');
+const { startBackend, killBackend } = require('./main');
 
 const screen = { x: 0, y: 0, width: 1920, height: 1080 };
 const second = { x: 1920, y: 0, width: 1920, height: 1080 };
@@ -113,4 +114,47 @@ test('track on darwin fullscreen keeps the last non-fullscreen bounds', () => {
   win.getBounds = () => ({ x: 0, y: 0, width: 3000, height: 2000 });
   win.emit('close');
   assert.deepEqual(ws.load(file), { width: 1000, height: 700, x: 10, y: 20, maximized: false, fullScreen: true });
+});
+
+test('startBackend resolves DESKTOP_PORT across chunk boundaries', async () => {
+  const script = [
+    "process.stdout.write('DESKTOP_');",
+    "setTimeout(() => process.stdout.write('PORT=43'), 20);",
+    "setTimeout(() => process.stdout.write('21\\n'), 40);",
+    'setInterval(() => {}, 1000);',
+  ].join(' ');
+  try {
+    const port = await startBackend('tok', process.execPath, ['-e', script]);
+    assert.equal(port, 4321);
+  } finally {
+    killBackend();
+  }
+});
+
+test('startBackend rejects with exit code and captured stderr on failure', async () => {
+  const script =
+    "process.stderr.write(\"/lib/x86_64-linux-gnu/libm.so.6: version 'GLIBC_2.43' not found\\n\"); process.exit(1);";
+  await assert.rejects(
+    () => startBackend('tok', process.execPath, ['-e', script]),
+    (err) => {
+      assert.match(err.message, /^Backend exited with code 1:/);
+      assert.match(err.message, /GLIBC_2\.43/);
+      return true;
+    },
+  );
+});
+
+test('startBackend rejects when the child exits 0 before printing DESKTOP_PORT', async () => {
+  await assert.rejects(
+    () => startBackend('tok', process.execPath, ['-e', 'process.exit(0)']),
+    /Backend exited with code 0/,
+  );
+});
+
+test('startBackend rejects when the binary cannot be spawned', async () => {
+  const missing = path.join(os.tmpdir(), `missing-synkban-bin-${process.pid}-${Date.now()}`);
+  await assert.rejects(
+    () => startBackend('tok', missing, []),
+    { code: 'ENOENT' },
+  );
 });

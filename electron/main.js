@@ -1,4 +1,6 @@
-const { app, BrowserWindow, shell, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, shell, dialog, ipcMain, screen } = process.versions.electron
+  ? require('electron')
+  : {};
 const { spawn } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
@@ -50,7 +52,7 @@ try {
   appVersion = v.version;
   buildStamp = [v.build, v.commit].filter(Boolean).join(' · ');
 } catch {
-  appVersion = app.getVersion();
+  appVersion = app?.getVersion?.() ?? '';
   buildStamp = '';
 }
 
@@ -77,31 +79,65 @@ function getBackendPath() {
   return path.join(__dirname, '..', 'backend', 'target', 'release', `synkban${ext}`);
 }
 
-function startBackend(token) {
+const MAX_STARTUP_STDERR = 4096;
+
+function startBackend(token, command = getBackendPath(), args = []) {
   return new Promise((resolve, reject) => {
     // No DATA_DIR: the binary resolves its data dir from synkban.toml (or an
     // inherited DATA_DIR/--data-dir override in dev).
     const env = { ...process.env, DESKTOP_TOKEN: token };
-    backendProcess = spawn(getBackendPath(), [], { env });
+    const proc = spawn(command, args, { env });
+    backendProcess = proc;
 
-    backendProcess.stdout.on('data', (data) => {
-      const text = data.toString();
-      const match = text.match(/DESKTOP_PORT=(\d+)/);
+    let settled = false;
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => {
+      if (settled) return;
+      stdout += data.toString();
+      if (stdout.length > 65536) stdout = stdout.slice(-8192);
+      const match = stdout.match(/DESKTOP_PORT=(\d+)\r?\n/);
       if (match) {
+        settled = true;
+        stdout = '';
+        stderr = '';
         resolve(parseInt(match[1], 10));
       }
     });
 
-    backendProcess.stderr.on('data', (data) => {
+    proc.stderr.on('data', (data) => {
       process.stderr.write(data);
+      if (!settled && stderr.length < MAX_STARTUP_STDERR) {
+        stderr += data.toString().slice(0, MAX_STARTUP_STDERR - stderr.length);
+      }
     });
 
-    backendProcess.on('error', reject);
+    proc.on('error', (err) => {
+      if (backendProcess === proc) backendProcess = null;
+      if (settled) return;
+      settled = true;
+      stdout = '';
+      stderr = '';
+      reject(err);
+    });
 
-    backendProcess.on('exit', (code) => {
-      if (code !== 0 && code !== null) {
-        reject(new Error(`Backend exited with code ${code}`));
-      }
+    proc.on('exit', () => {
+      if (backendProcess === proc) backendProcess = null;
+    });
+
+    proc.on('close', (code, signal) => {
+      if (backendProcess === proc) backendProcess = null;
+      if (settled) return;
+      settled = true;
+      const detail = stderr.trim();
+      stdout = '';
+      stderr = '';
+      const reason = code !== null ? `code ${code}` : `signal ${signal}`;
+      const message = detail
+        ? `Backend exited with ${reason}:\n${detail}`
+        : `Backend exited with ${reason}`;
+      reject(new Error(message));
     });
   });
 }
@@ -185,19 +221,15 @@ async function createWindow() {
   mainWindow.loadURL(`${appOrigin}/?token=${token}`);
 }
 
-app.whenReady().then(() => {
-  // Windows groups taskbar buttons (and resolves the pinned shortcut's icon) by
-  // AppUserModelID. Without this the running window is its own anonymous group
-  // with Electron's default icon instead of the installed shortcut's.
-  app.setAppUserModelId('com.synkban.app');
-  app.setAboutPanelOptions({
-    applicationName: 'Synkban',
-    applicationVersion: appVersion,
-    version: buildStamp,
+function openMainWindow() {
+  createWindow().catch((err) => {
+    const detail = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Synkban failed to start: ${detail}\n`);
+    dialog.showErrorBox('Synkban failed to start', detail);
+    killBackend();
+    app.exit(1);
   });
-  registerSettingsIpc();
-  createWindow();
-});
+}
 
 function killBackend() {
   if (backendProcess && !backendProcess.killed) {
@@ -210,25 +242,43 @@ function killBackend() {
   }
 }
 
-app.on('window-all-closed', () => {
-  killBackend();
-  app.quit();
-});
+if (app) {
+  app.whenReady().then(() => {
+    // Windows groups taskbar buttons (and resolves the pinned shortcut's icon) by
+    // AppUserModelID. Without this the running window is its own anonymous group
+    // with Electron's default icon instead of the installed shortcut's.
+    app.setAppUserModelId('com.synkban.app');
+    app.setAboutPanelOptions({
+      applicationName: 'Synkban',
+      applicationVersion: appVersion,
+      version: buildStamp,
+    });
+    registerSettingsIpc();
+    openMainWindow();
+  });
 
-// Kill the spawned backend whenever the main process goes away — not just on
-// window-all-closed. Force-quit, an external SIGTERM (e.g. a test harness
-// closing the app), or any quit path would otherwise orphan the Rust child.
-app.on('before-quit', killBackend);
-process.on('exit', killBackend);
-for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-  process.on(sig, () => {
+  app.on('window-all-closed', () => {
     killBackend();
-    process.exit(0);
+    app.quit();
+  });
+
+  // Kill the spawned backend whenever the main process goes away — not just on
+  // window-all-closed. Force-quit, an external SIGTERM (e.g. a test harness
+  // closing the app), or any quit path would otherwise orphan the Rust child.
+  app.on('before-quit', killBackend);
+  process.on('exit', killBackend);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(sig, () => {
+      killBackend();
+      process.exit(0);
+    });
+  }
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      openMainWindow();
+    }
   });
 }
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+module.exports = { startBackend, killBackend };

@@ -65,7 +65,7 @@ jobs:
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxss1 libnss3
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxss1 libnss3 musl-tools
 
       - name: Build desktop app
         shell: bash
@@ -110,7 +110,7 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
   docker:
     name: Publish Docker Image (GHCR)
@@ -133,7 +133,11 @@ jobs:
             v="${GITHUB_REF#refs/tags/}"
             v_clean="${v#v}"
             echo "version=${v}" >> "$GITHUB_OUTPUT"
-            echo "tags=${IMAGE}:${v_clean},${IMAGE}:${v},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            if [[ "$v" == *-* ]]; then
+              echo "tags=${IMAGE}:${v_clean},${IMAGE}:${v}" >> "$GITHUB_OUTPUT"
+            else
+              echo "tags=${IMAGE}:${v_clean},${IMAGE}:${v},${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+            fi
           else
             v="snap-$(date -u +%Y-%m-%d)"
             echo "version=${v}" >> "$GITHUB_OUTPUT"
