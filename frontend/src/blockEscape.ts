@@ -16,7 +16,15 @@ export function isValidGapCursor($pos: ResolvedPos): boolean {
   return (GapCursor as unknown as { valid($pos: ResolvedPos): boolean }).valid($pos);
 }
 
-const ESCAPABLE_BLOCKS = new Set(["table", "code_block", "lua_block", "blockquote", "bullet_list", "ordered_list"]);
+const ESCAPABLE_BLOCKS = new Set([
+  "table",
+  "code_block",
+  "lua_block",
+  "blockquote",
+  "alert",
+  "bullet_list",
+  "ordered_list",
+]);
 
 /// True when the selection sits inside a single top-level block that cannot
 /// naturally be escaped by typing/splitting (table, code block, quote, list).

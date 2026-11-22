@@ -25,6 +25,15 @@ import {
   insertFootnote,
 } from "./footnotes";
 import { createLuaBlockView, luaPlugins } from "./luaBlock";
+import { canInsertAlert, createAlertView, openAlertPicker } from "./alerts";
+import {
+  canHighlight,
+  getLastHighlightColor,
+  hasAnyHighlight,
+  highlightLabel,
+  openHighlightSwatchPopover,
+  toggleDefaultHighlight,
+} from "./highlights";
 import { insertMatrix, insertTable, tablePlugins } from "./tables";
 import { schema, TEXT_STYLES, validateDescription } from "./schema";
 import { api } from "./api";
@@ -220,10 +229,69 @@ export function createCardEditor(
     run(_state, _dispatch, view) { return openLinkEditor(view, linkType); },
   });
 
+  const highlightSplitItem = {
+    render(view: EditorView) {
+      const wrap = document.createElement("div");
+      wrap.className = "highlight-split-btn";
+
+      const actionBtn = document.createElement("button");
+      actionBtn.type = "button";
+      actionBtn.className = "ProseMirror-icon highlight-split-action";
+      actionBtn.setAttribute("aria-label", "Highlight");
+      actionBtn.innerHTML =
+        `<span class="highlight-trigger-stack">` +
+        `${svg(ICONS.highlight, 15)}` +
+        `<span class="highlight-trigger-bar" aria-hidden="true"></span>` +
+        `</span>`;
+      const bar = actionBtn.querySelector<HTMLElement>(".highlight-trigger-bar")!;
+
+      const chevronBtn = document.createElement("button");
+      chevronBtn.type = "button";
+      chevronBtn.className = "ProseMirror-icon highlight-split-chevron";
+      chevronBtn.title = "Choose highlight color";
+      chevronBtn.setAttribute("aria-label", "Choose highlight color");
+      chevronBtn.setAttribute("aria-haspopup", "menu");
+      chevronBtn.innerHTML = svg('<path d="m6 9 6 6 6-6"/>', 11);
+
+      actionBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      actionBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        toggleDefaultHighlight(view.state, view.dispatch, view);
+        view.focus();
+      });
+
+      chevronBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      chevronBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const r = wrap.getBoundingClientRect();
+        openHighlightSwatchPopover(view, { at: { x: r.left, y: r.bottom } });
+      });
+
+      wrap.append(actionBtn, chevronBtn);
+
+      const update = (state: EditorState) => {
+        const enabled = canHighlight(state);
+        const active = hasAnyHighlight(state);
+        const last = getLastHighlightColor();
+        bar.dataset.highlight = last;
+        actionBtn.disabled = !enabled;
+        chevronBtn.disabled = !enabled;
+        actionBtn.classList.toggle("ProseMirror-menu-disabled", !enabled);
+        chevronBtn.classList.toggle("ProseMirror-menu-disabled", !enabled);
+        actionBtn.classList.toggle("ProseMirror-menu-active", active);
+        actionBtn.title = active ? "Remove highlight" : `Highlight (${highlightLabel(last)})`;
+        return true;
+      };
+      update(view.state);
+      return { dom: wrap, update };
+    },
+  };
+
   const inlineMenu = [[
     items.toggleStrong,
     items.toggleEm,
     items.toggleCode,
+    highlightSplitItem,
     customLinkItem,
   ].filter(Boolean) as any[]];
 
@@ -292,6 +360,17 @@ export function createCardEditor(
       className: "insert-blockquote-btn",
       enable: (state) => blockquoteCmd(state),
       run: blockquoteCmd,
+    }),
+    insertDropdownItem({
+      label: "Alert",
+      title: "Insert or change alert",
+      icon: ICONS.alert,
+      className: "insert-alert-btn",
+      enable: (state) => canInsertAlert(state),
+      run(_state, _dispatch, view) {
+        if (view) setTimeout(() => openAlertPicker(view), 0);
+        return true;
+      },
     }),
   ]);
 
@@ -383,6 +462,7 @@ export function createCardEditor(
       return autolinkPaste(view, event);
     },
     nodeViews: {
+      alert: createAlertView,
       lua_block: createLuaBlockView,
       footnote_ref: createFootnoteRefView,
       footnote_def: createFootnoteDefView,

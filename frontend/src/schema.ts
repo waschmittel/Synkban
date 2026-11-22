@@ -25,6 +25,11 @@ import schemaSpec from "./schema.json";
 export { schemaSpec };
 
 const ALLOWED_ALIGNMENTS: ReadonlySet<string> = new Set(schemaSpec.allowedAlignments);
+const ALLOWED_HIGHLIGHT_COLORS: ReadonlySet<string> = new Set(schemaSpec.allowedHighlightColors);
+const ALLOWED_ALERT_KINDS: ReadonlySet<string> = new Set(schemaSpec.allowedAlertKinds);
+
+export type HighlightColor = (typeof schemaSpec.allowedHighlightColors)[number];
+export type AlertKind = (typeof schemaSpec.allowedAlertKinds)[number];
 
 function attrValidator(type: string): (value: unknown) => void {
   switch (type) {
@@ -61,6 +66,16 @@ function attrValidator(type: string): (value: unknown) => void {
     case "link_href":
       return (v) => {
         if (typeof v !== "string" || !isValidLinkHref(v)) throw new RangeError("Expected valid link href");
+      };
+    case "highlight_color":
+      return (v) => {
+        if (typeof v !== "string" || !ALLOWED_HIGHLIGHT_COLORS.has(v))
+          throw new RangeError("Expected valid highlight color");
+      };
+    case "alert_kind":
+      return (v) => {
+        if (typeof v !== "string" || !ALLOWED_ALERT_KINDS.has(v))
+          throw new RangeError("Expected valid alert kind");
       };
     default:
       throw new Error(`Unknown schema attribute type: ${type}`);
@@ -182,6 +197,33 @@ const footnoteParagraphSpec: NodeSpec = {
   toDOM: () => ["p", { class: "footnote-para" }, 0],
 };
 
+const alertSpec: NodeSpec = {
+  defining: true,
+  parseDOM: [
+    {
+      tag: "div.editor-alert[data-alert]",
+      getAttrs: (dom) => {
+        const kind = (dom as HTMLElement).getAttribute("data-alert");
+        return kind && ALLOWED_ALERT_KINDS.has(kind) ? { kind } : false;
+      },
+    },
+  ],
+  toDOM: (node) => ["div", { class: "editor-alert", "data-alert": node.attrs.kind }, 0],
+};
+
+const highlightSpec: MarkSpec = {
+  parseDOM: [
+    {
+      tag: "mark[data-highlight]",
+      getAttrs: (dom) => {
+        const color = (dom as HTMLElement).getAttribute("data-highlight");
+        return color && ALLOWED_HIGHLIGHT_COLORS.has(color) ? { color } : false;
+      },
+    },
+  ],
+  toDOM: (mark) => ["mark", { "data-highlight": mark.attrs.color }, 0],
+};
+
 const baseNodes = addListNodes(
   basicSchema.spec.nodes,
   schemaSpec.nodes.list_item.content,
@@ -189,6 +231,7 @@ const baseNodes = addListNodes(
 )
   .append(tableNodeSpecs)
   .append({
+    alert: alertSpec,
     lua_block: luaBlockSpec,
     footnote_ref: footnoteRefSpec,
     footnote_list: footnoteListSpec,
@@ -197,7 +240,7 @@ const baseNodes = addListNodes(
   })
   .update("image", imageSpec);
 
-const GAP_CURSOR_BLOCKS = new Set(["code_block", "lua_block", "blockquote", "bullet_list", "ordered_list"]);
+const GAP_CURSOR_BLOCKS = new Set(["code_block", "lua_block", "blockquote", "alert", "bullet_list", "ordered_list"]);
 
 const nodes: Record<string, NodeSpec> = {};
 for (const [name, spec] of Object.entries(schemaSpec.nodes as Record<string, JsonNodeSpec>)) {
@@ -223,13 +266,15 @@ for (const [name, spec] of Object.entries(schemaSpec.nodes as Record<string, Jso
 // a safe rel. The editor opens links via handleClick (below), but the
 // attributes keep the markup correct and serve as a fallback.
 const linkSpec = basicSchema.spec.marks.get("link")!;
-const baseMarks = basicSchema.spec.marks.update("link", {
-  ...linkSpec,
-  toDOM(mark: PmMark) {
-    const { href, title } = mark.attrs;
-    return ["a", { href, title, target: "_blank", rel: "noopener noreferrer" }, 0];
-  },
-});
+const baseMarks = basicSchema.spec.marks
+  .update("link", {
+    ...linkSpec,
+    toDOM(mark: PmMark) {
+      const { href, title } = mark.attrs;
+      return ["a", { href, title, target: "_blank", rel: "noopener noreferrer" }, 0];
+    },
+  })
+  .append({ highlight: highlightSpec });
 
 const marks: Record<string, MarkSpec> = {};
 for (const [name, spec] of Object.entries(schemaSpec.marks as Record<string, JsonMarkSpec>)) {

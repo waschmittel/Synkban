@@ -6,16 +6,16 @@
 
 ## The menu
 
-`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a flat **`+ Insert`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, and **Blockquote** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices inside a table, or footnotes inside a footnote/code block). Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
+`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a highlighter split button toggles the last-used highlight color on click (removing it when highlighted text is selected or under the caret) and opens a compact swatch-only popover from its right chevron; a flat **`+ Insert`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, and **Alert** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices/alerts inside a table, or footnotes inside a footnote/code block). Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
 
 | Group | Items (key) | Availability |
 |---|---|---|
 | Link | Add/Edit link… (`L`), Remove link (`U`) | greyed when not applicable |
-| Code / Inline | Inline code (`I`), Insert image… (`M`), Insert/Jump footnote (`F`) | greyed when not applicable |
+| Code / Inline | Inline code (`I`), Highlight / Remove highlight (`H`), Highlight color… (`G`), Insert image… (`M`), Insert/Jump footnote (`F`) | greyed when not applicable |
 | Footnote | Delete footnote (`D`; tinted danger) | inside a footnote definition |
-| Text style | Plain (`0`), Code block (`B`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
-| Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`) | outside tables |
-| Block | Insert paragraph above (`Shift+P`), Insert paragraph below (`P`) | inside tables, code blocks, quotes, lists (before Delete inside tables) |
+| Text style | Plain (`0`), Code block (`B`), Lua block (`E`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
+| Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`), Insert/Change alert… (`A`) | outside tables |
+| Block | Insert paragraph above (`Shift+P`), Insert paragraph below (`P`) | inside tables, code blocks, quotes, alerts, lists (before Delete inside tables) |
 | Table | move row/column (`W`/`S` up/down, `A`/`D` left/right), transpose matrix (`X`), insert row/column (Shift+arrows), align column or matrix cell (`1`/`2`/`3`), delete row/column/table or matrix (`R`/`C`/`T`; tinted danger) | inside tables/matrices |
 
 ## Why

@@ -978,6 +978,8 @@ test("prose stops at the text measure; tables are centred, code blocks too once 
     content: [
       { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: long }] },
       p(long),
+      { type: "alert", attrs: { kind: "note" }, content: [p("Aligned alert body")] },
+      { type: "blockquote", content: [p("Aligned quote body")] },
       {
         type: "table",
         content: [
@@ -1018,9 +1020,17 @@ test("prose stops at the text measure; tables are centred, code blocks too once 
       return Math.round(r.left - left - (right - r.right));
     };
     const pBox = pm.querySelector("p")!.getBoundingClientRect();
+    const alertBox = pm.querySelector(".editor-alert")!.getBoundingClientRect();
+    const quoteBox = pm.querySelector("blockquote")!.getBoundingClientRect();
     return {
       pOff: off(pm.querySelector("p")!),
       pLeft: pBox.left,
+      alertOff: off(pm.querySelector(".editor-alert")!),
+      alertLeft: alertBox.left,
+      alertWidth: alertBox.width,
+      quoteOff: off(pm.querySelector("blockquote")!),
+      quoteLeft: quoteBox.left,
+      quoteWidth: quoteBox.width,
       tableOffs: [...tables].map(off),
       preOffs: [...pres].map(off),
       midPre: pres[1].getBoundingClientRect().width,
@@ -1044,8 +1054,15 @@ test("prose stops at the text measure; tables are centred, code blocks too once 
   expect(Math.abs(m.tinyTable - m.p)).toBeLessThan(2);
   expect(m.pre).toBeGreaterThan(m.p + 50);
   expect(m.pre).toBeLessThanOrEqual(m.content);
-  // Centred: the text column, every table, every code block.
-  for (const o of [m.pOff, ...m.tableOffs, ...m.preOffs]) expect(Math.abs(o)).toBeLessThanOrEqual(2);
+  // Centred: the text column, alerts, quotes, every table, every code block.
+  for (const o of [m.pOff, m.alertOff, m.quoteOff, ...m.tableOffs, ...m.preOffs]) {
+    expect(Math.abs(o)).toBeLessThanOrEqual(2);
+  }
+  // Alerts and blockquotes align with prose in both horizontal position and width (ADR-0022).
+  expect(Math.abs(m.alertLeft - m.pLeft)).toBeLessThan(2);
+  expect(Math.abs(m.alertWidth - m.p)).toBeLessThan(2);
+  expect(Math.abs(m.quoteLeft - m.pLeft)).toBeLessThan(2);
+  expect(Math.abs(m.quoteWidth - m.p)).toBeLessThan(2);
   // A code block wider than the measure but narrower than the pane: centred, not at the column's edge.
   expect(m.midPre).toBeGreaterThan(m.p + 50);
   expect(m.midPre).toBeLessThan(m.content - 50);

@@ -20,7 +20,7 @@ use krilla::geom::{PathBuilder, Point, Rect};
 use krilla::image::Image;
 use krilla::metadata::{DateTime, Metadata};
 use krilla::page::PageSettings;
-use krilla::paint::Fill;
+use krilla::paint::{Fill, LineCap, LineJoin, Stroke};
 use krilla::text::{Font, Tag, TextDirection};
 use krilla::{Document, SerializeSettings};
 use std::collections::HashMap;
@@ -106,7 +106,72 @@ const MUTED: Rgb = [0x6b, 0x72, 0x80];
 const LINK: Rgb = [0x00, 0x55, 0xaa];
 const RULE: Rgb = [0xd0, 0xd4, 0xda];
 const CODE_BG: Rgb = [0xf1, 0xf3, 0xf5];
+const ALERT_CODE_BG: Rgb = [0xd6, 0xde, 0xe7];
 const HEAD_BG: Rgb = [0xe9, 0xec, 0xef];
+
+/// Print-friendly pastel RGB for each `highlight` mark color (ADR-0031).
+fn highlight_rgb(name: &str) -> Option<Rgb> {
+    match name {
+        "yellow" => Some([0xfe, 0xf0, 0x8a]),
+        "orange" => Some([0xfe, 0xd7, 0xaa]),
+        "red" => Some([0xfe, 0xca, 0xca]),
+        "pink" => Some([0xfb, 0xcf, 0xe8]),
+        "purple" => Some([0xe9, 0xd5, 0xff]),
+        "blue" => Some([0xbf, 0xdb, 0xfe]),
+        "green" => Some([0xbb, 0xf7, 0xd0]),
+        "gray" => Some([0xe5, 0xe7, 0xeb]),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AlertKind {
+    Note,
+    Tip,
+    Important,
+    Warning,
+    Caution,
+}
+
+impl AlertKind {
+    fn from_str(s: &str) -> Self {
+        match s {
+            "tip" => Self::Tip,
+            "important" => Self::Important,
+            "warning" => Self::Warning,
+            "caution" => Self::Caution,
+            _ => Self::Note,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Note => "Note",
+            Self::Tip => "Tip",
+            Self::Important => "Important",
+            Self::Warning => "Warning",
+            Self::Caution => "Caution",
+        }
+    }
+
+    /// GitHub light theme accent colors (aligned with `../tct`).
+    fn color(self) -> Rgb {
+        match self {
+            Self::Note => [9, 105, 218],
+            Self::Tip => [26, 127, 55],
+            Self::Important => [130, 80, 223],
+            Self::Warning => [154, 103, 0],
+            Self::Caution => [207, 34, 46],
+        }
+    }
+
+    /// Soft 7% tint on white paper for the alert box background.
+    fn bg(self) -> Rgb {
+        let [r, g, b] = self.color();
+        let mix = |c: u8| ((u16::from(c) * 7 + 255 * 93) / 100) as u8;
+        [mix(r), mix(g), mix(b)]
+    }
+}
 
 // ── fonts ────────────────────────────────────────────────────────────────
 
@@ -367,6 +432,13 @@ enum Op {
         h: f32,
         url: String,
     },
+    AlertIcon {
+        kind: AlertKind,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: Rgb,
+    },
 }
 
 // ── inline text ──────────────────────────────────────────────────────────
@@ -377,6 +449,7 @@ struct Span {
     bold: bool,
     italic: bool,
     code: bool,
+    highlight: Option<Rgb>,
     sup: bool,
     fn_num: Option<usize>,
     link: Option<String>,
@@ -443,6 +516,8 @@ struct Seg {
     face: Face,
     w: f32,
     lead: f32,
+    code: bool,
+    highlight: Option<Rgb>,
     sup: bool,
     fn_num: Option<usize>,
     link: Option<String>,
@@ -479,6 +554,7 @@ struct Mark {
     images: usize,
     y: f32,
     marker: Option<(String, f32)>,
+    in_alert: bool,
     page_notes: Vec<Vec<NoteItem>>,
     carry: Vec<NoteItem>,
 }
@@ -494,6 +570,8 @@ struct Layout {
     y: f32,
     /// List marker waiting for the next line emitted: (text, x).
     marker: Option<(String, f32)>,
+    /// True while laying out blocks inside an `alert` node (darkens inline code bg).
+    in_alert: bool,
     /// Referenced footnotes in document order of first reference.
     notes: Vec<FootnoteDef>,
     /// Maps footnote_def id -> 1-based index in `notes`.
@@ -516,6 +594,7 @@ impl Layout {
             thumb_idx: HashMap::new(),
             y: TOP,
             marker: None,
+            in_alert: false,
             notes: Vec::new(),
             fn_map: HashMap::new(),
             note_wrap_indent: 0.0,
@@ -771,8 +850,22 @@ impl Layout {
                     }
                     let mut cx = MARGIN + indent;
                     let base = y + NOTE_SIZE * 1.05;
+                    let mut prev_hl: Option<Rgb> = None;
                     for seg in line {
+                        let gap_x = cx;
                         cx += seg.lead;
+                        if let Some(bg) = seg.highlight {
+                            let rx = if prev_hl == Some(bg) { gap_x } else { cx };
+                            let rw = (cx + seg.w) - rx;
+                            ops.push(Op::Rect {
+                                x: rx,
+                                y: y + 0.5,
+                                w: rw,
+                                h: NOTE_SIZE * 1.25,
+                                color: bg,
+                            });
+                        }
+                        prev_hl = seg.highlight;
                         ops.push(Op::Text {
                             x: cx,
                             y: base,
@@ -850,6 +943,7 @@ impl Layout {
             images: self.images.len(),
             y: self.y,
             marker: self.marker.clone(),
+            in_alert: self.in_alert,
             page_notes: self.page_notes.clone(),
             carry: self.carry.clone(),
         }
@@ -862,6 +956,7 @@ impl Layout {
         self.thumb_idx.retain(|_, i| *i < m.images);
         self.y = m.y;
         self.marker = m.marker.clone();
+        self.in_alert = m.in_alert;
         self.page_notes = m.page_notes.clone();
         self.carry = m.carry.clone();
     }
@@ -914,6 +1009,8 @@ impl Layout {
                             text,
                             face,
                             lead_face: primary,
+                            code: span.code,
+                            highlight: span.highlight,
                             sup: span.sup,
                             fn_num: span.fn_num,
                             link: span.link.clone(),
@@ -945,7 +1042,12 @@ impl Layout {
                 && w.fn_num.is_none()
                 && self.fonts.has(w.face, ' ')
                 && buf.cur.last().is_some_and(|l| {
-                    l.face == w.face && l.link == w.link && !l.sup && l.fn_num.is_none()
+                    l.face == w.face
+                        && l.link == w.link
+                        && l.highlight == w.highlight
+                        && l.code == w.code
+                        && !l.sup
+                        && l.fn_num.is_none()
                 });
             let mut lead = match (w.space && !buf.cur.is_empty(), merge) {
                 (false, _) => 0.0,
@@ -979,6 +1081,8 @@ impl Layout {
             face: word.face,
             w,
             lead: 0.0,
+            code: word.code,
+            highlight: word.highlight,
             sup: word.sup,
             fn_num: word.fn_num,
             link: word.link.clone(),
@@ -1030,7 +1134,9 @@ impl Layout {
                 text: m,
             });
         }
+        let mut prev_hl: Option<Rgb> = None;
         for seg in line {
+            let gap_x = cx;
             cx += seg.lead;
             let (draw_size, draw_y) = if seg.sup {
                 (size * SUP_SCALE, base - size * 0.34)
@@ -1047,6 +1153,20 @@ impl Layout {
             } else {
                 seg.w
             };
+            if let Some(bg) = seg.highlight {
+                let rx = if prev_hl == Some(bg) { gap_x } else { cx };
+                let rw = (cx + draw_w) - rx;
+                self.rect(rx, top + 0.5, rw, size * 1.28, bg);
+            } else if seg.code && self.in_alert {
+                self.rect(
+                    cx - 2.0,
+                    top + 0.5,
+                    draw_w + 4.0,
+                    size * 1.28,
+                    ALERT_CODE_BG,
+                );
+            }
+            prev_hl = seg.highlight;
             self.page().push(Op::Text {
                 x: cx,
                 y: draw_y,
@@ -1316,6 +1436,87 @@ impl Layout {
                     }
                 }
             }
+            "alert" => {
+                let kind = AlertKind::from_str(
+                    node.pointer("/attrs/kind")
+                        .and_then(Value::as_str)
+                        .unwrap_or("note"),
+                );
+                let pad_top = 6.0;
+                let pad_left = indent_for(w, 13.0);
+                let pad_right = 8.0_f32.min((w - pad_left) / 4.0).max(0.0);
+                let header_h = 15.0;
+                // Keep the alert header together with at least the first body line.
+                self.ensure(pad_top + header_h + size * 1.4 + 4.0);
+                let start_page = self.pages.len() - 1;
+                let start_y = self.y;
+                let start_op = self.pages[start_page].len();
+
+                self.y += pad_top;
+                let icon_size = 10.5;
+                let hy = self.y;
+                self.page().push(Op::AlertIcon {
+                    kind,
+                    x: x + pad_left,
+                    y: hy + 0.5,
+                    size: icon_size,
+                    color: kind.color(),
+                });
+                self.text_runs(
+                    x + pad_left + icon_size + 4.5,
+                    hy + 9.5,
+                    Face::Bold,
+                    size * 0.95,
+                    kind.color(),
+                    kind.label(),
+                );
+                self.y += header_h;
+
+                let prev_in_alert = self.in_alert;
+                self.in_alert = true;
+                self.blocks(
+                    content,
+                    x + pad_left,
+                    (w - pad_left - pad_right).max(20.0),
+                    size,
+                    INK,
+                );
+                self.in_alert = prev_in_alert;
+                self.y += 2.0;
+
+                let end_page = self.pages.len() - 1;
+                let end_y = self.y;
+                for (offset, page) in self.pages[start_page..=end_page].iter_mut().enumerate() {
+                    let p = start_page + offset;
+                    let y0 = if p == start_page { start_y } else { TOP };
+                    let y1 = if p == end_page {
+                        end_y
+                    } else {
+                        BOTTOM - Self::notes_height(&self.page_notes[p])
+                    };
+                    if y1 > y0 {
+                        let insert_at = if p == start_page { start_op } else { 0 };
+                        let bg_ops = [
+                            Op::Rect {
+                                x,
+                                y: y0,
+                                w,
+                                h: y1 - y0,
+                                color: kind.bg(),
+                            },
+                            Op::Rect {
+                                x,
+                                y: y0,
+                                w: 3.0,
+                                h: y1 - y0,
+                                color: kind.color(),
+                            },
+                        ];
+                        page.splice(insert_at..insert_at, bg_ops);
+                    }
+                }
+                self.gap(6.0);
+            }
             "footnote_list" => {}
             "table" => {
                 let matrix = node
@@ -1515,6 +1716,8 @@ impl Layout {
             face: Face::Mono,
             w: header_w,
             lead: 0.0,
+            code: false,
+            highlight: None,
             sup: false,
             fn_num: None,
             link: None,
@@ -1544,6 +1747,8 @@ impl Layout {
                     face: s.face,
                     w: s.w,
                     lead: s.lead,
+                    code: s.code,
+                    highlight: s.highlight,
                     sup: s.sup,
                     fn_num: s.fn_num,
                     link: s.link.clone(),
@@ -1572,6 +1777,8 @@ impl Layout {
                         face: Face::Mono,
                         w: cw,
                         lead: 0.0,
+                        code: false,
+                        highlight: None,
                         sup: false,
                         fn_num: None,
                         link: None,
@@ -1590,6 +1797,8 @@ impl Layout {
                     face: Face::Mono,
                     w: cw,
                     lead: 0.0,
+                    code: false,
+                    highlight: None,
                     sup: false,
                     fn_num: None,
                     link: None,
@@ -1893,6 +2102,8 @@ struct Word {
     face: Face,
     /// Style face of the surrounding span; measures the space before the word.
     lead_face: Face,
+    code: bool,
+    highlight: Option<Rgb>,
     sup: bool,
     fn_num: Option<usize>,
     link: Option<String>,
@@ -1933,6 +2144,8 @@ impl LineBuf {
                 face: w.face,
                 w: ww,
                 lead,
+                code: w.code,
+                highlight: w.highlight,
                 sup: w.sup,
                 fn_num: w.fn_num,
                 link: w.link,
@@ -1993,6 +2206,12 @@ fn inline(nodes: &[Value], out: &mut Vec<Span>, bold: bool, fn_map: &HashMap<Str
                         Some("strong") => span.bold = true,
                         Some("em") => span.italic = true,
                         Some("code") => span.code = true,
+                        Some("highlight") => {
+                            span.highlight = m
+                                .pointer("/attrs/color")
+                                .and_then(Value::as_str)
+                                .and_then(highlight_rgb);
+                        }
                         Some("link") => {
                             span.link = m
                                 .pointer("/attrs/href")
@@ -2472,6 +2691,13 @@ fn replay(l: &Layout, export: &CardExport) -> Result<Vec<u8>, AppError> {
                             ));
                         }
                     }
+                    Op::AlertIcon {
+                        kind,
+                        x,
+                        y,
+                        size,
+                        color,
+                    } => draw_alert_icon(&mut s, *kind, *x, *y, *size, *color),
                 }
             }
             s.finish();
@@ -2488,6 +2714,151 @@ fn fill(c: Rgb) -> Fill {
     Fill {
         paint: rgb::Color::new(c[0], c[1], c[2]).into(),
         ..Default::default()
+    }
+}
+
+fn stroke(c: Rgb, width: f32) -> Stroke {
+    Stroke {
+        paint: rgb::Color::new(c[0], c[1], c[2]).into(),
+        width,
+        line_cap: LineCap::Round,
+        line_join: LineJoin::Round,
+        ..Default::default()
+    }
+}
+
+/// Draws a crisp 16×16 vector alert icon scaled to `size` at `(x, y)`.
+fn draw_alert_icon(
+    s: &mut krilla::surface::Surface<'_>,
+    kind: AlertKind,
+    x: f32,
+    y: f32,
+    size: f32,
+    color: Rgb,
+) {
+    let k = size / 16.0;
+    let pt = |px: f32, py: f32| (x + px * k, y + py * k);
+    let lw = (1.35 * k).max(0.75);
+
+    let mut outline = PathBuilder::new();
+    match kind {
+        AlertKind::Note => {
+            // Circle + "i"
+            let (cx, cy) = pt(8.0, 8.0);
+            let r = 6.75 * k;
+            let c = r * 0.552_284_8;
+            outline.move_to(cx, cy - r);
+            outline.cubic_to(cx + c, cy - r, cx + r, cy - c, cx + r, cy);
+            outline.cubic_to(cx + r, cy + c, cx + c, cy + r, cx, cy + r);
+            outline.cubic_to(cx - c, cy + r, cx - r, cy + c, cx - r, cy);
+            outline.cubic_to(cx - r, cy - c, cx - c, cy - r, cx, cy - r);
+            outline.close();
+            let (a, b) = (pt(8.0, 7.4), pt(8.0, 11.6));
+            outline.move_to(a.0, a.1);
+            outline.line_to(b.0, b.1);
+        }
+        AlertKind::Tip => {
+            // Lightbulb outline + base bar
+            let (p0, p1, p2, p3, p4) = (
+                pt(5.5, 10.6),
+                pt(3.4, 8.6),
+                pt(3.4, 3.0),
+                pt(8.0, 1.4),
+                pt(12.6, 3.0),
+            );
+            let (p5, p6, p7, p8) = (pt(12.6, 8.6), pt(10.5, 10.6), pt(6.0, 12.6), pt(10.0, 12.6));
+            outline.move_to(p0.0, p0.1);
+            outline.cubic_to(p1.0, p1.1, p2.0, p2.1, p3.0, p3.1);
+            outline.cubic_to(p4.0, p4.1, p5.0, p5.1, p6.0, p6.1);
+            outline.move_to(p7.0, p7.1);
+            outline.line_to(p8.0, p8.1);
+            let (b0, b1) = (pt(6.6, 14.6), pt(9.4, 14.6));
+            outline.move_to(b0.0, b0.1);
+            outline.line_to(b1.0, b1.1);
+        }
+        AlertKind::Important => {
+            // Speech/callout box + "!"
+            let pts = [
+                pt(2.0, 1.8),
+                pt(14.0, 1.8),
+                pt(14.0, 11.4),
+                pt(7.2, 11.4),
+                pt(3.8, 14.4),
+                pt(3.8, 11.4),
+                pt(2.0, 11.4),
+            ];
+            outline.move_to(pts[0].0, pts[0].1);
+            for p in &pts[1..] {
+                outline.line_to(p.0, p.1);
+            }
+            outline.close();
+            let (a, b) = (pt(8.0, 4.2), pt(8.0, 7.6));
+            outline.move_to(a.0, a.1);
+            outline.line_to(b.0, b.1);
+        }
+        AlertKind::Warning => {
+            // Triangle + "!"
+            let (t, r, l) = (pt(8.0, 1.6), pt(14.6, 13.8), pt(1.4, 13.8));
+            outline.move_to(t.0, t.1);
+            outline.line_to(r.0, r.1);
+            outline.line_to(l.0, l.1);
+            outline.close();
+            let (a, b) = (pt(8.0, 5.6), pt(8.0, 9.4));
+            outline.move_to(a.0, a.1);
+            outline.line_to(b.0, b.1);
+        }
+        AlertKind::Caution => {
+            // Octagon + "!"
+            let pts = [
+                pt(5.2, 1.4),
+                pt(10.8, 1.4),
+                pt(14.6, 5.2),
+                pt(14.6, 10.8),
+                pt(10.8, 14.6),
+                pt(5.2, 14.6),
+                pt(1.4, 10.8),
+                pt(1.4, 5.2),
+            ];
+            outline.move_to(pts[0].0, pts[0].1);
+            for p in &pts[1..] {
+                outline.line_to(p.0, p.1);
+            }
+            outline.close();
+            let (a, b) = (pt(8.0, 4.6), pt(8.0, 8.8));
+            outline.move_to(a.0, a.1);
+            outline.line_to(b.0, b.1);
+        }
+    }
+
+    if let Some(path) = outline.finish() {
+        s.set_fill(None);
+        s.set_stroke(Some(stroke(color, lw)));
+        s.draw_path(&path);
+        s.set_stroke(None);
+    }
+
+    // Dot for "i" / "!" on Note, Important, Warning, Caution.
+    let dot_pos = match kind {
+        AlertKind::Note => Some(pt(8.0, 4.9)),
+        AlertKind::Tip => None,
+        AlertKind::Important => Some(pt(8.0, 9.4)),
+        AlertKind::Warning => Some(pt(8.0, 11.4)),
+        AlertKind::Caution => Some(pt(8.0, 11.2)),
+    };
+    if let Some((dx, dy)) = dot_pos {
+        let r = 0.9 * k;
+        let c = r * 0.552_284_8;
+        let mut dot = PathBuilder::new();
+        dot.move_to(dx, dy - r);
+        dot.cubic_to(dx + c, dy - r, dx + r, dy - c, dx + r, dy);
+        dot.cubic_to(dx + r, dy + c, dx + c, dy + r, dx, dy + r);
+        dot.cubic_to(dx - c, dy + r, dx - r, dy + c, dx - r, dy);
+        dot.cubic_to(dx - r, dy - c, dx - c, dy - r, dx, dy - r);
+        dot.close();
+        if let Some(path) = dot.finish() {
+            s.set_fill(Some(fill(color)));
+            s.draw_path(&path);
+        }
     }
 }
 

@@ -449,6 +449,19 @@ fn assert_in_bounds(l: &Layout, check_height: bool) {
                     }
                 }
                 Op::Link { .. } => {}
+                Op::AlertIcon { x, y, size, .. } => {
+                    assert!(
+                        *x >= left && x + size <= right,
+                        "page {pi}: alert icon {x}..{} outside margins",
+                        x + size
+                    );
+                    if check_height {
+                        assert!(
+                            *y >= TOP - 0.6 && y + size <= PAGE_H,
+                            "page {pi}: alert icon y {y}+{size}"
+                        );
+                    }
+                }
             }
         }
     }
@@ -507,6 +520,19 @@ fn dump(l: &Layout) -> String {
                 Op::Link { x, y, w, h, url } => {
                     writeln!(out, "L {x:.1} {y:.1} {w:.1} {h:.1} {url}").unwrap()
                 }
+                Op::AlertIcon {
+                    kind,
+                    x,
+                    y,
+                    size,
+                    color,
+                } => writeln!(
+                    out,
+                    "A {} {x:.1} {y:.1} {size:.1} {}",
+                    kind.label(),
+                    hex(color)
+                )
+                .unwrap(),
             }
         }
     }
@@ -2348,6 +2374,77 @@ fn giant_footnote_splits_across_pages_without_exceeding_bounds() {
     assert!(
         l.pages.len() >= 2,
         "expected carried footnote overflow page"
+    );
+}
+
+#[test]
+fn highlights_emit_colored_background_rects_in_pdf() {
+    let nodes = vec![json!({
+        "type": "paragraph",
+        "content": [
+            { "type": "text", "text": "Plain " },
+            { "type": "text", "marks": [{ "type": "highlight", "attrs": { "color": "yellow" } }], "text": "sunny words" },
+            { "type": "text", "text": " and " },
+            { "type": "text", "marks": [{ "type": "highlight", "attrs": { "color": "blue" } }, { "type": "strong" }], "text": "bold blue" },
+        ]
+    })];
+    let e = with_description(nodes);
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    let yellow = highlight_rgb("yellow").unwrap();
+    let blue = highlight_rgb("blue").unwrap();
+    let has_yellow = l.pages[0]
+        .iter()
+        .any(|op| matches!(op, Op::Rect { color, .. } if *color == yellow));
+    let has_blue = l.pages[0]
+        .iter()
+        .any(|op| matches!(op, Op::Rect { color, .. } if *color == blue));
+    assert!(has_yellow, "expected yellow highlight rect");
+    assert!(has_blue, "expected blue highlight rect");
+}
+
+#[test]
+fn alerts_render_all_kinds_and_darker_inline_code_background() {
+    let mut nodes = Vec::new();
+    for kind in ["note", "tip", "important", "warning", "caution"] {
+        nodes.push(json!({
+            "type": "alert",
+            "attrs": { "kind": kind },
+            "content": [{
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": format!("Body for {kind} with ") },
+                    { "type": "text", "marks": [{ "type": "code" }], "text": "inline_code()" },
+                    { "type": "text", "text": "." }
+                ]
+            }]
+        }));
+    }
+    let e = with_description(nodes);
+    let (l, pdf) = build(&e);
+    assert_pdfa(&pdf);
+    assert_in_bounds(&l, true);
+    let text = all_text(&l);
+    for label in ["Note", "Tip", "Important", "Warning", "Caution"] {
+        assert!(text.contains(label), "missing alert header {label}");
+    }
+    let icon_count = l
+        .pages
+        .iter()
+        .flatten()
+        .filter(|op| matches!(op, Op::AlertIcon { .. }))
+        .count();
+    assert_eq!(icon_count, 5);
+    let code_bg_count = l
+        .pages
+        .iter()
+        .flatten()
+        .filter(|op| matches!(op, Op::Rect { color, .. } if *color == ALERT_CODE_BG))
+        .count();
+    assert_eq!(
+        code_bg_count, 5,
+        "expected darker inline code background inside each alert"
     );
 }
 

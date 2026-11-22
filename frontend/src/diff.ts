@@ -172,6 +172,12 @@ export function descriptionLines(description: string): string[] {
       case "blockquote":
         (node.content ?? []).forEach((child: any) => block(child, indent + "> ", null));
         return;
+      case "alert": {
+        const kind = typeof node.attrs?.kind === "string" ? node.attrs.kind.toUpperCase() : "NOTE";
+        lines.push(`${indent}> [!${kind}]`);
+        (node.content ?? []).forEach((child: any) => block(child, indent + "> ", null));
+        return;
+      }
       case "footnote_list":
         (node.content ?? []).forEach((def: any) => {
           const id = def?.attrs?.id;

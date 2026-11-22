@@ -370,6 +370,102 @@ fn corner_cases() -> Vec<(&'static str, CardExport)> {
             }));
             with_description(nodes)
         }),
+        ("20-highlights-and-alerts", {
+            let hl = |color: &str, text: &str| {
+                json!({
+                    "type": "text",
+                    "marks": [{ "type": "highlight", "attrs": { "color": color } }],
+                    "text": text
+                })
+            };
+            let ic = |text: &str| {
+                json!({
+                    "type": "text",
+                    "marks": [{ "type": "code" }],
+                    "text": text
+                })
+            };
+            let alert = |kind: &str, content: Vec<Value>| {
+                json!({
+                    "type": "alert",
+                    "attrs": { "kind": kind },
+                    "content": content
+                })
+            };
+            with_description(vec![
+                h(1, "Highlights"),
+                p(vec![
+                    text_node("Palette: "),
+                    hl("yellow", "yellow"),
+                    text_node(" "),
+                    hl("orange", "orange"),
+                    text_node(" "),
+                    hl("red", "red"),
+                    text_node(" "),
+                    hl("pink", "pink"),
+                    text_node(" "),
+                    hl("purple", "purple"),
+                    text_node(" "),
+                    hl("blue", "blue"),
+                    text_node(" "),
+                    hl("green", "green"),
+                    text_node(" "),
+                    hl("gray", "gray"),
+                    text_node("."),
+                ]),
+                p(vec![
+                    text_node("Combined with formatting: "),
+                    json!({
+                        "type": "text",
+                        "marks": [
+                            { "type": "highlight", "attrs": { "color": "yellow" } },
+                            { "type": "strong" }
+                        ],
+                        "text": "bold yellow phrase"
+                    }),
+                    text_node(" and "),
+                    json!({
+                        "type": "text",
+                        "marks": [
+                            { "type": "highlight", "attrs": { "color": "blue" } },
+                            { "type": "link", "attrs": { "href": "https://example.com" } }
+                        ],
+                        "text": "highlighted link"
+                    }),
+                    text_node("."),
+                ]),
+                h(1, "Alerts"),
+                alert("note", vec![p(vec![
+                    text_node("Highlights store semantic names ("),
+                    ic("yellow"),
+                    text_node(", "),
+                    ic("blue"),
+                    text_node(") so Light, Dark, and PDF exports all stay legible."),
+                ])]),
+                alert("tip", vec![p(vec![
+                    text_node("Press "),
+                    ic("Accel+K"),
+                    text_node(" then "),
+                    ic("A"),
+                    text_node(" to insert or change an alert without leaving the keyboard."),
+                ])]),
+                alert("important", vec![p(vec![
+                    text_node("Keep "),
+                    ic("schema.json"),
+                    text_node(" and "),
+                    ic("backend/src/schema.rs"),
+                    text_node(" in sync."),
+                ])]),
+                alert("warning", vec![p(vec![
+                    text_node("Alerts support "),
+                    hl("purple", "highlighted text"),
+                    text_node(" and nested blocks, but cannot go inside table cells."),
+                ])]),
+                alert("caution", vec![p(vec![
+                    text_node("Deleting an archived board removes all cards and attachments permanently."),
+                ])]),
+            ])
+        }),
     ];
     // Unless a case sets its own title, the file name is the title.
     cases

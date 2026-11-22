@@ -31,6 +31,12 @@ export const ICONS = {
     '<path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v4M4 11.5c0-.8.7-1.3 1.5-1.3s1.5.5 1.5 1.3c0 1-3 2-3 3h3M4 17.5h2c.6 0 1 .4 1 1s-.4 1-1 1H4"/>',
   blockquote:
     '<path d="M5 6v12M10 8h9M10 12h9M10 16h6"/>',
+  alert:
+    '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
+  highlight:
+    '<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
+  clearHighlight:
+    '<path d="M18 6 6 18M6 6l12 12"/>',
   image:
     '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
   // Move: an arrow in the direction of travel.

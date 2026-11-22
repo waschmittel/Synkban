@@ -36,7 +36,7 @@ test("top bar groups Footnote, Image, Table, Matrix, lists and Blockquote into a
 
   await insertDropdown(page).click();
   const menuItems = page.locator(".ProseMirror-menu-dropdown-menu .insert-menu-item");
-  await expect(menuItems).toHaveCount(7);
+  await expect(menuItems).toHaveCount(8);
   await expect(menuItems).toHaveText([
     "Footnote",
     "Image",
@@ -45,8 +45,9 @@ test("top bar groups Footnote, Image, Table, Matrix, lists and Blockquote into a
     "Bullet list",
     "Ordered list",
     "Blockquote",
+    "Alert",
   ]);
-  await expect(menuItems.locator("svg")).toHaveCount(7);
+  await expect(menuItems.locator("svg")).toHaveCount(8);
 
   // Blockquote works from the Insert menu.
   await menuItems.filter({ hasText: "Blockquote" }).click();
@@ -172,6 +173,7 @@ test("tabbed jump-back and delete buttons work via keyboard, and Accel+K -> D de
 
   // Jump back into the footnote and delete it via Accel+K -> D.
   await page.keyboard.press("ArrowLeft");
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
   await page.keyboard.press("ControlOrMeta+Enter");
   await page.keyboard.press("ControlOrMeta+k");
   await expect(page.locator(".table-menu-item", { hasText: "Delete footnote" })).toBeVisible();

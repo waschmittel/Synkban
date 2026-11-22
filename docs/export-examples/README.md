@@ -30,3 +30,4 @@ validity, margins/page bounds, no empty pages and determinism.
 | `17-matrix` | Matrix with open top-left corner, centred top/left headers, per-cell alignment, and page break |
 | `18-lua-blocks` | Runnable Lua blocks with evaluated output, outdated indicator, and runtime error |
 | `19-footnotes` | Numbered footnotes with same-page placement, per-page numbering restart, repeated references across pages, and omitted unreferenced orphans |
+| `20-highlights-and-alerts` | All 8 text highlight colors (including bold and linked highlights) and all 5 alert kinds (Note, Tip, Important, Warning, Caution) with inline code inside alerts |

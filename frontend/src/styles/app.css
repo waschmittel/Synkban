@@ -21,6 +21,24 @@
   --color-danger: #eb5a46;
   --color-success: #36b37e;
 
+  /* Description highlight palette (tuned to stand out on #fffbe6) */
+  --hl-yellow: #ffe066;
+  --hl-orange: #ffc078;
+  --hl-red: #ffa8a8;
+  --hl-pink: #faa2c1;
+  --hl-purple: #d0bfff;
+  --hl-blue: #a5d8ff;
+  --hl-green: #b2f2bb;
+  --hl-gray: #dee2e6;
+
+  /* Alert colors (aligned with tct / GitHub light theme) */
+  --alert-note: #0969da;
+  --alert-tip: #1a7f37;
+  --alert-important: #8250df;
+  --alert-warning: #9a6700;
+  --alert-caution: #cf222e;
+  --alert-tint: 9%;
+
   color-scheme: light;
 
   --radius-sm: 6px;
@@ -1184,23 +1202,6 @@ html.electron .app-header .board-color-dropdown {
 
 .modal-content--pane .editor-wrapper .ProseMirror {
   padding-inline: 24px;
-}
-
-/* The measure column is centred; text in it stays left-aligned. Tables are
-   always centred; code blocks are as wide as the column (so aligned with it)
-   until their content is wider, then centred too. */
-.modal-content--pane .editor-wrapper .ProseMirror > * {
-  margin-left: max(0px, calc((100% - var(--text-measure)) / 2));
-}
-
-.modal-content--pane .editor-wrapper .ProseMirror > table,
-.modal-content--pane .editor-wrapper .ProseMirror > pre,
-.modal-content--pane .editor-wrapper .ProseMirror > .lua-block {
-  margin-inline: auto;
-}
-
-.modal-content--pane .editor-wrapper .ProseMirror > :not(table):not(pre):not(.lua-block) {
-  margin-right: auto;
 }
 
 /* Due date left of the labels (in the modal: above them). */
@@ -2550,6 +2551,211 @@ html.theme-dark .modal-history-btn:hover {
   font-style: italic;
 }
 
+/* Text highlights (ADR-0031): zero padding/margin/border so highlighting
+   (including mid-word) never shifts text position or changes text dimensions. */
+.editor-wrapper .ProseMirror mark[data-highlight] {
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.editor-wrapper .ProseMirror mark[data-highlight="yellow"] { background: var(--hl-yellow); }
+.editor-wrapper .ProseMirror mark[data-highlight="orange"] { background: var(--hl-orange); }
+.editor-wrapper .ProseMirror mark[data-highlight="red"] { background: var(--hl-red); }
+.editor-wrapper .ProseMirror mark[data-highlight="pink"] { background: var(--hl-pink); }
+.editor-wrapper .ProseMirror mark[data-highlight="purple"] { background: var(--hl-purple); }
+.editor-wrapper .ProseMirror mark[data-highlight="blue"] { background: var(--hl-blue); }
+.editor-wrapper .ProseMirror mark[data-highlight="green"] { background: var(--hl-green); }
+.editor-wrapper .ProseMirror mark[data-highlight="gray"] { background: var(--hl-gray); }
+
+.highlight-split-btn {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.editor-wrapper .ProseMirror-menubar .highlight-split-action,
+.editor-wrapper .ProseMirror-menubar .highlight-split-chevron {
+  border: none;
+  background: transparent;
+  color: inherit;
+  height: 24px;
+}
+
+.editor-wrapper .ProseMirror-menubar .highlight-split-action {
+  padding: 3px 4px 3px 6px;
+  border-radius: 4px 0 0 4px;
+}
+
+.editor-wrapper .ProseMirror-menubar .highlight-split-chevron {
+  padding: 3px 4px 3px 2px;
+  border-radius: 0 4px 4px 0;
+  color: var(--color-text-muted);
+}
+
+.highlight-trigger-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.highlight-trigger-bar {
+  width: 14px;
+  height: 3px;
+  border-radius: 1px;
+  margin-top: 1px;
+  background: var(--hl-yellow);
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+.highlight-trigger-bar[data-highlight="yellow"] { background: var(--hl-yellow); }
+.highlight-trigger-bar[data-highlight="orange"] { background: var(--hl-orange); }
+.highlight-trigger-bar[data-highlight="red"] { background: var(--hl-red); }
+.highlight-trigger-bar[data-highlight="pink"] { background: var(--hl-pink); }
+.highlight-trigger-bar[data-highlight="purple"] { background: var(--hl-purple); }
+.highlight-trigger-bar[data-highlight="blue"] { background: var(--hl-blue); }
+.highlight-trigger-bar[data-highlight="green"] { background: var(--hl-green); }
+.highlight-trigger-bar[data-highlight="gray"] { background: var(--hl-gray); }
+
+/* Compact visual swatch popover for the split button's right chevron */
+.highlight-swatch-popover {
+  position: fixed;
+  z-index: 310;
+  padding: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.highlight-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  gap: 5px;
+}
+
+.highlight-swatch-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+
+.highlight-swatch-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.highlight-swatch-btn--active {
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.highlight-swatch-btn[data-highlight="yellow"] { background: var(--hl-yellow); }
+.highlight-swatch-btn[data-highlight="orange"] { background: var(--hl-orange); }
+.highlight-swatch-btn[data-highlight="red"] { background: var(--hl-red); }
+.highlight-swatch-btn[data-highlight="pink"] { background: var(--hl-pink); }
+.highlight-swatch-btn[data-highlight="purple"] { background: var(--hl-purple); }
+.highlight-swatch-btn[data-highlight="blue"] { background: var(--hl-blue); }
+.highlight-swatch-btn[data-highlight="green"] { background: var(--hl-green); }
+.highlight-swatch-btn[data-highlight="gray"] { background: var(--hl-gray); }
+
+.highlight-swatch-clear {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+
+.highlight-swatch-clear:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.highlight-menu-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+}
+.highlight-menu-swatch[data-highlight="yellow"] { background: var(--hl-yellow); }
+.highlight-menu-swatch[data-highlight="orange"] { background: var(--hl-orange); }
+.highlight-menu-swatch[data-highlight="red"] { background: var(--hl-red); }
+.highlight-menu-swatch[data-highlight="pink"] { background: var(--hl-pink); }
+.highlight-menu-swatch[data-highlight="purple"] { background: var(--hl-purple); }
+.highlight-menu-swatch[data-highlight="blue"] { background: var(--hl-blue); }
+.highlight-menu-swatch[data-highlight="green"] { background: var(--hl-green); }
+.highlight-menu-swatch[data-highlight="gray"] { background: var(--hl-gray); }
+
+/* Semantic alert blocks (ADR-0031, inspired by tct).
+   Use margin-block (never horizontal margin shorthand) so Notes-mode measure
+   centring (ADR-0022) aligns alerts with prose by default. */
+.editor-wrapper .ProseMirror .editor-alert {
+  --alert-color: var(--alert-note);
+  border-left: 3.5px solid var(--alert-color);
+  background: color-mix(in srgb, var(--alert-color) var(--alert-tint), transparent);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 12px;
+  margin-block: 0 10px;
+}
+.editor-wrapper .ProseMirror .editor-alert:last-child {
+  margin-bottom: 0;
+}
+.editor-wrapper .ProseMirror .editor-alert[data-alert="note"] { --alert-color: var(--alert-note); }
+.editor-wrapper .ProseMirror .editor-alert[data-alert="tip"] { --alert-color: var(--alert-tip); }
+.editor-wrapper .ProseMirror .editor-alert[data-alert="important"] { --alert-color: var(--alert-important); }
+.editor-wrapper .ProseMirror .editor-alert[data-alert="warning"] { --alert-color: var(--alert-warning); }
+.editor-wrapper .ProseMirror .editor-alert[data-alert="caution"] { --alert-color: var(--alert-caution); }
+
+.editor-wrapper .ProseMirror .editor-alert-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  user-select: none;
+}
+
+.editor-wrapper .ProseMirror .editor-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 5px 1px 2px;
+  margin-left: -2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--alert-color);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.editor-wrapper .ProseMirror .editor-alert-badge:hover {
+  background: color-mix(in srgb, var(--alert-color) 14%, transparent);
+}
+
+.editor-wrapper .ProseMirror .editor-alert-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.editor-wrapper .ProseMirror .editor-alert :not(pre) > code {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.alert-menu-icon[data-alert="note"] { color: var(--alert-note); }
+.alert-menu-icon[data-alert="tip"] { color: var(--alert-tip); }
+.alert-menu-icon[data-alert="important"] { color: var(--alert-important); }
+.alert-menu-icon[data-alert="warning"] { color: var(--alert-warning); }
+.alert-menu-icon[data-alert="caution"] { color: var(--alert-caution); }
+
 .editor-wrapper .ProseMirror h1 {
   font-size: 20px;
   margin: 0 0 10px;
@@ -2892,6 +3098,24 @@ html.theme-dark .modal-history-btn:hover {
   max-width: var(--text-measure);
 }
 
+/* Notes-mode measure centring (ADR-0022): placed after all block rules so every
+   top-level block (paragraphs, headings, lists, quotes, alerts, footnotes, …)
+   is centred and aligned to --text-measure by default, except explicit wide
+   exceptions (table, pre, .lua-block). */
+.modal-content--pane .editor-wrapper .ProseMirror > * {
+  margin-left: max(0px, calc((100% - var(--text-measure)) / 2));
+}
+
+.modal-content--pane .editor-wrapper .ProseMirror > table,
+.modal-content--pane .editor-wrapper .ProseMirror > pre,
+.modal-content--pane .editor-wrapper .ProseMirror > .lua-block {
+  margin-inline: auto;
+}
+
+.modal-content--pane .editor-wrapper .ProseMirror > :not(table):not(pre):not(.lua-block) {
+  margin-right: auto;
+}
+
 /* A table/code block wider than the pane scrolls the description sideways. */
 .modal-content--pane .editor-wrapper .ProseMirror {
   overflow-x: auto;
@@ -2971,7 +3195,9 @@ html.theme-dark .modal-history-btn:hover {
   position: fixed;
   z-index: 310;
   min-width: 230px;
-  padding: 6px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 5px;
   background: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border-strong);
@@ -2982,7 +3208,7 @@ html.theme-dark .modal-history-btn:hover {
 
 .table-menu-sep {
   height: 1px;
-  margin: 4px 6px;
+  margin: 3px 6px;
   background: var(--color-border);
 }
 
@@ -3005,7 +3231,8 @@ html.theme-dark .modal-history-btn:hover {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 4px 8px;
+  padding: 2.5px 8px;
+  line-height: 1.3;
   background: none;
   border: none;
   border-radius: var(--radius-sm);
@@ -5460,6 +5687,34 @@ html.theme-dark .label-drawer {
 /* Keep the sticky-note feel with a dark warm tint instead of pale yellow. */
 html.theme-dark .editor-wrapper {
   background: #2a2a20;
+}
+
+html.theme-dark {
+  --hl-yellow: rgba(250, 204, 21, 0.34);
+  --hl-orange: rgba(251, 146, 60, 0.34);
+  --hl-red: rgba(248, 113, 113, 0.34);
+  --hl-pink: rgba(244, 114, 182, 0.32);
+  --hl-purple: rgba(192, 132, 252, 0.32);
+  --hl-blue: rgba(96, 165, 250, 0.32);
+  --hl-green: rgba(74, 222, 128, 0.28);
+  --hl-gray: rgba(148, 163, 184, 0.28);
+
+  --alert-note: #58a6ff;
+  --alert-tip: #3fb950;
+  --alert-important: #a371f7;
+  --alert-warning: #d29922;
+  --alert-caution: #f85149;
+  --alert-tint: 13%;
+}
+
+html.theme-dark .highlight-menu-swatch,
+html.theme-dark .highlight-trigger-bar,
+html.theme-dark .highlight-swatch-btn {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+html.theme-dark .editor-wrapper .ProseMirror .editor-alert :not(pre) > code {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 html.theme-dark .editor-wrapper .ProseMirror :not(pre) > code {

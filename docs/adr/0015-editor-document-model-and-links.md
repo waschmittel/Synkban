@@ -1,6 +1,6 @@
 # Descriptions are ProseMirror JSON with a restricted schema; links are allow-listed and edited whole
 
-The card description is rich text in ProseMirror (`schema.json` / `schema.ts`): basic nodes, nested lists, tables, Lua blocks (ADR-0028), numbered footnotes pinned at the bottom (`doc: block+ footnote_list?`, ADR-0030), and an inline `image` that references an *attachment* (ADR-0020, never a URL); **no `horizontal_rule`**; marks bold, italic, inline code, link. It is stored as `JSON.stringify(doc)` in `description` (empty string = empty); never HTML. A stored description on disk that fails to validate as a `doc` is shown as plain text.
+The card description is rich text in ProseMirror (`schema.json` / `schema.ts`): basic nodes, nested lists, tables, dedicated `alert` blocks (ADR-0031), Lua blocks (ADR-0028), numbered footnotes pinned at the bottom (`doc: block+ footnote_list?`, ADR-0030), and an inline `image` that references an *attachment* (ADR-0020, never a URL); **no `horizontal_rule`**; marks bold, italic, inline code, semantic `highlight` (8 named colors, ADR-0031), link. It is stored as `JSON.stringify(doc)` in `description` (empty string = empty); never HTML. A stored description on disk that fails to validate as a `doc` is shown as plain text.
 
 ## Why
 

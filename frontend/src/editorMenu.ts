@@ -16,9 +16,9 @@
 /// block type is fixed) · then either "insert table" or the table actions.
 /// Keys:
 ///
-///   always            l link (add/edit) · u remove link · i inline code · m image
+///   always            l link (add/edit) · u remove link · i inline code · h highlight · g highlight color · m image · f footnote
 ///                     ↑ ↓ Home End move a highlight, Enter runs it
-///   outside a table   0 plain · b code block · e lua block · 1/2/3 heading · t table · x matrix
+///   outside a table   0 plain · b code block · e lua block · 1/2/3 heading · t table · x matrix · a alert
 ///   in a block/table  Shift+P / P … insert paragraph above / below
 ///   inside a table    w s / a d … move the row up, down / column left, right
 ///                     x … transpose (matrix only)
@@ -37,6 +37,8 @@ import { accel, hasAccel, isMac, tip } from "./platform";
 import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
 import { menuNav, navKey } from "./menuNav";
 import { canInsertImage, hooksOf, openImagePicker } from "./imagePicker";
+import { canHighlight, hasAnyHighlight, openHighlightPicker, toggleDefaultHighlight } from "./highlights";
+import { alertAt, canInsertAlert, openAlertPicker } from "./alerts";
 import { inEscapableBlock, insertParagraphAbove, insertParagraphBelow } from "./blockEscape";
 import {
   deleteCurrentFootnote,
@@ -133,6 +135,29 @@ const CODE_ITEM: Item = {
   command: toggleMark(codeMark),
 };
 
+const HIGHLIGHT_ITEM: Item = {
+  label: (s) => (hasAnyHighlight(s) ? "Remove highlight" : "Highlight"),
+  icon: ICONS.highlight,
+  group: 1,
+  hint: "H",
+  active: (s) => hasAnyHighlight(s),
+  match: letter("h"),
+  command: toggleDefaultHighlight,
+};
+
+const HIGHLIGHT_COLOR_ITEM: Item = {
+  label: "Highlight color…",
+  icon: ICONS.highlight,
+  group: 1,
+  hint: "G",
+  match: letter("g"),
+  command: (s, d, v) => {
+    if (!canHighlight(s)) return false;
+    if (d && v) setTimeout(() => openHighlightPicker(v), 0);
+    return true;
+  },
+};
+
 const IMAGE_ITEM: Item = {
   label: "Insert image…",
   icon: ICONS.image,
@@ -226,6 +251,19 @@ const TABLE_DELETE_ITEMS: Item[] = [
 const INSERT_ITEMS: Item[] = [
   { label: "Insert table (3×3)", icon: TABLE_ICON, group: 3, hint: "T", match: letter("t"), command: insertTable },
   { label: "Insert matrix (3×3)", icon: MATRIX_ICON, group: 3, hint: "X", match: letter("x"), command: insertMatrix },
+  {
+    label: (s) => (alertAt(s) ? "Change alert…" : "Insert alert…"),
+    icon: ICONS.alert,
+    group: 3,
+    hint: "A",
+    active: (s) => alertAt(s) !== null,
+    match: letter("a"),
+    command: (s, d, v) => {
+      if (!canInsertAlert(s)) return false;
+      if (d && v) setTimeout(() => openAlertPicker(v), 0);
+      return true;
+    },
+  },
 ];
 
 let close: (() => void) | null = null;
@@ -254,6 +292,8 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
       return [
         ...LINK_ITEMS,
         CODE_ITEM,
+        HIGHLIGHT_ITEM,
+        HIGHLIGHT_COLOR_ITEM,
         IMAGE_ITEM,
         FOOTNOTE_ITEM,
         ...STYLE_ITEMS,
@@ -265,7 +305,7 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
     const tableItems = isMatrix(ctx.table)
       ? [...MOVE_ITEMS, TRANSPOSE_ITEM, ...TABLE_REST_ITEMS]
       : [...MOVE_ITEMS, ...TABLE_REST_ITEMS];
-    return [...LINK_ITEMS, CODE_ITEM, IMAGE_ITEM, FOOTNOTE_ITEM, ...tableItems, ...PARAGRAPH_ITEMS, ...TABLE_DELETE_ITEMS];
+    return [...LINK_ITEMS, CODE_ITEM, HIGHLIGHT_ITEM, HIGHLIGHT_COLOR_ITEM, IMAGE_ITEM, FOOTNOTE_ITEM, ...tableItems, ...PARAGRAPH_ITEMS, ...TABLE_DELETE_ITEMS];
   };
 
   const nav = menuNav(menu);

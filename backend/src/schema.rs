@@ -23,6 +23,10 @@ struct RawSchema {
     allowed_link_protocols: Vec<String>,
     #[serde(rename = "allowedAlignments")]
     allowed_alignments: Vec<String>,
+    #[serde(rename = "allowedHighlightColors")]
+    allowed_highlight_colors: Vec<String>,
+    #[serde(rename = "allowedAlertKinds")]
+    allowed_alert_kinds: Vec<String>,
     nodes: BTreeMap<String, RawNodeSpec>,
     marks: BTreeMap<String, RawMarkSpec>,
 }
@@ -76,6 +80,8 @@ enum AttrType {
     Colwidth,
     Align,
     LinkHref,
+    HighlightColor,
+    AlertKind,
 }
 
 impl AttrType {
@@ -89,6 +95,8 @@ impl AttrType {
             "colwidth" => Self::Colwidth,
             "align" => Self::Align,
             "link_href" => Self::LinkHref,
+            "highlight_color" => Self::HighlightColor,
+            "alert_kind" => Self::AlertKind,
             other => panic!("unknown attribute type in schema.json: {other}"),
         }
     }
@@ -134,6 +142,8 @@ struct CompiledSchema {
     top_node: String,
     allowed_link_protocols: Vec<String>,
     allowed_alignments: HashSet<String>,
+    allowed_highlight_colors: HashSet<String>,
+    allowed_alert_kinds: HashSet<String>,
     nodes: HashMap<String, CompiledNode>,
     marks: HashMap<String, CompiledMark>,
 }
@@ -237,6 +247,8 @@ impl CompiledSchema {
             top_node: raw.top_node,
             allowed_link_protocols: raw.allowed_link_protocols,
             allowed_alignments: raw.allowed_alignments.into_iter().collect(),
+            allowed_highlight_colors: raw.allowed_highlight_colors.into_iter().collect(),
+            allowed_alert_kinds: raw.allowed_alert_kinds.into_iter().collect(),
             nodes,
             marks: compiled_marks,
         }
@@ -276,6 +288,12 @@ impl CompiledSchema {
                         .is_some_and(|s| self.allowed_alignments.contains(s))
             }
             AttrType::LinkHref => val.as_str().is_some_and(|s| self.is_valid_link_href(s)),
+            AttrType::HighlightColor => val
+                .as_str()
+                .is_some_and(|s| self.allowed_highlight_colors.contains(s)),
+            AttrType::AlertKind => val
+                .as_str()
+                .is_some_and(|s| self.allowed_alert_kinds.contains(s)),
         }
     }
 
@@ -1036,5 +1054,78 @@ mod tests {
                 }]
             }));
         }
+    }
+
+    #[test]
+    fn validates_highlights_and_alerts() {
+        for color in [
+            "yellow", "orange", "red", "pink", "purple", "blue", "green", "gray",
+        ] {
+            ok(json!({
+                "type": "doc",
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{
+                        "type": "text",
+                        "marks": [{ "type": "highlight", "attrs": { "color": color } }],
+                        "text": "hi"
+                    }]
+                }]
+            }));
+        }
+        // Invalid or missing highlight color.
+        err(json!({
+            "type": "doc",
+            "content": [{
+                "type": "paragraph",
+                "content": [{
+                    "type": "text",
+                    "marks": [{ "type": "highlight", "attrs": { "color": "#ffff00" } }],
+                    "text": "hi"
+                }]
+            }]
+        }));
+        err(json!({
+            "type": "doc",
+            "content": [{
+                "type": "paragraph",
+                "content": [{
+                    "type": "text",
+                    "marks": [{ "type": "highlight" }],
+                    "text": "hi"
+                }]
+            }]
+        }));
+        // Valid alert kinds + default kind.
+        ok(json!({
+            "type": "doc",
+            "content": [{
+                "type": "alert",
+                "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "default" }] }]
+            }]
+        }));
+        for kind in ["note", "tip", "important", "warning", "caution"] {
+            ok(json!({
+                "type": "doc",
+                "content": [{
+                    "type": "alert",
+                    "attrs": { "kind": kind },
+                    "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "body" }] }]
+                }]
+            }));
+        }
+        // Invalid alert kind or empty alert.
+        err(json!({
+            "type": "doc",
+            "content": [{
+                "type": "alert",
+                "attrs": { "kind": "danger" },
+                "content": [{ "type": "paragraph" }]
+            }]
+        }));
+        err(json!({
+            "type": "doc",
+            "content": [{ "type": "alert", "attrs": { "kind": "note" }, "content": [] }]
+        }));
     }
 }

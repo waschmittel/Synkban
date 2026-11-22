@@ -8,7 +8,7 @@ Archivable output without a headless browser or system libraries. **Conformance 
 
 ## Content and rules
 
-- Title (bold/italic), `Board: … · Status: <creation date> UTC`, label chips, due date, description (headings, paragraphs with marks/links, nested lists, quote, code block, Lua blocks, tables, footnotes), checklist (☑/☐), attachment list and image thumbnails.
+- Title (bold/italic), `Board: … · Status: <creation date> UTC`, label chips, due date, description (headings, paragraphs with marks/highlights/links, nested lists, quote, alert blocks, code block, Lua blocks, tables, footnotes), checklist (☑/☐), attachment list and image thumbnails.
 - PDF/A constraints: all fonts embedded and subsetted; unknown characters become `?` (`.notdef` is forbidden); no image interpolation; no embedded files.
 - **Fonts are in the binary** (`include_bytes!` from `backend/fonts/`, licences alongside; the `Dockerfile` copies the dir): DejaVu Sans ×4 + Mono, Noto Emoji (monochrome), Noto Sans Arabic/Hebrew/Devanagari/Thai. **No CJK** (10–18 MB per language) — it prints `?`. Variable Noto fonts are pinned to wght 400 for drawing and measuring.
 - **Fallback per character:** script font → the style's face → `FALLBACKS` → `?`. ZWJ, variation selectors and skin-tone modifiers are dropped. Widths come from rustybuzz shaping. RTL runs draw right-to-left; a paragraph that starts RTL is right-aligned; mixed lines are not full bidi.
@@ -30,4 +30,5 @@ Golden layouts in `tests/golden/*.txt` (`UPDATE_GOLDEN=1 cargo test --lib pdf` a
 - **No orphans/widows:** when splitting, no single line (paragraph, code) or row (table) is left alone at a page's top or bottom; a table header keeps two rows company and is repeated on each page.
 - **Checklist** (title and items) moves as a unit when it fits a page.
 - **Footnotes (ADR-0030):** printed at the bottom of every page that references them (short muted rule, raised black `[k]` markers, per-page numbering restart, `NOTE_BUDGET` half-page cap with `carry` spill onto subsequent pages); unreferenced orphans are omitted.
+- **Highlights & alerts (ADR-0031):** `highlight` marks paint print-friendly pastel rects behind runs (including in footnotes); `alert` blocks paint a tinted box, 3pt colored left bar, vector icon + bold colored header, and a darker pill background for inline code inside alerts.
 - Implemented by `Layout::keep_together_up_to`: build, and if the output was split but fits a fresh page, roll back and rebuild on a new page. Tests sweep the offset on the page (`tests.rs`, "page-break rules"); examples 14, 15 and 19.

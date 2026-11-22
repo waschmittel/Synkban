@@ -2,6 +2,8 @@
   "topNode": "doc",
   "allowedLinkProtocols": ["http:", "https:", "mailto:"],
   "allowedAlignments": ["left", "center", "right"],
+  "allowedHighlightColors": ["yellow", "orange", "red", "pink", "purple", "blue", "green", "gray"],
+  "allowedAlertKinds": ["note", "tip", "important", "warning", "caution"],
   "nodes": {
     "doc": {
       "content": "block+ footnote_list?"
@@ -13,6 +15,13 @@
     "blockquote": {
       "content": "block+",
       "group": "block"
+    },
+    "alert": {
+      "content": "block+",
+      "group": "block",
+      "attrs": {
+        "kind": { "default": "note", "type": "alert_kind" }
+      }
     },
     "heading": {
       "content": "inline*",
@@ -124,6 +133,11 @@
     },
     "em": {},
     "strong": {},
-    "code": {}
+    "code": {},
+    "highlight": {
+      "attrs": {
+        "color": { "type": "highlight_color" }
+      }
+    }
   }
 }

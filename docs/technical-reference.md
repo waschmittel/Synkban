@@ -124,7 +124,7 @@ last_board_id = "..."      # maintained automatically
 - **5-minute startup cleanup grace window:** At startup, partial or orphaned attachment leftovers are cleaned up only when older than 5 minutes so in-flight file transfers from sync tools are never mistaken for garbage.
 - **Corrupt / partial file resilience:** Unreadable JSON files are skipped on read, left untouched on disk, and surfaced in a dismissible warning banner naming the exact file path.
 - **Network outage handling (Web / PWA Mode):** Already-loaded boards and open card edits remain intact if the server restarts or disconnects, failed quick-adds preserve typed text, and connectivity recovers automatically.
-- **Keep versions aligned:** When multiple devices sync the same Data Directory, keep all installations on the same Synkban version so newer rich-text features (such as tables, matrices, Lua blocks, or inline images) render consistently everywhere.
+- **Keep versions aligned:** When multiple devices sync the same Data Directory, keep all installations on the same Synkban version so newer rich-text features (such as highlights, alerts, tables, matrices, Lua blocks, footnotes, or inline images) render consistently everywhere.
 
 ---
 

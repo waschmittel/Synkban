@@ -175,9 +175,9 @@ test("Accel+K menu is contextual: link, inline code, text style", async ({ page,
   await page.keyboard.press("ControlOrMeta+k");
   const labels = page.locator(".table-menu-item .table-menu-label");
   await expect(labels).toHaveText([
-    "Add link…", "Remove link", "Inline code", "Insert image…", "Insert footnote",
+    "Add link…", "Remove link", "Inline code", "Highlight", "Highlight color…", "Insert image…", "Insert footnote",
     "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
-    "Insert table (3×3)", "Insert matrix (3×3)",
+    "Insert table (3×3)", "Insert matrix (3×3)", "Insert alert…",
   ]);
   // No link at the cursor and nothing selected: link actions are greyed out.
   await expect(page.locator(".table-menu-item", { hasText: "Add link" })).toBeDisabled();
@@ -361,10 +361,10 @@ test("the Accel+K menu is arrow-navigable and offers images", async ({ page, req
   await page.keyboard.press("ArrowDown"); // first enabled item (links are greyed out)
   await expect(hi).toHaveText(/^Inline code/);
   await page.keyboard.press("ArrowDown");
-  await expect(hi).toHaveText(/^Insert image…/);
+  await expect(hi).toHaveText(/^Highlight/);
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp"); // wraps to the last item
-  await expect(hi).toHaveText(/^Insert matrix/);
+  await expect(hi).toHaveText(/^Insert alert…/);
   await page.keyboard.press("End");
   await page.keyboard.press("Home");
   await expect(hi).toHaveText(/^Inline code/);
@@ -379,6 +379,7 @@ test("the Accel+K menu is arrow-navigable and offers images", async ({ page, req
   // Enter on a highlighted item runs it.
   await page.keyboard.press("ControlOrMeta+k");
   await page.keyboard.press("End");
+  await page.keyboard.press("ArrowUp");
   await page.keyboard.press("Enter");
   await expect(editor(page).locator("table")).toHaveCount(1);
 });

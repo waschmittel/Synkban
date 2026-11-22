@@ -298,7 +298,7 @@ A card's **title, labels, due date, description, and checklist** are edited loca
 
 The description area (styled with a subtle warm note background) gives you structured rich text stored cleanly without raw HTML:
 
-- **Toolbar controls:** Bold, Italic, Inline code, Add or edit link, **Text style** dropdown (showing the active style), **Insert** dropdown (icon + text: **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**), Undo, Redo, and **Find in description** (`Cmd/Ctrl + F`).
+- **Toolbar controls:** Bold, Italic, Inline code, **Highlight** (8-color semantic palette), Add or edit link, **Text style** dropdown (showing the active style), **Insert** dropdown (icon + text: **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, **Alert**), Undo, Redo, and **Find in description** (`Cmd/Ctrl + F`).
 - **Text Styles:** **Plain text**, **Code block**, **Heading 1**, **Heading 2**, **Heading 3** (selectable via the toolbar dropdown, `Ctrl + Shift + 0 / 1 / 2 / 3 / \`, or the Editor Menu).
 - **Markdown typing shortcuts (start of a line):**
   - `# `, `## `, `### ` → Heading 1, 2, 3
@@ -315,7 +315,13 @@ The description area (styled with a subtle warm note background) gives you struc
   - Plain click opens the link (new tab in Web Mode, default browser in Desktop Mode). **`Cmd/Ctrl + Click`** edits or removes the link (editing always targets the whole link cleanly rather than splitting it).
 - **Context-sensitive Editor Menu (`Cmd/Ctrl + K` or Right-Click):**
   - Opens right beside your caret (or pointer) without losing your text selection or touch keyboard.
-  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `M` insert image, `F` insert or jump footnote, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, plus table actions when inside a table).
+  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `H` toggle highlight, `G` highlight color, `M` insert image, `F` insert or jump footnote, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, `A` insert/change alert, plus table actions when inside a table).
+- **Text highlights:**
+  - Highlight text in any of 8 theme-aware colors (**Yellow**, **Orange**, **Red**, **Pink**, **Purple**, **Blue**, **Green**, **Gray**).
+  - **Toolbar split button:** click the left half to highlight in the **last used color** (default Yellow) — or to remove the highlight when highlighted text is selected or the cursor is inside a highlighted span. Click the right chevron to open a compact color-swatch popover (swatches + clear button, no labels or shortcuts).
+  - **Keyboard (`Cmd/Ctrl + K`):** press **`H`** to run the same default toggle (apply last color / remove highlight), or **`G`** to open the full color picker (`1`–`8` pick a color, `0` clears). Highlights work in paragraphs, headings, lists, alerts, footnotes, and table cells, never shift text layout, and export as pastel backgrounds in PDFs.
+- **Alerts:**
+  - Add semantic callout blocks (**Note**, **Tip**, **Important**, **Warning**, **Caution**) via **Insert → Alert** or the Editor Menu (`Cmd/Ctrl + K`, then `A`). Press `N`, `T`, `I`, `W`, or `C` to insert or switch an alert's kind (or click the alert's header badge), and `X` inside an alert to remove the alert wrapper while keeping its content. Press `Shift + P` / `P` in the Editor Menu to insert a paragraph above or below an alert.
 - **Footnotes:**
   - Insert numbered footnotes from **Insert → Footnote** or via the Editor Menu (`Cmd/Ctrl + K`, then `F`). Footnote definitions always remain pinned at the bottom of the description, automatically numbered and sorted (`[1]`, `[2]`, …) by order of first reference in the text.
   - Press **`Cmd/Ctrl + Enter`** when the cursor is next to or selecting a reference (`[1]`) to jump down to its definition, and press **`Cmd/Ctrl + Enter`** again (or activate the marker / `↩` button via click or keyboard) inside a definition to jump right back to the reference you came from.
@@ -466,7 +472,7 @@ Press **`Cmd/Ctrl + J`** (or click the clock/history button in the card footer) 
 
 Press **`Cmd/Ctrl + P`** (or click the **PDF** button in the card footer) to download a self-contained **PDF/A-2u** archive of the card, named automatically from the card's title.
 
-- **What gets included:** Formatted title, board name and card creation timestamp (UTC), label chips, due date, full rich-text description (headings, formatted text, clickable links, nested lists, quotes, code blocks, Lua blocks with their saved output/errors, tables & matrices with repeating headers, inline images, and same-page footnotes with per-page numbering), checklist (`☑` / `☐`), and remaining attachments (with thumbnails for non-inline images).
+- **What gets included:** Formatted title, board name and card creation timestamp (UTC), label chips, due date, full rich-text description (headings, formatted and highlighted text, clickable links, nested lists, quotes, semantic alerts, code blocks, Lua blocks with their saved output/errors, tables & matrices with repeating headers, inline images, and same-page footnotes with per-page numbering), checklist (`☑` / `☐`), and remaining attachments (with thumbnails for non-inline images).
 - **Clean pagination:** Sections, blocks up to half a page, and checklist/attachment groups are kept together where they fit, and paragraphs/tables split without leaving orphaned single lines or stranded table headers.
 - **Unsaved edits prompt:** PDFs always render the *saved* card on disk. If you have unsaved changes when exporting, Synkban asks whether to **Save & export**, **Export saved version**, or **Cancel**.
 - **Self-contained offline fonts:** Bundles DejaVu Sans, DejaVu Sans Mono, monochrome Noto Emoji, and Noto Sans Arabic, Hebrew, Devanagari, and Thai directly inside the app — zero reliance on system fonts or external browsers. *(To keep the app lightweight, CJK fonts are not bundled and appear as `?` in exported PDFs, though they display normally in the app.)*

@@ -201,3 +201,19 @@ describe("descriptionLines lua_block", () => {
     ]);
   });
 });
+
+describe("descriptionLines alert", () => {
+  it("prefixes alert kind and body lines so kind changes diff cleanly", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "alert",
+          attrs: { kind: "warning" },
+          content: [{ type: "paragraph", content: [{ type: "text", text: "Watch out" }] }],
+        },
+      ],
+    };
+    expect(descriptionLines(JSON.stringify(doc))).toEqual(["> [!WARNING]", "> Watch out"]);
+  });
+});
