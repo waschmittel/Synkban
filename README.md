@@ -31,7 +31,7 @@ Install via **[Homebrew](https://brew.sh)** (macOS Apple Silicon) or download pr
 
 - **macOS (Apple Silicon) — Homebrew (recommended):** Automatically clears the Gatekeeper quarantine flag on install:
   ```bash
-  brew install --cask waschmittel/synkban/synkban
+  brew install waschmittel/synkban/synkban
   ```
 - **macOS (Apple Silicon) — manual download:** Open the `.dmg` (or `.zip`) and drag **Synkban.app** into **Applications**. Because release builds are currently unsigned, macOS Gatekeeper may warn on first launch — run once in Terminal:
   ```bash
