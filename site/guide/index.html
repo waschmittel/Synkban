@@ -160,14 +160,18 @@
         <h2 id="getting-started">Getting Started</h2>
 
         <h3 id="installing-desktop-app">Installing the Desktop App</h3>
-        <p>Download the installer for your operating system from <a href="https://github.com/waschmittel/Synkban/releases/latest">GitHub Releases</a>:</p>
+        <p>Install via <a href="https://brew.sh">Homebrew</a> on macOS (Apple Silicon) or download the installer for your operating system from <a href="https://github.com/waschmittel/Synkban/releases/latest">GitHub Releases</a>:</p>
+        <div class="code-block">
+          <pre><code>brew install --cask waschmittel/synkban/synkban</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr><th>Platform</th><th>Available Packages</th></tr>
             </thead>
             <tbody>
-              <tr><td><strong>macOS (Apple Silicon)</strong></td><td><code>.dmg</code> installer and <code>.zip</code> archive</td></tr>
+              <tr><td><strong>macOS (Apple Silicon)</strong></td><td>Homebrew Cask (<code>waschmittel/synkban/synkban</code>), <code>.dmg</code> installer, and <code>.zip</code> archive</td></tr>
               <tr><td><strong>Linux</strong></td><td><code>.AppImage</code> and <code>.deb</code></td></tr>
               <tr><td><strong>Windows</strong></td><td><code>.exe</code> installer (NSIS)</td></tr>
             </tbody>
@@ -175,7 +179,7 @@
         </div>
 
         <div class="callout callout--warn">
-          <strong>macOS Gatekeeper note:</strong> Because release builds are not notarised with a paid Apple Developer certificate, macOS may say <em>"Synkban.app is damaged and can't be opened."</em> Run this once in Terminal, then open Synkban normally:
+          <strong>macOS Gatekeeper note:</strong> Installing via Homebrew clears the quarantine flag automatically. If you download the <code>.dmg</code> or <code>.zip</code> manually, macOS may say <em>"Synkban.app is damaged and can't be opened"</em> because release builds are not notarised with a paid Apple Developer certificate. Run this once in Terminal, then open Synkban normally:
           <div class="code-block">
             <pre><code>sudo xattr -cr /Applications/Synkban.app</code></pre>
             <button type="button" class="code-copy">Copy</button>
@@ -441,7 +445,7 @@
         <h2 id="faq">Troubleshooting &amp; FAQ</h2>
 
         <h3>macOS says <em>"Synkban.app is damaged and can't be opened"</em></h3>
-        <p>Release builds are unsigned. Run <code>sudo xattr -cr /Applications/Synkban.app</code> in Terminal once and reopen the app.</p>
+        <p>Release builds are unsigned. Installing via Homebrew (<code>brew install --cask waschmittel/synkban/synkban</code>) clears the quarantine flag automatically. For manual <code>.dmg</code>/<code>.zip</code> installs, run <code>sudo xattr -cr /Applications/Synkban.app</code> in Terminal once and reopen the app.</p>
 
         <h3>I changed the Data folder in Settings and my existing boards disappeared</h3>
         <p>Changing the Data folder points Synkban at the new folder without moving files automatically. Copy your existing <code>boards/</code> folder from the old Data Directory into the new folder and Synkban will load them automatically.</p>

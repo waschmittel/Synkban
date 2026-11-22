@@ -325,7 +325,7 @@ In-description **Find & Replace** is implemented as a custom ProseMirror plugin 
 When packaged with `./build.sh --desktop`, Electron generates a UUID token at launch, spawns the Rust binary with that token (the binary resolves its data dir itself — see the [README](../README.md#configuration); a custom folder chosen in the in-app Settings dialog is persisted in `~/.config/synkban/synkban.toml` and applied after a relaunch), reads a random port from stdout, then opens a window pointing at the local server. Every request must present the token (cookie or `?token=` query param), so other apps on the same machine can't reach the UI. See `electron/main.js`, `electron/preload.js`, and `run_desktop_server` in `backend/src/lib.rs`.
 
 **macOS "App is damaged" Error:**
-Because the app is not code-signed with a Developer ID, macOS Gatekeeper may report it as "damaged". You can fix this by running:
+Because the app is not code-signed with a Developer ID, macOS Gatekeeper may report manual `.dmg` / `.zip` downloads as "damaged" (installing via `brew install --cask waschmittel/synkban/synkban` clears the quarantine flag automatically). For manual installs, fix it by running:
 
 ```bash
 sudo xattr -cr /Applications/Synkban.app

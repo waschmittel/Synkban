@@ -27,9 +27,13 @@ Organise tasks across lists in **Kanban Mode**, switch any board to **Notes Mode
 
 ## Install the Desktop App
 
-Download prebuilt installers for **macOS**, **Windows**, and **Linux** from the **[latest GitHub Release](https://github.com/waschmittel/Synkban/releases/latest)**:
+Install via **[Homebrew](https://brew.sh)** (macOS Apple Silicon) or download prebuilt installers for **macOS**, **Windows**, and **Linux** from the **[latest GitHub Release](https://github.com/waschmittel/Synkban/releases/latest)**:
 
-- **macOS (Apple Silicon):** Open the `.dmg` (or `.zip`) and drag **Synkban.app** into **Applications**. Because release builds are currently unsigned, macOS Gatekeeper may warn on first launch — run once in Terminal:
+- **macOS (Apple Silicon) — Homebrew (recommended):** Automatically clears the Gatekeeper quarantine flag on install:
+  ```bash
+  brew install --cask waschmittel/synkban/synkban
+  ```
+- **macOS (Apple Silicon) — manual download:** Open the `.dmg` (or `.zip`) and drag **Synkban.app** into **Applications**. Because release builds are currently unsigned, macOS Gatekeeper may warn on first launch — run once in Terminal:
   ```bash
   sudo xattr -cr /Applications/Synkban.app
   ```

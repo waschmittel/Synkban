@@ -362,10 +362,15 @@
 
           <div class="os-panel active" data-os="macos" role="tabpanel">
             <h3>macOS (Apple Silicon)</h3>
-            <p>Download the <code>.dmg</code> installer (or <code>.zip</code> archive) from the latest GitHub Release and drag <strong>Synkban.app</strong> into <strong>Applications</strong>.</p>
+            <p>Install via <a href="https://brew.sh">Homebrew</a> (recommended — removes the Gatekeeper quarantine flag automatically):</p>
+            <div class="code-block">
+              <pre><code>brew install --cask waschmittel/synkban/synkban</code></pre>
+              <button type="button" class="code-copy">Copy</button>
+            </div>
+            <p>Or download the <code>.dmg</code> installer (or <code>.zip</code> archive) from the latest GitHub Release and drag <strong>Synkban.app</strong> into <strong>Applications</strong>.</p>
             <p><a class="btn btn-primary" href="https://github.com/waschmittel/Synkban/releases/latest">Download from GitHub Releases</a></p>
             <div class="callout callout--warn">
-              <strong>First launch on macOS:</strong> Release builds are currently unsigned, so macOS Gatekeeper may say <em>"Synkban.app is damaged and can't be opened."</em> Run this once in Terminal, then open Synkban normally:
+              <strong>Manual download on macOS:</strong> Release builds are currently unsigned, so macOS Gatekeeper may say <em>"Synkban.app is damaged and can't be opened."</em> If you did not install via Homebrew, run this once in Terminal, then open Synkban normally:
               <div class="code-block">
                 <pre><code>sudo xattr -cr /Applications/Synkban.app</code></pre>
                 <button type="button" class="code-copy">Copy</button>

@@ -82,15 +82,20 @@ Knowing what Synkban deliberately omits helps decide whether it fits your workfl
 
 ### Installing the Desktop App
 
-Download the installer for your platform from [GitHub Releases](https://github.com/waschmittel/Synkban/releases/latest):
+Install via **[Homebrew](https://brew.sh)** on macOS (Apple Silicon) or download the installer for your platform from [GitHub Releases](https://github.com/waschmittel/Synkban/releases/latest):
+
+```bash
+# macOS (Apple Silicon) — Homebrew (clears the Gatekeeper quarantine flag automatically)
+brew install --cask waschmittel/synkban/synkban
+```
 
 | Platform | Available Packages |
 | --- | --- |
-| **macOS (Apple Silicon)** | `.dmg` installer and `.zip` archive |
+| **macOS (Apple Silicon)** | Homebrew Cask (`waschmittel/synkban/synkban`), `.dmg` installer, and `.zip` archive |
 | **Linux** | `.AppImage` and `.deb` |
 | **Windows** | `.exe` installer (NSIS) |
 
-> **macOS Gatekeeper note:** Because release builds are not notarised with a paid Apple Developer certificate, macOS may warn that `Synkban.app` *"is damaged and can't be opened"*. Run this command once in Terminal to clear the quarantine flag, then open Synkban normally:
+> **macOS Gatekeeper note:** If you install via Homebrew, the quarantine flag is removed automatically. If you download the `.dmg` or `.zip` manually, macOS may warn that `Synkban.app` *"is damaged and can't be opened"* because release builds are not notarised with a paid Apple Developer certificate. Run this command once in Terminal to clear the quarantine flag, then open Synkban normally:
 >
 > ```bash
 > sudo xattr -cr /Applications/Synkban.app
@@ -590,7 +595,7 @@ Press **`?`** at any time outside text fields (or click the **`?`** button in th
 ## Troubleshooting & FAQ
 
 ### macOS says `"Synkban.app" is damaged and can't be opened`
-Release builds are currently unsigned. Clear the quarantine flag in Terminal and reopen the app:
+Release builds are currently unsigned. Installing via Homebrew (`brew install --cask waschmittel/synkban/synkban`) clears the quarantine flag automatically. For manual `.dmg`/`.zip` installs, clear it in Terminal and reopen the app:
 ```bash
 sudo xattr -cr /Applications/Synkban.app
 ```
