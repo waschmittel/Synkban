@@ -101,6 +101,7 @@ const SUP_SCALE: f32 = 0.68;
 
 type Rgb = [u8; 3];
 const BLACK: Rgb = [0x00, 0x00, 0x00];
+const WHITE: Rgb = [0xff, 0xff, 0xff];
 const INK: Rgb = [0x1f, 0x23, 0x28];
 const MUTED: Rgb = [0x6b, 0x72, 0x80];
 const LINK: Rgb = [0x00, 0x55, 0xaa];
@@ -2255,6 +2256,38 @@ fn hex_color(s: &str) -> Rgb {
     [0xdd, 0xdd, 0xdd]
 }
 
+/// WCAG 2.1 relative luminance for an sRGB triple.
+fn relative_luminance(rgb: Rgb) -> f64 {
+    let lin = |c: u8| {
+        let s = f64::from(c) / 255.0;
+        if s <= 0.04045 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2])
+}
+
+/// Picks `INK` or `WHITE`, whichever gives higher WCAG contrast on `bg`.
+fn contrast_ink(bg: Rgb) -> Rgb {
+    let l_bg = relative_luminance(bg);
+    let ratio = |fg: Rgb| {
+        let l_fg = relative_luminance(fg);
+        let (hi, lo) = if l_fg > l_bg {
+            (l_fg, l_bg)
+        } else {
+            (l_bg, l_fg)
+        };
+        (hi + 0.05) / (lo + 0.05)
+    };
+    if ratio(WHITE) > ratio(INK) {
+        WHITE
+    } else {
+        INK
+    }
+}
+
 fn human_size(n: u64) -> String {
     const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
     let mut v = n as f64;
@@ -2345,13 +2378,14 @@ fn layout_card(export: &CardExport) -> Result<Layout, AppError> {
                 l.ensure(chip_h);
             }
             let y = l.y;
-            l.rect(MARGIN + cx, y, cw, chip_h, hex_color(&label.color));
+            let bg = hex_color(&label.color);
+            l.rect(MARGIN + cx, y, cw, chip_h, bg);
             l.text_runs(
                 MARGIN + cx + pad_x,
                 y + 10.5,
                 Face::Regular,
                 size,
-                INK,
+                contrast_ink(bg),
                 &name,
             );
             cx += cw + 5.0;

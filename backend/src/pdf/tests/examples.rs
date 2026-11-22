@@ -466,6 +466,44 @@ fn corner_cases() -> Vec<(&'static str, CardExport)> {
                 ])]),
             ])
         }),
+        ("21-custom-label-colors", {
+            let mut e = with_description(vec![para(
+                "Custom label colours automatically switch between dark and white ink based on WCAG relative luminance.",
+            )]);
+            e.labels = vec![
+                Label {
+                    id: "l1".into(),
+                    name: "Pastel".into(),
+                    color: "#ffb3b3".into(),
+                },
+                Label {
+                    id: "l2".into(),
+                    name: "White".into(),
+                    color: "#ffffff".into(),
+                },
+                Label {
+                    id: "l3".into(),
+                    name: "Yellow".into(),
+                    color: "#ffe066".into(),
+                },
+                Label {
+                    id: "l4".into(),
+                    name: "Royal Blue".into(),
+                    color: "#1d4ed8".into(),
+                },
+                Label {
+                    id: "l5".into(),
+                    name: "Crimson".into(),
+                    color: "#7f1d1d".into(),
+                },
+                Label {
+                    id: "l6".into(),
+                    name: "Black".into(),
+                    color: "#000000".into(),
+                },
+            ];
+            e
+        }),
     ];
     // Unless a case sets its own title, the file name is the title.
     cases

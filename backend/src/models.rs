@@ -245,6 +245,8 @@ pub struct UpdateCard {
 #[derive(Debug, Deserialize)]
 pub struct CreateLabel {
     pub name: String,
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -254,7 +256,10 @@ pub struct ReorderLabels {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateLabel {
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
     /// Required (true) when the name matches another label: merging is destructive.
     #[serde(default)]
     pub merge: bool,

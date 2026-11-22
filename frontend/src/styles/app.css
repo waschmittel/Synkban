@@ -17,7 +17,7 @@
   --color-surface-3: #ebecf0;
   --color-primary: oklch(from var(--board-color) clamp(0.38, l, 0.52) c h);
   --color-primary-hover: oklch(from var(--board-color) clamp(0.30, calc(l - 0.06), 0.45) c h);
-  --color-accent: var(--color-primary);
+  --color-accent: oklch(from var(--board-color) clamp(0.30, l, 0.65) c h);
   --color-danger: #eb5a46;
   --color-success: #36b37e;
 
@@ -57,7 +57,7 @@
   --shadow-list: var(--shadow-card);
   --shadow-xl: 0 24px 60px rgba(15, 23, 42, 0.24), 0 8px 16px rgba(15, 23, 42, 0.12);
 
-  --ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 42%, transparent);
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --t-fast: 120ms var(--ease);
@@ -80,9 +80,11 @@ body {
 /* ═══ Header ═══ */
 .app-header {
   --header-btn-height: 30px;
+  /* Header text and icons are always white; cap lightness only for very light
+     board colours while keeping full chroma and leaving darker colours untouched. */
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.24)),
-    var(--board-color);
+    oklch(from var(--board-color) min(l, 0.54) c h);
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -268,9 +270,9 @@ html.electron .app-header .board-color-dropdown {
 
 .btn-header-shortcuts,
 .btn-header-settings {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: rgba(255, 255, 255, 0.94);
 }
 
 .btn-header-shortcuts:hover,
@@ -459,6 +461,28 @@ html.electron .app-header .board-color-dropdown {
 .board-card-delete:hover {
   color: white;
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Light-coloured board tiles on Home switch to dark ink so the user's colour
+   stays intact and legible (ADR-0032). */
+.board-card--light .board-card-link {
+  color: #0f172a;
+  text-shadow: none;
+}
+
+.board-card--light .board-card-meta {
+  color: rgba(15, 23, 42, 0.82);
+  text-shadow: none;
+}
+
+.board-card--light .board-card-delete {
+  background: rgba(15, 23, 42, 0.1);
+  color: rgba(15, 23, 42, 0.84);
+}
+
+.board-card--light .board-card-delete:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.2);
 }
 
 .add-board {
@@ -701,10 +725,18 @@ html.electron .app-header .board-color-dropdown {
 
 .label-drawer-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 20px;
   transition: background 0.1s;
+}
+
+.label-drawer-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
 .label-drawer-item:hover,
@@ -736,9 +768,99 @@ html.electron .app-header .board-color-dropdown {
 .label-drawer-swatch {
   width: 32px;
   height: 18px;
+  padding: 0;
+  border: none;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.label-drawer-swatch:hover,
+.label-drawer-swatch:focus,
+.label-drawer-swatch--open {
+  outline: none;
+  transform: scale(1.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 0 0 2px var(--color-accent);
+}
+
+.label-drawer-swatch--static {
+  cursor: default;
+}
+
+.label-drawer-swatch--static:hover {
+  transform: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+}
+
+.label-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.label-color-presets {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.label-color-preset {
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.label-color-preset:hover,
+.label-color-preset:focus {
+  outline: none;
+  transform: scale(1.08);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.24), 0 0 0 2px var(--color-accent);
+}
+
+.label-color-preset--active {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25), 0 0 0 2px var(--color-text);
+}
+
+.label-color-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+.label-color-input {
+  width: 40px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.label-color-input::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.label-color-input::-webkit-color-swatch,
+.label-color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
 }
 
 .label-drawer-name {
@@ -835,12 +957,12 @@ html.electron .app-header .board-color-dropdown {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.005em;
-  color: rgba(0, 0, 0, 0.7);
+  color: var(--color-text);
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 .lists-container {
@@ -1100,7 +1222,7 @@ html.electron .app-header .board-color-dropdown {
 
 /* Selected (shown in the pane) without focus: the focus highlight minus the ring. */
 .card.card--selected:not(:focus) {
-  background: #f0f6fd;
+  background: color-mix(in srgb, var(--board-color) 18%, white);
   box-shadow: var(--shadow-card-hover);
 }
 
@@ -1763,27 +1885,29 @@ html.theme-dark .list-collapse:hover {
 
 .add-list-wrapper {
   min-width: 286px;
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px dashed rgba(255, 255, 255, 0.35);
+  background: rgba(241, 242, 244, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px dashed rgba(23, 43, 77, 0.28);
   border-radius: var(--radius-lg);
   transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 
 .add-list-wrapper:hover {
-  background: rgba(255, 255, 255, 0.32);
-  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(241, 242, 244, 0.92);
+  border-color: rgba(23, 43, 77, 0.45);
 }
 
 .add-list-wrapper .add-trigger {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--color-text);
   border-radius: var(--radius-lg);
   padding: 14px 18px;
   font-weight: 500;
 }
 
 .add-list-wrapper .add-trigger:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text);
+  background: transparent;
 }
 
 .add-list-wrapper .add-form {
@@ -1841,7 +1965,7 @@ html.theme-dark .list-collapse:hover {
 }
 
 .btn-primary:active:not(:disabled) {
-  background: #055a8c;
+  background: var(--color-primary-hover);
 }
 
 .btn-outline {
@@ -1891,10 +2015,14 @@ html.theme-dark .list-collapse:hover {
 
 /* ═══ Loading ═══ */
 .loading {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.88);
   text-align: center;
   padding: 60px;
   font-size: 16px;
+}
+
+.board-page .loading {
+  color: var(--color-text);
 }
 
 /* ═══ Board error ═══ */
@@ -3830,13 +3958,13 @@ html.theme-dark .modal-history-btn:hover {
 
 /* ═══ Selection highlight ═══ */
 ::selection {
-  background: #cce5ff;
+  background: color-mix(in srgb, var(--board-color) 30%, white);
 }
 
 /* ═══ Card keyboard focus ═══ */
 .card:focus {
   outline: none;
-  background: #f0f6fd;
+  background: color-mix(in srgb, var(--board-color) 18%, white);
   box-shadow: var(--ring), var(--shadow-card-hover);
 }
 
@@ -5588,8 +5716,8 @@ html.theme-dark {
   --color-surface-3: #383f4a;
   --color-primary: oklch(from var(--board-color) clamp(0.42, l, 0.54) c h);
   --color-primary-hover: oklch(from var(--board-color) clamp(0.35, calc(l - 0.06), 0.48) c h);
-  --color-accent: oklch(from var(--board-color) clamp(0.68, l, 0.78) min(c, 0.16) h);
-  --ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 40%, transparent);
+  --color-accent: oklch(from var(--board-color) clamp(0.55, l, 0.85) c h);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 44%, transparent);
 
   /* Deeper shadows read on dark surfaces where the light navy ones vanish. */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
@@ -5616,7 +5744,7 @@ html.theme-dark .board-page {
 html.theme-dark .app-header {
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.54)),
-    var(--board-color);
+    oklch(from var(--board-color) min(l, 0.62) c h);
 }
 
 /* ── Lists & cards ── */
@@ -5639,7 +5767,7 @@ html.theme-dark .card:hover {
 
 html.theme-dark .card:focus,
 html.theme-dark .card.card--selected:not(:focus) {
-  background: color-mix(in srgb, var(--color-accent) 16%, #1f242d);
+  background: color-mix(in srgb, var(--board-color) 26%, #1f242d);
 }
 
 html.theme-dark .add-trigger:hover {
@@ -5647,13 +5775,21 @@ html.theme-dark .add-trigger:hover {
 }
 
 html.theme-dark .add-list-wrapper {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.13);
+  background: rgba(23, 27, 33, 0.62);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 html.theme-dark .add-list-wrapper:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(23, 27, 33, 0.82);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+html.theme-dark .add-list-wrapper .add-trigger {
+  color: var(--color-text);
+}
+
+html.theme-dark .card-label-chip {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 html.theme-dark .add-list-wrapper .add-form {
@@ -5917,13 +6053,13 @@ html.theme-dark .filter-label-chip:hover {
 }
 
 html.theme-dark .filter-label-chip--active {
-  background: color-mix(in srgb, var(--label-color) 32%, #1c2029);
+  background: color-mix(in srgb, var(--label-color) 24%, #1c2029);
 }
 
 /* ── Card-detail label toggles ── */
 html.theme-dark .label-toggle--selected {
   color: var(--color-text);
-  background: color-mix(in srgb, var(--label-color) 30%, #1c2029);
+  background: color-mix(in srgb, var(--label-color) 24%, #1c2029);
 }
 
 /* ── Link dialog ── */

@@ -280,17 +280,17 @@ export const api = {
   deleteCard: (id: string) =>
     request<void>(`/cards/${id}`, { method: "DELETE" }),
 
-  createLabel: (boardId: string, name: string) =>
+  createLabel: (boardId: string, name: string, color?: string) =>
     request<Label>(`/boards/${boardId}/labels`, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(color ? { name, color } : { name }),
     }),
 
   /// `merge`: confirmed merge into a same-named label (409 without it).
-  updateLabel: (id: string, name: string, merge = false) =>
+  updateLabel: (id: string, data: { name?: string; color?: string; merge?: boolean }) =>
     request<Label>(`/labels/${id}`, {
       method: "PUT",
-      body: JSON.stringify({ name, merge }),
+      body: JSON.stringify(data),
     }),
 
   reorderLabels: (boardId: string, ids: string[]) =>

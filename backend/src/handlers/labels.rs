@@ -13,7 +13,7 @@ pub async fn create_label(
     let board_id = path.into_inner();
     let (label, created) = store::audit_op(
         &data_dir,
-        |dd| store::create_label(dd, &board_id, &body.name),
+        |dd| store::create_label(dd, &board_id, &body.name, body.color.as_deref()),
         |(l, created)| {
             format!(
                 "{} label \"{}\" (id: {}, color: {}) in board {}",
@@ -55,10 +55,21 @@ pub async fn update_label(
     let label_id = path.into_inner();
     let label = store::audit_op(
         &data_dir,
-        |dd| store::update_label_by_id(dd, &label_id, &body.name, body.merge),
+        |dd| {
+            store::update_label_by_id(
+                dd,
+                &label_id,
+                body.name.as_deref(),
+                body.color.as_deref(),
+                body.merge,
+            )
+        },
         |l| {
             if l.id == label_id {
-                format!("UPDATE label \"{}\" (id: {})", l.name, l.id)
+                format!(
+                    "UPDATE label \"{}\" (id: {}, color: {})",
+                    l.name, l.id, l.color
+                )
             } else {
                 format!(
                     "MERGE label {} into \"{}\" (id: {})",

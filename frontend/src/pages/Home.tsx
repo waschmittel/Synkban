@@ -19,6 +19,7 @@ import { registerShortcuts, type ShortcutDef } from "../shortcutRouter";
 import { isTypingIn } from "../boardInput";
 import { createConfirm } from "../confirm";
 import { tip } from "../platform";
+import { isLightColor } from "../colorContrast";
 
 const focusedBoardId = () => {
   const active = document.activeElement as HTMLElement | null;
@@ -535,11 +536,12 @@ export default function Home() {
               <A
                 href={`/board/${board.id}`}
                 class="board-card"
+                classList={{ "board-card--light": !!board.color && isLightColor(board.color) }}
                 data-board-id={board.id}
                 draggable={true}
                 onDragStart={(e) => handleBoardDragStart(e, board.id)}
                 onDragEnd={handleBoardDragEnd}
-                style={board.color ? { "background": board.color } : {}}
+                style={board.color ? { background: board.color } : {}}
               >
                 <span class="board-card-body">
                   <span class="board-card-link">{board.title}</span>

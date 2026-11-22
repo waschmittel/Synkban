@@ -31,4 +31,5 @@ Golden layouts in `tests/golden/*.txt` (`UPDATE_GOLDEN=1 cargo test --lib pdf` a
 - **Checklist** (title and items) moves as a unit when it fits a page.
 - **Footnotes (ADR-0030):** printed at the bottom of every page that references them (short muted rule, raised black `[k]` markers, per-page numbering restart, `NOTE_BUDGET` half-page cap with `carry` spill onto subsequent pages); unreferenced orphans are omitted.
 - **Highlights & alerts (ADR-0031):** `highlight` marks paint print-friendly pastel rects behind runs (including in footnotes); `alert` blocks paint a tinted box, 3pt colored left bar, vector icon + bold colored header, and a darker pill background for inline code inside alerts.
+- **Label chips (ADR-0032):** label chip text picks `INK` or `WHITE` from WCAG 2.1 relative luminance (`contrast_ink`) so custom dark label colours stay legible in print.
 - Implemented by `Layout::keep_together_up_to`: build, and if the output was split but fits a fresh page, roll back and rebuild on a new page. Tests sweep the offset on the page (`tests.rs`, "page-break rules"); examples 14, 15 and 19.

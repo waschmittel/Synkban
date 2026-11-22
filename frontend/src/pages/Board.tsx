@@ -1161,10 +1161,19 @@ export default function BoardPage() {
     }
     try {
       // The server merges only with the flag (409 for a clash we didn't see).
-      await api.updateLabel(labelId, name, !!(from && into));
+      await api.updateLabel(labelId, { name, merge: !!(from && into) });
       refetch();
     } catch (err) {
       reportActionError(err, "Rename failed");
+    }
+  };
+
+  const handleChangeLabelColor = async (labelId: string, color: string) => {
+    try {
+      await api.updateLabel(labelId, { color });
+      refetch();
+    } catch (err) {
+      reportActionError(err, "Color change failed");
     }
   };
 
@@ -1361,6 +1370,7 @@ export default function BoardPage() {
               onClose={drawer.close}
               onCreate={handleCreateLabel}
               onRename={handleUpdateLabel}
+              onChangeColor={handleChangeLabelColor}
               onDelete={handleDeleteLabel}
               onReorder={handleReorderLabels}
             />

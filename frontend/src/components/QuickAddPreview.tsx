@@ -3,6 +3,7 @@ import type { Label } from "../types";
 import { parseQuickAdd } from "../quickAdd";
 import { dueInfo } from "../dueDate";
 import { renderTitle } from "./Card";
+import { labelTextColor } from "../colorContrast";
 
 /// What a quick-add title will set: labels (new ones marked), due date.
 export default function QuickAddPreview(props: { text: string; labels: Label[] }) {
@@ -16,7 +17,11 @@ export default function QuickAddPreview(props: { text: string; labels: Label[] }
         <div class="quick-add-preview" aria-live="polite">
           <For each={q().labels}>
             {(l) => (
-              <span class="card-label-chip" style={{ "background-color": l.color }} innerHTML={renderTitle(l.name)} />
+              <span
+                class="card-label-chip"
+                style={{ "background-color": l.color, color: labelTextColor(l.color) }}
+                innerHTML={renderTitle(l.name)}
+              />
             )}
           </For>
           <For each={q().newLabels}>

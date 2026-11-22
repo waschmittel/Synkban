@@ -55,7 +55,7 @@ After any change:
 - Contexts: `LabelDrawerContext` (`useLabelDrawer`), `BoardHeaderContext` (`useBoardHeader`), wrapped in `App.tsx`.
 - Inputs auto-focus with `ref={(el) => requestAnimationFrame(() => el.focus())}`, not `autofocus`. Focus styles use `:focus`, not `:focus-visible` (Safari/WebView).
 - Card/label titles support `**bold**`/`*italic*` via `renderTitle()` (`innerHTML`; stored as markdown) and `handleMarkdownShortcut` on plain inputs.
-- Board colour: `--board-color` set from `Board.tsx`; header uses a dark overlay, page background `color-mix` (ADR-0013). `BoardColorPicker` is a native colour input (live preview, commit on change, reset). Board rename is inline in the header (`BoardHeaderContext`, `commit-board-rename` event). The `.board-dock` pill must stay capped and scrollable (`max-width`, `overflow-x: auto`, active dot scrolled into view) — uncapped it hung off both edges past ~60 boards (`e2e/board.spec.ts`).
+- Board colour: `--board-color` set from `Board.tsx`; `.app-header` always keeps white text/icons (capping only excessive header lightness via `oklch(from var(--board-color) min(l, 0.54) c h)` light / `min(l, 0.62)` dark with full chroma), Home tiles (`.board-card--light`) preserve the user's colour and adapt ink via WCAG luminance, floating board controls (`.add-list-wrapper`, `.board-page .loading`) use real surfaces / `--color-text` rather than translucent white on `.board-page`, and highlights (`.card:focus`, `.card--selected`, `::selection`, `--color-accent`) stay close to `--board-color` (ADR-0013, ADR-0032). `BoardColorPicker` is a native colour input (live preview, commit on change, reset). Board rename is inline in the header (`BoardHeaderContext`, `commit-board-rename` event). The `.board-dock` pill must stay capped and scrollable (`max-width`, `overflow-x: auto`, active dot scrolled into view) — uncapped it hung off both edges past ~60 boards (`e2e/board.spec.ts`).
 
 ### Decisions index (`docs/adr/`)
 
@@ -92,6 +92,7 @@ After any change:
 | 0029 | Description editor find & replace (`editorSearch.ts`) |
 | 0030 | Numbered footnotes (`footnotes.ts`, per-page PDF placement, Insert dropdown) |
 | 0031 | Semantic text highlights (`highlights.ts`) and dedicated alert blocks (`alerts.ts`) |
+| 0032 | Adaptive contrast for board & label colours, board-matched highlights, and manual label colours (`colorContrast.ts`) |
 
 ## Data model (summary)
 
@@ -124,8 +125,8 @@ PUT    /api/boards/:id       {title?,color??,archived?,mode?} → Board — colo
 PUT    /api/boards/order     {ids: string[]} → 204 — renumber active boards 1.0, 2.0, … in given order
 DELETE /api/boards/:id                       → 204 (must be archived first, else 400)
 
-POST   /api/boards/:bid/labels  {name}       → Label (201) — auto-assigns pastel color; a same-named one (case/space/dash-insensitive) is returned instead (200)
-PUT    /api/labels/:id          {name, merge?} → Label — onto another label's name: 409 unless merge: true, then merges into it (cards relabelled) and returns the survivor
+POST   /api/boards/:bid/labels  {name, color?} → Label (201) — auto-assigns pastel color when omitted (`#RRGGBB` validated, 400 otherwise); a same-named one (case/space/dash-insensitive) is returned instead (200)
+PUT    /api/labels/:id          {name?, color?, merge?} → Label — rename and/or change color (`#RRGGBB`, at least one required); renaming onto another label's name: 409 unless merge: true, then merges into it (cards relabelled) and returns the survivor
 PUT    /api/boards/:bid/labels/order {ids: string[]} → 204 — reorder labels (unlisted ids keep relative order at the end, unknown ids ignored)
 DELETE /api/labels/:id                       → 204
 

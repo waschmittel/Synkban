@@ -688,6 +688,56 @@ async fn creating_a_same_named_label_reuses_it_and_renaming_onto_one_merges() {
 }
 
 #[actix_web::test]
+async fn label_color_update_and_validation() {
+    let dir = TempDir::new().unwrap();
+    let dir_path = dir.path().to_path_buf();
+    let app = test::init_service(make_app!(&dir_path)).await;
+    let (bid, _, _) = seed_board_list_card!(app);
+
+    // Create with custom color.
+    let req = test::TestRequest::post()
+        .uri(&format!("/api/boards/{bid}/labels"))
+        .set_json(json!({ "name": "Priority", "color": "#1d4ed8" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let label = read_json_body(test::read_body(resp).await);
+    assert_eq!(label["color"], "#1d4ed8");
+    let lid = label["id"].as_str().unwrap();
+
+    // Update color only.
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/labels/{lid}"))
+        .set_json(json!({ "color": "#7f1d1d" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let updated = read_json_body(test::read_body(resp).await);
+    assert_eq!(updated["name"], "Priority");
+    assert_eq!(updated["color"], "#7f1d1d");
+
+    // Invalid hex color -> 400.
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/labels/{lid}"))
+        .set_json(json!({ "color": "not-a-hex" }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    // Empty body -> 400.
+    let req = test::TestRequest::put()
+        .uri(&format!("/api/labels/{lid}"))
+        .set_json(json!({}))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[actix_web::test]
 async fn list_collapsed_round_trips() {
     let dir = TempDir::new().unwrap();
     let dir_path = dir.path().to_path_buf();

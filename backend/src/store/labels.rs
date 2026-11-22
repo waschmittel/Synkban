@@ -9,7 +9,7 @@ use crate::models::{CardPatch, Label};
 use crate::store::boards::{read_board_file, write_board_file, BoardFile};
 use crate::store::cards::update_card;
 use crate::store::io::read_json;
-use crate::store::paths::{board_dir, boards_dir, check_id};
+use crate::store::paths::{board_dir, boards_dir, check_id, is_valid_hex_color};
 use crate::store::walk;
 
 /// Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
@@ -55,15 +55,25 @@ pub fn create_label(
     data_dir: &Path,
     board_id: &str,
     name: &str,
+    color: Option<&str>,
 ) -> Result<(Label, bool), AppError> {
     if name.trim().is_empty() {
         return Err(AppError::BadRequest("label name must not be empty".into()));
+    }
+    if let Some(hex) = color {
+        if !is_valid_hex_color(hex) {
+            return Err(AppError::BadRequest(
+                "color must be in #RRGGBB format".into(),
+            ));
+        }
     }
     let mut bf = read_board_file(data_dir, board_id)?;
     if let Some(existing) = same_label(&bf.labels, name, "") {
         return Ok((existing.clone(), false));
     }
-    let color = LABEL_COLORS[bf.labels.len() % LABEL_COLORS.len()].to_string();
+    let color = color
+        .map(str::to_string)
+        .unwrap_or_else(|| LABEL_COLORS[bf.labels.len() % LABEL_COLORS.len()].to_string());
     let label = Label {
         id: uuid::Uuid::new_v4().to_string(),
         name: name.to_string(),
@@ -78,12 +88,27 @@ pub fn update_label(
     data_dir: &Path,
     board_id: &str,
     label_id: &str,
-    name: &str,
+    name: Option<&str>,
+    color: Option<&str>,
     merge: bool,
 ) -> Result<Label, AppError> {
     check_id(label_id)?;
-    if name.trim().is_empty() {
-        return Err(AppError::BadRequest("label name must not be empty".into()));
+    if name.is_none() && color.is_none() {
+        return Err(AppError::BadRequest(
+            "label name or color must be provided".into(),
+        ));
+    }
+    if let Some(n) = name {
+        if n.trim().is_empty() {
+            return Err(AppError::BadRequest("label name must not be empty".into()));
+        }
+    }
+    if let Some(hex) = color {
+        if !is_valid_hex_color(hex) {
+            return Err(AppError::BadRequest(
+                "color must be in #RRGGBB format".into(),
+            ));
+        }
     }
     let mut bf = read_board_file(data_dir, board_id)?;
     if !bf.labels.iter().any(|l| l.id == label_id) {
@@ -91,17 +116,21 @@ pub fn update_label(
     }
     // Renamed onto another label: merge into that one — only when asked to
     // (destructive: the renamed label is removed, its cards relabelled).
-    let other = same_label(&bf.labels, name, label_id);
+    let other = name.and_then(|n| same_label(&bf.labels, n, label_id));
     if let (Some(o), false) = (other, merge) {
         return Err(AppError::Conflict(format!(
             "A label named \"{}\" exists; renaming merges into it (send merge: true)",
             o.name
         )));
     }
-    let target_id = other.map_or(label_id, |l| &l.id);
-    let target_id = target_id.to_string();
+    let target_id = other.map_or(label_id, |l| &l.id).to_string();
     for l in bf.labels.iter_mut().filter(|l| l.id == target_id) {
-        l.name = name.to_string();
+        if let Some(n) = name {
+            l.name = n.to_string();
+        }
+        if let Some(hex) = color {
+            l.color = hex.to_string();
+        }
     }
     let updated = bf
         .labels
@@ -202,11 +231,12 @@ fn find_board_for_label(data_dir: &Path, label_id: &str) -> Result<String, AppEr
 pub fn update_label_by_id(
     data_dir: &Path,
     label_id: &str,
-    name: &str,
+    name: Option<&str>,
+    color: Option<&str>,
     merge: bool,
 ) -> Result<Label, AppError> {
     let board_id = find_board_for_label(data_dir, label_id)?;
-    update_label(data_dir, &board_id, label_id, name, merge)
+    update_label(data_dir, &board_id, label_id, name, color, merge)
 }
 
 pub fn delete_label_by_id(data_dir: &Path, label_id: &str) -> Result<(), AppError> {
@@ -231,10 +261,22 @@ mod tests {
     fn create_label_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "Bug").unwrap().0;
+        let label = create_label(d.path(), &b.id, "Bug", None).unwrap().0;
         assert_eq!(label.name, "Bug");
         assert_eq!(label.color, "#ffb3b3");
         assert!(!label.id.is_empty());
+    }
+
+    #[test]
+    fn create_label_with_custom_color() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let label = create_label(d.path(), &b.id, "Urgent", Some("#1d4ed8"))
+            .unwrap()
+            .0;
+        assert_eq!(label.color, "#1d4ed8");
+        let err = create_label(d.path(), &b.id, "Bad", Some("red")).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
     }
 
     #[test]
@@ -243,7 +285,9 @@ mod tests {
         let b = create_board(d.path(), "Board").unwrap();
         let mut colors = Vec::new();
         for i in 0..13 {
-            let label = create_label(d.path(), &b.id, &format!("L{i}")).unwrap().0;
+            let label = create_label(d.path(), &b.id, &format!("L{i}"), None)
+                .unwrap()
+                .0;
             colors.push(label.color);
         }
         for i in 0..12 {
@@ -255,7 +299,7 @@ mod tests {
     #[test]
     fn create_label_board_not_found() {
         let d = tmp();
-        let err = create_label(d.path(), "fake", "Bug").unwrap_err();
+        let err = create_label(d.path(), "fake", "Bug", None).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
@@ -263,11 +307,50 @@ mod tests {
     fn update_label_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "Bug").unwrap().0;
-        let updated = update_label(d.path(), &b.id, &label.id, "Feature", false).unwrap();
+        let label = create_label(d.path(), &b.id, "Bug", None).unwrap().0;
+        let updated =
+            update_label(d.path(), &b.id, &label.id, Some("Feature"), None, false).unwrap();
         assert_eq!(updated.name, "Feature");
         assert_eq!(updated.id, label.id);
         assert_eq!(updated.color, label.color);
+    }
+
+    #[test]
+    fn update_label_color_and_validation() {
+        let d = tmp();
+        let b = create_board(d.path(), "Board").unwrap();
+        let label = create_label(d.path(), &b.id, "Bug", None).unwrap().0;
+
+        // Color-only update keeps name.
+        let updated =
+            update_label(d.path(), &b.id, &label.id, None, Some("#1d4ed8"), false).unwrap();
+        assert_eq!(updated.name, "Bug");
+        assert_eq!(updated.color, "#1d4ed8");
+        assert_eq!(
+            get_board(d.path(), &b.id).unwrap().labels[0].color,
+            "#1d4ed8"
+        );
+
+        // Name + color together.
+        let both = update_label(
+            d.path(),
+            &b.id,
+            &label.id,
+            Some("Critical"),
+            Some("#7f1d1d"),
+            false,
+        )
+        .unwrap();
+        assert_eq!(both.name, "Critical");
+        assert_eq!(both.color, "#7f1d1d");
+
+        // Invalid hex rejected.
+        let err = update_label(d.path(), &b.id, &label.id, None, Some("#fff"), false).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
+
+        // Neither name nor color rejected.
+        let err = update_label(d.path(), &b.id, &label.id, None, None, false).unwrap_err();
+        assert!(matches!(err, AppError::BadRequest(_)));
     }
 
     #[test]
@@ -283,16 +366,16 @@ mod tests {
     fn create_label_reuses_a_same_named_one() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let (first, created) = create_label(d.path(), &b.id, "In Progress").unwrap();
+        let (first, created) = create_label(d.path(), &b.id, "In Progress", None).unwrap();
         assert!(created);
-        let (again, created) = create_label(d.path(), &b.id, "in-progress").unwrap();
+        let (again, created) = create_label(d.path(), &b.id, "in-progress", None).unwrap();
         assert!(!created);
         assert_eq!(again.id, first.id);
         assert_eq!(again.name, "In Progress");
         assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 1);
         // Names without letters never match each other.
-        create_label(d.path(), &b.id, "-").unwrap();
-        assert!(create_label(d.path(), &b.id, "--").unwrap().1);
+        create_label(d.path(), &b.id, "-", None).unwrap();
+        assert!(create_label(d.path(), &b.id, "--", None).unwrap().1);
     }
 
     #[test]
@@ -303,9 +386,9 @@ mod tests {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
         let other = create_board(d.path(), "Other").unwrap();
-        let keep = create_label(d.path(), &b.id, "Bug").unwrap().0;
-        let gone = create_label(d.path(), &b.id, "Defect").unwrap().0;
-        let extra = create_label(d.path(), &b.id, "Extra").unwrap().0;
+        let keep = create_label(d.path(), &b.id, "Bug", None).unwrap().0;
+        let gone = create_label(d.path(), &b.id, "Defect", None).unwrap().0;
+        let extra = create_label(d.path(), &b.id, "Extra", None).unwrap().0;
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let set = |card: &str, ids: &[String], archived: Option<bool>| {
             let patch = CardPatch {
@@ -324,18 +407,18 @@ mod tests {
         let untouched = create_card(d.path(), &l.id, "untouched").unwrap();
         set(&untouched.id, std::slice::from_ref(&extra.id), None);
         // Another board's same-named label is not a merge target.
-        create_label(d.path(), &other.id, "bug").unwrap();
+        create_label(d.path(), &other.id, "bug", None).unwrap();
         let history = |id: &str| get_card_history(d.path(), id).unwrap().entries.len();
         let untouched_history = history(&untouched.id);
         let both_history = history(&both.id);
 
         // Without the flag: refused, nothing changes.
-        let err = update_label(d.path(), &b.id, &gone.id, "BUG", false).unwrap_err();
+        let err = update_label(d.path(), &b.id, &gone.id, Some("BUG"), None, false).unwrap_err();
         assert!(matches!(err, AppError::Conflict(_)));
         assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 3);
         assert_eq!(history(&both.id), both_history);
 
-        let merged = update_label(d.path(), &b.id, &gone.id, "BUG", true).unwrap();
+        let merged = update_label(d.path(), &b.id, &gone.id, Some("BUG"), None, true).unwrap();
         assert_eq!(merged.id, keep.id);
         assert_eq!(merged.name, "BUG");
         assert_eq!(merged.color, keep.color);
@@ -369,8 +452,11 @@ mod tests {
     fn renaming_a_label_to_its_own_variant_is_a_plain_rename() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "in progress").unwrap().0;
-        let updated = update_label(d.path(), &b.id, &label.id, "In-Progress", false).unwrap();
+        let label = create_label(d.path(), &b.id, "in progress", None)
+            .unwrap()
+            .0;
+        let updated =
+            update_label(d.path(), &b.id, &label.id, Some("In-Progress"), None, false).unwrap();
         assert_eq!(updated.id, label.id);
         assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 1);
     }
@@ -379,7 +465,7 @@ mod tests {
     fn update_label_not_found() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let err = update_label(d.path(), &b.id, "fake", "X", false).unwrap_err();
+        let err = update_label(d.path(), &b.id, "fake", Some("X"), None, false).unwrap_err();
         assert!(matches!(err, AppError::NotFound(_)));
     }
 
@@ -387,7 +473,7 @@ mod tests {
     fn delete_label_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let label = create_label(d.path(), &b.id, "Bug").unwrap().0;
+        let label = create_label(d.path(), &b.id, "Bug", None).unwrap().0;
         delete_label(d.path(), &b.id, &label.id).unwrap();
         assert!(get_board(d.path(), &b.id).unwrap().labels.is_empty());
     }
@@ -405,8 +491,9 @@ mod tests {
         let d = tmp();
         let _b1 = create_board(d.path(), "Board 1").unwrap();
         let b2 = create_board(d.path(), "Board 2").unwrap();
-        let label = create_label(d.path(), &b2.id, "Original").unwrap().0;
-        let updated = update_label_by_id(d.path(), &label.id, "Renamed", false).unwrap();
+        let label = create_label(d.path(), &b2.id, "Original", None).unwrap().0;
+        let updated =
+            update_label_by_id(d.path(), &label.id, Some("Renamed"), None, false).unwrap();
         assert_eq!(updated.name, "Renamed");
     }
 
@@ -417,14 +504,15 @@ mod tests {
         let d = tmp();
         let corrupt = create_board(d.path(), "Corrupt").unwrap();
         let b2 = create_board(d.path(), "Good").unwrap();
-        let label = create_label(d.path(), &b2.id, "Bug").unwrap().0;
+        let label = create_label(d.path(), &b2.id, "Bug", None).unwrap().0;
         // A corrupt board.json must not stop us finding the label's real owner.
         fs::write(
             board_dir(d.path(), &corrupt.id).join("board.json"),
             b"{ broken",
         )
         .unwrap();
-        let updated = update_label_by_id(d.path(), &label.id, "Renamed", false).unwrap();
+        let updated =
+            update_label_by_id(d.path(), &label.id, Some("Renamed"), None, false).unwrap();
         assert_eq!(updated.name, "Renamed");
     }
 
@@ -433,7 +521,7 @@ mod tests {
         let d = tmp();
         let _b1 = create_board(d.path(), "Board 1").unwrap();
         let b2 = create_board(d.path(), "Board 2").unwrap();
-        let label = create_label(d.path(), &b2.id, "Bug").unwrap().0;
+        let label = create_label(d.path(), &b2.id, "Bug", None).unwrap().0;
         delete_label_by_id(d.path(), &label.id).unwrap();
         assert!(get_board(d.path(), &b2.id).unwrap().labels.is_empty());
     }
@@ -442,9 +530,9 @@ mod tests {
     fn reorder_labels_basic() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        let a = create_label(d.path(), &b.id, "A").unwrap().0;
-        let bb = create_label(d.path(), &b.id, "B").unwrap().0;
-        let c = create_label(d.path(), &b.id, "C").unwrap().0;
+        let a = create_label(d.path(), &b.id, "A", None).unwrap().0;
+        let bb = create_label(d.path(), &b.id, "B", None).unwrap().0;
+        let c = create_label(d.path(), &b.id, "C", None).unwrap().0;
         // C first, B second; A unlisted -> last. Unknown id ignored.
         reorder_labels(
             d.path(),
@@ -472,8 +560,8 @@ mod tests {
     fn labels_in_board_detail() {
         let d = tmp();
         let b = create_board(d.path(), "Board").unwrap();
-        create_label(d.path(), &b.id, "Bug").unwrap();
-        create_label(d.path(), &b.id, "Feature").unwrap();
+        create_label(d.path(), &b.id, "Bug", None).unwrap();
+        create_label(d.path(), &b.id, "Feature", None).unwrap();
         assert_eq!(get_board(d.path(), &b.id).unwrap().labels.len(), 2);
     }
 }

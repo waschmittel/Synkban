@@ -17,6 +17,11 @@ pub(crate) fn check_id(id: &str) -> Result<(), AppError> {
         .ok_or_else(|| AppError::BadRequest("invalid id".into()))
 }
 
+/// Validates a `#RRGGBB` hex color string.
+pub(crate) fn is_valid_hex_color(c: &str) -> bool {
+    c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
 /// Validates a `YYYY-MM-DD` calendar date (including month lengths and leap years).
 pub fn is_valid_iso_date(s: &str) -> bool {
     if s.len() != 10 {

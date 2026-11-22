@@ -9,7 +9,7 @@
 | **Board** | Top-level workspace owning ordered **Lists**, a **Label** palette and a colour (`board.json`) | Project, workspace |
 | **List** | An ordered column on a **Board** holding **Cards** (`list.json`) | Column, lane, stack |
 | **Card** | A unit of work in one **List**: title, description, labels, due date, checklist, attachments, history | Task, ticket, item |
-| **Label** | Named, auto-coloured tag defined per **Board**; cards reference it by id; array order = display order (ADR-0014) | Tag, category |
+| **Label** | Named, coloured tag defined per **Board** (auto-assigned from a pastel palette, customisable via swatch picker); cards reference it by id; array order = display order (ADR-0014, ADR-0032) | Tag, category |
 | **Description** | A **Card**'s rich text: ProseMirror doc JSON stored as a string (ADR-0015) | Body, notes |
 | **Checklist** | The single flat list of **Checklist Items** (`id`, `text`, `done`) on a **Card**; card content (ADR-0007) | Subtasks, todo list |
 | **Attachment** | A file on a **Card**, stored as binary + optional thumbnail + sidecar, never in card JSON (ADR-0004) | Upload, file |

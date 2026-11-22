@@ -688,8 +688,8 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let l1 = create_label(d.path(), &b.id, "One").unwrap().0;
-        let l2 = create_label(d.path(), &b.id, "Two").unwrap().0;
+        let l1 = create_label(d.path(), &b.id, "One", None).unwrap().0;
+        let l2 = create_label(d.path(), &b.id, "Two", None).unwrap().0;
         let ids = vec![l1.id.clone(), l2.id.clone()];
         let updated = update_card(
             d.path(),
@@ -937,8 +937,8 @@ mod tests {
         let b = create_board(d.path(), "B").unwrap();
         let l = create_list(d.path(), &b.id, "L").unwrap();
         let c = create_card(d.path(), &l.id, "C").unwrap();
-        let keep = create_label(d.path(), &b.id, "Keep").unwrap().0;
-        let gone = create_label(d.path(), &b.id, "Gone").unwrap().0;
+        let keep = create_label(d.path(), &b.id, "Keep", None).unwrap().0;
+        let gone = create_label(d.path(), &b.id, "Gone", None).unwrap().0;
 
         update_card(
             d.path(),

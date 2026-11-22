@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import type { Card as CardType, Label } from "../types";
 import { crossListInsertPosition, listDropPosition, moveToBottom, moveToTop, withinListMoveDown, withinListMoveUp } from "../positions";
 import { tip } from "../platform";
+import { labelTextColor } from "../colorContrast";
 import { dueInfo } from "../dueDate";
 import { focusAdjacentList, resetPreferredRow } from "../listFocus";
 
@@ -234,7 +235,7 @@ export default function Card(props: Props) {
                 {(label) => (
                   <span
                     class="card-label-chip"
-                    style={{ "background-color": label.color }}
+                    style={{ "background-color": label.color, color: labelTextColor(label.color) }}
                     title={label.name}
                     innerHTML={renderTitle(label.name)}
                   />

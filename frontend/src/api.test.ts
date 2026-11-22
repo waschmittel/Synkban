@@ -302,7 +302,7 @@ describe("label operations", () => {
 
   it("updateLabel sends PUT", async () => {
     const fn = mockFetch({});
-    await api.updateLabel("label-1", "Feature");
+    await api.updateLabel("label-1", { name: "Feature", merge: false });
     expect(fn).toHaveBeenCalledWith(
       "/api/labels/label-1",
       expect.objectContaining({
@@ -314,10 +314,22 @@ describe("label operations", () => {
 
   it("updateLabel sends the merge confirmation only when asked", async () => {
     const fn = mockFetch({});
-    await api.updateLabel("label-1", "Bug", true);
+    await api.updateLabel("label-1", { name: "Bug", merge: true });
     expect(fn).toHaveBeenCalledWith(
       "/api/labels/label-1",
       expect.objectContaining({ body: JSON.stringify({ name: "Bug", merge: true }) })
+    );
+  });
+
+  it("updateLabel can update color only", async () => {
+    const fn = mockFetch({});
+    await api.updateLabel("label-1", { color: "#1d4ed8" });
+    expect(fn).toHaveBeenCalledWith(
+      "/api/labels/label-1",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ color: "#1d4ed8" }),
+      })
     );
   });
 

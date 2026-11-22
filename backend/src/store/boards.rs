@@ -230,10 +230,6 @@ pub fn get_board(data_dir: &Path, board_id: &str) -> Result<BoardDetail, AppErro
     })
 }
 
-fn is_valid_hex_color(c: &str) -> bool {
-    c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
-}
-
 pub fn update_board(
     data_dir: &Path,
     board_id: &str,

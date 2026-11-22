@@ -162,7 +162,7 @@ Inside any board, the top bar gives quick access to board-wide controls:
 - **Filter (`F`):** Show or hide the **Filter Bar**.
 - **Inline board rename:** Click the board's title in the centre of the top bar, edit the name, and press `Enter` (or click away) to save, or `Esc` to cancel.
 - **Archived cards (`A`):** Open the **Archive Panel** for this board.
-- **Board colour (palette icon):** Open the colour picker and choose any custom colour with live preview across the board background, header, buttons, and focus rings (in both light and dark modes), or click **Reset to default** to return to the classic blue (`#0079bf`).
+- **Board colour (palette icon):** Open the colour picker and choose any custom colour with live preview across the board background, header, Home tiles, selection highlights, buttons, and focus rings (in both light and dark modes — header text and icons stay crisp white while very light header colours deepen just enough for legibility, Home tiles adapt ink automatically, and floating controls stay readable on any background), or click **Reset to default** to return to the classic blue (`#0079bf`).
 - **Manage labels (`G`):** Toggle the right-side **Label Drawer**.
 - **Keyboard shortcuts (`?`):** Open the contextual shortcut help dialog.
 - **Settings (gear icon):** Open **Settings** from any page.
@@ -388,10 +388,11 @@ Image attachments can be placed directly inside a card's description as **Inline
 
 ### Labels & Label Drawer
 
-Labels are colour-coded per board, automatically assigned from a distinct 12-colour pastel palette.
+Labels are colour-coded per board — automatically assigned from a distinct 12-colour pastel palette and customisable at any time.
 
 - **Manage Labels (`G`):** Opens the right-side **Label Drawer** where you can:
   - Create new labels (names support `**bold**`/`*italic*` via `Cmd/Ctrl + B` / `Cmd/Ctrl + I`).
+  - **Change label colour:** Click any label's colour swatch to pick from the 12 pastel presets or choose any custom colour with the colour picker (`Esc` closes the picker without closing the drawer). Label chips on cards, quick-add previews, and exported PDFs automatically switch between dark and white text for high contrast.
   - Rename labels (`Enter` on a focused row or click to edit) and delete labels.
   - **Reorder labels:** Drag rows or focus a row and press **`Shift + ↑ / ↓`**. The order in the Label Drawer controls the display order of labels everywhere — on cards, inside the Card Modal, and in the Filter Bar.
 - **Smart duplicate prevention & Label Merge:**

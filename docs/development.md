@@ -82,11 +82,12 @@ Base URL: `/api`
 
 ### Labels
 
-| Method | Path                       | Body       | Response      | Description                        |
-| ------ | -------------------------- | ---------- | ------------- | ---------------------------------- |
-| POST   | `/boards/:board_id/labels` | `{ name }` | `Label` (201) | Create label (color auto-assigned) |
-| PUT    | `/labels/:id`              | `{ name }` | `Label`       | Rename label                       |
-| DELETE | `/labels/:id`              | —          | 204           | Delete label                       |
+| Method | Path                             | Body                        | Response      | Description                                                                                             |
+| ------ | -------------------------------- | --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------- |
+| POST   | `/boards/:board_id/labels`       | `{ name, color? }`          | `Label` (201) | Create label (color `#RRGGBB` optional, auto-assigned from 12-color pastel palette when omitted; 200 if same-named label exists) |
+| PUT    | `/labels/:id`                    | `{ name?, color?, merge? }` | `Label`       | Rename and/or change label color (`#RRGGBB`); renaming onto another label requires `merge: true` (409 otherwise) |
+| PUT    | `/boards/:board_id/labels/order` | `{ ids: string[] }`         | 204           | Reorder labels on the board                                                                             |
+| DELETE | `/labels/:id`                    | —                           | 204           | Delete label                                                                                            |
 
 ### Lists
 
