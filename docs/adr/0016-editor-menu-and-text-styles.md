@@ -6,7 +6,7 @@
 
 ## The menu
 
-`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a highlighter split button toggles the last-used highlight color on click (removing it when highlighted text is selected or under the caret) and opens a compact swatch-only popover from its right chevron; a flat **`+ Insert`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, and **Alert** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices/alerts inside a table, or footnotes inside a footnote/code block). Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
+`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a highlighter split button toggles the last-used highlight color on click (removing it when highlighted text is selected or under the caret) and opens a compact swatch-only popover from its right chevron; a flat **`+ Insert`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, and **Alert** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices/alerts inside a table, footnotes inside a footnote/code block, or a list type when already inside that same list type). **Bullet list** and **Ordered list** (both in `+ Insert` and via `Ctrl+Shift+8` / `Ctrl+Shift+9`) convert the innermost enclosing list when inside the other list type instead of nesting, leave nested sublists and adjacent lists separate, and do nothing when already in the same list type. Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
 
 | Group | Items (key) | Availability |
 |---|---|---|
@@ -15,6 +15,7 @@
 | Footnote | Delete footnote (`D`; tinted danger) | inside a footnote definition |
 | Text style | Plain (`0`), Code block (`B`), Lua block (`E`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
 | Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`), Insert/Change alert… (`A`) | outside tables |
+| List | Convert to ordered list / Convert to bullet list (`C`) | inside a list |
 | Block | Insert paragraph above (`Shift+P`), Insert paragraph below (`P`) | inside tables, code blocks, quotes, alerts, lists (before Delete inside tables) |
 | Table | move row/column (`W`/`S` up/down, `A`/`D` left/right), transpose matrix (`X`), insert row/column (Shift+arrows), align column or matrix cell (`1`/`2`/`3`), delete row/column/table or matrix (`R`/`C`/`T`; tinted danger) | inside tables/matrices |
 

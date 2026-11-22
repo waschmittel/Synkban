@@ -278,8 +278,8 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("Tab"), k(A, "]")], "Nest item"],
           [[k("Shift", "Tab"), k(A, "[")], "Outdent item"],
           [[k("Enter")], "New item (empty: end the list)"],
-          [[k("Ctrl", "Shift", "8")], "Bulleted list"],
-          [[k("Ctrl", "Shift", "9")], "Numbered list"],
+          [[k("Ctrl", "Shift", "8")], "Bulleted list (or convert numbered list)"],
+          [[k("Ctrl", "Shift", "9")], "Numbered list (or convert bulleted list)"],
         ],
       },
       {
@@ -292,6 +292,7 @@ export const TABS: { id: HelpContext; label: string; groups: Group[] }[] = [
           [[k("D")], "Delete footnote (when inside a footnote)"],
           [[k("0"), k("B"), k("E"), k("1", "2", "3")], "Plain, code block, Lua block, heading 1–3"],
           [[k("T"), k("X"), k("A")], "Insert table, insert matrix, insert/change alert (N/T/I/W/C, X remove)"],
+          [[k("C")], "Convert between bullet and ordered list (when inside a list)"],
           [[k("Shift", "P"), k("P")], "Insert paragraph above / below block"],
         ],
       },

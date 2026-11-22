@@ -12,7 +12,8 @@ import {
   Node as PmNode,
 } from "prosemirror-model";
 import { wrapIn } from "prosemirror-commands";
-import { sinkListItem, liftListItem, wrapInList } from "prosemirror-schema-list";
+import { sinkListItem, liftListItem } from "prosemirror-schema-list";
+import { enclosingList, setListType } from "./lists";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
@@ -297,8 +298,8 @@ export function createCardEditor(
 
   const typeDropdown = new TypeDropdown(TEXT_STYLES.map((t) => t.item()));
 
-  const bulletListCmd = wrapInList(schema.nodes.bullet_list);
-  const orderedListCmd = wrapInList(schema.nodes.ordered_list);
+  const bulletListCmd = setListType(schema.nodes.bullet_list);
+  const orderedListCmd = setListType(schema.nodes.ordered_list);
   const blockquoteCmd = wrapIn(schema.nodes.blockquote);
 
   const insertDropdown = new InsertDropdown([
@@ -404,6 +405,12 @@ export function createCardEditor(
   const listKeymap = keymap({
     "Tab": (state, dispatch) => inList(state) && (sinkListItem(listItem)(state, dispatch), true),
     "Shift-Tab": (state, dispatch) => inList(state) && (liftListItem(listItem)(state, dispatch), true),
+    // Override exampleSetup's wrapInList chords so they convert the enclosing
+    // list instead of nesting, and stay a no-op when already that list type.
+    "Shift-Ctrl-8": (state, dispatch) =>
+      enclosingList(state)?.node.type === schema.nodes.bullet_list ? true : bulletListCmd(state, dispatch),
+    "Shift-Ctrl-9": (state, dispatch) =>
+      enclosingList(state)?.node.type === schema.nodes.ordered_list ? true : orderedListCmd(state, dispatch),
   });
   // Opens the context menu (link, text style, table).
   const tableMenuKeymap = keymap({

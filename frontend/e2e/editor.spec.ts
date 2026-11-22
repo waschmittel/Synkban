@@ -560,6 +560,88 @@ test("Tab nests list items and Shift+Tab lifts them; in a list Tab never leaves 
   await expect(editor(page)).not.toBeFocused();
 });
 
+test("lists convert between bullet and ordered via editor menu, Insert dropdown, and shortcuts", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "List Conversion");
+
+  // Outside a list: no convert item in the editor menu.
+  await page.keyboard.type("plain");
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu")).toBeVisible();
+  await expect(page.locator(".table-menu-item", { hasText: /Convert to (ordered|bullet) list/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".table-menu")).toHaveCount(0);
+
+  // Create a 2-item bullet list.
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("- alpha");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("beta");
+  await expect(editor(page).locator(":scope > ul > li")).toHaveCount(2);
+
+  // Editor menu (Accel+K -> C) converts bullet -> ordered -> bullet.
+  await page.keyboard.press("ControlOrMeta+k");
+  const toOrdered = page.locator(".table-menu-item", { hasText: "Convert to ordered list" });
+  await expect(toOrdered).toBeEnabled();
+  await expect(toOrdered.locator("kbd")).toHaveText("C");
+  await page.keyboard.press("c");
+  await expect(page.locator(".table-menu")).toHaveCount(0);
+  await expect(editor(page).locator(":scope > ol > li")).toHaveCount(2);
+  await expect(editor(page).locator(":scope > ul")).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu-item", { hasText: "Convert to bullet list" })).toBeEnabled();
+  await page.keyboard.press("c");
+  await expect(editor(page).locator(":scope > ul > li")).toHaveCount(2);
+  await expect(editor(page).locator(":scope > ol")).toHaveCount(0);
+
+  // + Insert dropdown disables the current list type and converts via the other.
+  await page.locator(".insert-dropdown").click();
+  await expect(page.locator(".insert-bullet-list-btn")).toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(page.locator(".insert-ordered-list-btn")).not.toHaveClass(/ProseMirror-menu-disabled/);
+  await page.locator(".insert-ordered-list-btn").click();
+  await expect(editor(page).locator(":scope > ol > li")).toHaveCount(2);
+  await expect(editor(page).locator("ol ol, ol ul")).toHaveCount(0);
+
+  await page.locator(".insert-dropdown").click();
+  await expect(page.locator(".insert-ordered-list-btn")).toHaveClass(/ProseMirror-menu-disabled/);
+  await page.locator(".insert-bullet-list-btn").click();
+  await expect(editor(page).locator(":scope > ul > li")).toHaveCount(2);
+
+  // Ctrl+Shift+8 / Ctrl+Shift+9 convert instead of nesting, and no-op on same type.
+  await page.keyboard.press("Control+Shift+8");
+  await expect(editor(page).locator(":scope > ul > li")).toHaveCount(2);
+  await expect(editor(page).locator("ul ul")).toHaveCount(0);
+
+  await page.keyboard.press("Control+Shift+9");
+  await expect(editor(page).locator(":scope > ol > li")).toHaveCount(2);
+  await page.keyboard.press("Control+Shift+9");
+  await expect(editor(page).locator("ol ol")).toHaveCount(0);
+
+  await page.keyboard.press("Control+Shift+8");
+  await expect(editor(page).locator(":scope > ul > li")).toHaveCount(2);
+
+  // Nested list: converting inside the inner list only converts the inner list.
+  await page.keyboard.press("Tab");
+  await expect(editor(page).locator("ul > li > ul > li")).toHaveText("beta");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("c");
+  await expect(editor(page).locator(":scope > ul > li > ol > li")).toHaveText("beta");
+
+  // Converting in the outer list only converts the outer list, leaving the inner list untouched.
+  await editor(page).getByText("alpha", { exact: true }).click();
+  await settle(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("c");
+  await expect(editor(page).locator(":scope > ol > li > ol > li")).toHaveText("beta");
+
+  // Undo restores the outer list to bullet in one step while keeping the inner ordered list.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(editor(page).locator(":scope > ul > li > ol > li")).toHaveText("beta");
+});
+
 async function expectGapCursor(page: Page) {
   const gap = editor(page).locator(".ProseMirror-gapcursor");
   await expect(gap).toHaveCount(1);

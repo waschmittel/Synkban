@@ -307,7 +307,7 @@ The description area (styled with a subtle warm note background) gives you struc
   - `> ` → Quote
   - ```` ``` ```` → Code block
   - Press `Backspace` immediately after any auto-conversion to undo it back to plain characters.
-- **Nested lists:** Inside a list, press **`Tab`** / **`Shift + Tab`** (or **`Cmd/Ctrl + ]`** / **`Cmd/Ctrl + [`**) to indent or outdent items; press `Enter` on an empty item to exit the list. Outside lists and tables, `Tab` moves focus to the next control as usual.
+- **Lists & nested lists:** Inside a list, press **`Tab`** / **`Shift + Tab`** (or **`Cmd/Ctrl + ]`** / **`Cmd/Ctrl + [`**) to indent or outdent items; press `Enter` on an empty item to exit the list. Outside lists and tables, `Tab` moves focus to the next control as usual. To convert an existing bullet list to a numbered list (or vice versa), open the Editor Menu (**`Cmd/Ctrl + K`** or right-click) and press **`C`**, choose the other list type from **Insert**, or press **`Ctrl + Shift + 8`** / **`Ctrl + Shift + 9`**. Conversion applies to the whole innermost enclosing list (leaving nested sublists and adjacent lists untouched) and is undoable in one step.
 - **Smart links:**
   - Typing a URL followed by whitespace (`https://…` or `www.…`) automatically creates a clickable link (trailing punctuation stays outside the link).
   - Pasting a URL while text is selected wraps that text as a link; pasting a bare URL inserts it linked.
@@ -315,7 +315,7 @@ The description area (styled with a subtle warm note background) gives you struc
   - Plain click opens the link (new tab in Web Mode, default browser in Desktop Mode). **`Cmd/Ctrl + Click`** edits or removes the link (editing always targets the whole link cleanly rather than splitting it).
 - **Context-sensitive Editor Menu (`Cmd/Ctrl + K` or Right-Click):**
   - Opens right beside your caret (or pointer) without losing your text selection or touch keyboard.
-  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `H` toggle highlight, `G` highlight color, `M` insert image, `F` insert or jump footnote, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, `A` insert/change alert, plus table actions when inside a table).
+  - Use **`↑` / `↓` / `Home` / `End` + `Enter`** or press the single-letter/digit shortcut shown next to each item (`L` link, `U` remove link, `I` inline code, `H` toggle highlight, `G` highlight color, `M` insert image, `F` insert or jump footnote, `0` plain, `B` code block, `E` Lua block, `1`–`3` headings, `T` table, `X` matrix, `A` insert/change alert, `C` convert bullet/ordered list when inside a list, plus table actions when inside a table).
 - **Text highlights:**
   - Highlight text in any of 8 theme-aware colors (**Yellow**, **Orange**, **Red**, **Pink**, **Purple**, **Blue**, **Green**, **Gray**).
   - **Toolbar split button:** click the left half to highlight in the **last used color** (default Yellow) — or to remove the highlight when highlighted text is selected or the cursor is inside a highlighted span. Click the right chevron to open a compact color-swatch popover (swatches + clear button, no labels or shortcuts).

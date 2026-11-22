@@ -19,6 +19,7 @@
 ///   always            l link (add/edit) · u remove link · i inline code · h highlight · g highlight color · m image · f footnote
 ///                     ↑ ↓ Home End move a highlight, Enter runs it
 ///   outside a table   0 plain · b code block · e lua block · 1/2/3 heading · t table · x matrix · a alert
+///   inside a list     c … convert between bullet and ordered list
 ///   in a block/table  Shift+P / P … insert paragraph above / below
 ///   inside a table    w s / a d … move the row up, down / column left, right
 ///                     x … transpose (matrix only)
@@ -40,6 +41,7 @@ import { canInsertImage, hooksOf, openImagePicker } from "./imagePicker";
 import { canHighlight, hasAnyHighlight, openHighlightPicker, toggleDefaultHighlight } from "./highlights";
 import { alertAt, canInsertAlert, openAlertPicker } from "./alerts";
 import { inEscapableBlock, insertParagraphAbove, insertParagraphBelow } from "./blockEscape";
+import { convertListLabel, enclosingList, toggleListType } from "./lists";
 import {
   deleteCurrentFootnote,
   footnoteDefAt,
@@ -77,7 +79,7 @@ interface Item {
   active?: (state: EditorState) => boolean;
   danger?: boolean;
   /// Inner markup of a 24×24 stroke icon (see tableIcons.ts).
-  icon: string;
+  icon: string | ((state: EditorState) => string);
   /// Items of one group sit together; a divider separates groups.
   group: number;
   /// Text shown in the key hint, e.g. "⇧↑".
@@ -236,6 +238,15 @@ const TABLE_REST_ITEMS: Item[] = [
   { label: (s) => (inMatrix(s) ? "Align cell right" : "Align column right"), icon: ICONS.alignRight, group: 5, hint: "3", match: digit("3"), command: alignRight },
 ];
 
+const CONVERT_LIST_ITEM: Item = {
+  label: convertListLabel,
+  icon: (s) => (enclosingList(s)?.node.type === schema.nodes.ordered_list ? ICONS.bulletList : ICONS.orderedList),
+  group: 5,
+  hint: "C",
+  match: letter("c"),
+  command: toggleListType,
+};
+
 const PARAGRAPH_ITEMS: Item[] = [
   { label: "Insert paragraph above", icon: ICONS.paraAbove, group: 6, hint: `${SHIFT}P`, match: letter("p", true), command: insertParagraphAbove },
   { label: "Insert paragraph below", icon: ICONS.paraBelow, group: 6, hint: "P", match: letter("p"), command: insertParagraphBelow },
@@ -298,6 +309,7 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
         FOOTNOTE_ITEM,
         ...STYLE_ITEMS,
         ...INSERT_ITEMS,
+        ...(enclosingList(view.state) ? [CONVERT_LIST_ITEM] : []),
         ...(inEscapableBlock(view.state) ? PARAGRAPH_ITEMS : []),
         ...(footnoteDefAt(view.state) ? [DELETE_FOOTNOTE_ITEM] : []),
       ];
@@ -350,7 +362,8 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
       const icon = document.createElement("span");
       icon.className = "table-menu-icon";
       icon.setAttribute("aria-hidden", "true");
-      icon.innerHTML = svg(item.icon); // static markup from tableIcons.ts
+      const iconMarkup = typeof item.icon === "function" ? item.icon(view.state) : item.icon;
+      icon.innerHTML = svg(iconMarkup); // static markup from tableIcons.ts
       const text = document.createElement("span");
       text.className = "table-menu-label";
       text.textContent = label;
