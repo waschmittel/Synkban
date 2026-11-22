@@ -381,15 +381,33 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
     nav.apply();
   };
 
-  // Below the caret, kept inside the viewport.
+  // Below the caret, kept inside the viewport. When taller than both sides
+  // (e.g. shorter viewports or taller OS font metrics), stay on the roomier
+  // side and scroll inside maxHeight instead of flipping over the pointer.
   const position = () => {
     const c = opts.at
       ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
       : view.coordsAtPos(view.state.selection.head);
+    const margin = 8;
+    const gap = 6;
+    menu.style.maxHeight = "";
     const r = menu.getBoundingClientRect();
-    const left = Math.max(8, Math.min(c.left, window.innerWidth - r.width - 8));
-    const below = c.bottom + 6;
-    const top = below + r.height > window.innerHeight - 8 ? Math.max(8, c.top - r.height - 6) : below;
+    const left = Math.max(margin, Math.min(c.left, window.innerWidth - r.width - margin));
+    const below = c.bottom + gap;
+    const spaceBelow = window.innerHeight - margin - below;
+    const spaceAbove = c.top - gap - margin;
+    let top: number;
+    if (r.height <= spaceBelow) {
+      top = below;
+    } else if (r.height <= spaceAbove) {
+      top = c.top - r.height - gap;
+    } else if (spaceBelow >= spaceAbove) {
+      top = below;
+      menu.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
+    } else {
+      top = margin;
+      menu.style.maxHeight = `${Math.max(120, spaceAbove)}px`;
+    }
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
   };

@@ -626,10 +626,10 @@ test("card-detail Ctrl/Cmd+O opens the attachment file picker", async ({
 
   await page.goto(`/board/${board.id}`);
   await page.locator(".card", { hasText: "Attach card" }).click();
-  await expect(page.locator(".modal-title-input")).toBeFocused();
-
   // Accel+O triggers the hidden file input's click → a native file chooser.
+  // Arm before the awaited focus check so CDP filechooser interception is active.
   const fileChooserPromise = page.waitForEvent("filechooser");
+  await expect(page.locator(".modal-title-input")).toBeFocused();
   await page.keyboard.press("ControlOrMeta+o");
   const chooser = await fileChooserPromise;
   expect(chooser).toBeTruthy();

@@ -115,7 +115,7 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
 
   // Outside a table: link, code, text-style groups, then the insert actions.
   await page.keyboard.press("ControlOrMeta+k");
-  await expect(page.locator(".table-menu-item").last()).toHaveText(/Insert matrix/);
+  await expect(page.locator(".table-menu-item").last()).toHaveText(/Insert alert…/);
   await expect(page.locator(".table-menu-sep")).toHaveCount(3);
   await page.keyboard.press("Escape");
 
@@ -125,12 +125,12 @@ test("table menu: groups, icons, and every action closes the menu", async ({ pag
   // Link / code / move / insert / align / paragraph / delete: seven groups,
   // six dividers, an icon each, no group headings. No text styles: cell blocks are fixed.
   const items = page.locator(".table-menu-item");
-  await expect(items).toHaveCount(21);
+  await expect(items).toHaveCount(23);
   await expect(page.locator(".table-menu-sep")).toHaveCount(6);
-  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(21);
+  await expect(page.locator(".table-menu-item .table-menu-icon svg")).toHaveCount(23);
   await expect(page.locator(".table-menu-title")).toHaveCount(0);
   await expect(items.locator(".table-menu-label")).toHaveText([
-    "Add link…", "Remove link", "Inline code", "Insert image…", "Insert footnote",
+    "Add link…", "Remove link", "Inline code", "Highlight", "Highlight color…", "Insert image…", "Insert footnote",
     "Move row up", "Move row down", "Move column left", "Move column right",
     "Insert row above", "Insert row below", "Insert column left", "Insert column right",
     "Align column left", "Align column center", "Align column right",

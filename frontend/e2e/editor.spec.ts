@@ -337,9 +337,11 @@ test("the toolbar's insert menu image item picks an existing attachment or uploa
   await expect(editor(page).locator("img.editor-image")).toHaveCount(1);
 
   // Upload goes through the file chooser, attaches and references.
+  // Arm waitForEvent("filechooser") before the awaited UI steps so Playwright's
+  // async CDP setInterceptFileChooserDialog settles before `keyboard.press("u")`.
+  const chooser = page.waitForEvent("filechooser");
   await openImageFromInsert();
   await expect(picker).toBeVisible();
-  const chooser = page.waitForEvent("filechooser");
   await page.keyboard.press("u");
   const fc = await chooser;
   expect(await fc.element().evaluate((el) => el.isConnected)).toBe(true);
