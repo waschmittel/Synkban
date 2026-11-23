@@ -62,10 +62,10 @@ import {
 import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
 import { accel, isMac, tip } from "./platform";
 import { editorSearchPlugin, getSearchState, openSearch } from "./editorSearch";
+import { openFloatingPopup, type FloatingPopupHandle } from "./floatingPopup";
+import { menuNav, navKey } from "./menuNav";
 import {
   MenuItem,
-  Dropdown,
-  blockTypeItem,
   icons,
   undoItem,
   redoItem,
@@ -120,89 +120,159 @@ const clipboardSerializer = (cardId: string) =>
     DOMSerializer.marksFromSchema(schema),
   );
 
-/// Dropdown whose button shows the current text style and which disables
-/// itself entirely when the style can't be changed (e.g. in a table cell).
-class TypeDropdown extends Dropdown {
-  constructor(items: MenuItem[]) {
-    super(items, { label: "Text style", title: "Text style", class: "type-dropdown" });
-  }
-  render(view: EditorView) {
-    const r = super.render(view);
-    const btn = r.focusable as HTMLButtonElement;
-    const update = r.update;
-    r.update = (state: EditorState) => {
-      update(state);
-      btn.textContent = TEXT_STYLES.find((t) => t.active(state))?.label ?? "Text style";
-      const changeable = TEXT_STYLES.some((t) => t.command(state));
-      btn.disabled = !changeable;
-      btn.title = changeable ? "Text style" : "Text style can't be changed here";
-      return true;
-    };
-    return r;
-  }
-}
-
-/// Renders an Insert-dropdown item with both icon and text label.
-function insertDropdownItem(opts: {
+interface ToolbarDropdownItem {
   label: string;
-  title: string;
-  icon: string;
-  className: string;
+  title?: string;
+  className?: string;
+  icon?: string;
   enable?: (state: EditorState) => boolean;
+  active?: (state: EditorState) => boolean;
   run: Command;
-}): MenuItem<HTMLButtonElement> {
-  return new MenuItem({
-    label: opts.label,
-    title: opts.title,
-    class: opts.className,
-    enable: opts.enable,
-    run: opts.run,
-    render() {
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = `insert-menu-item ${opts.className}`;
-      el.title = opts.title;
-      el.innerHTML =
-        `<span class="insert-menu-icon">${svg(opts.icon, 15)}</span>` +
-        `<span class="insert-menu-label">${opts.label}</span>`;
-      return el;
-    },
-  });
 }
 
-class InsertDropdown extends Dropdown {
-  constructor(items: readonly MenuItem<any>[]) {
-    super(items, { label: "Insert", title: "Insert", class: "insert-dropdown" });
-  }
-  render(view: EditorView) {
-    const r = super.render(view);
-    const btn = r.focusable as HTMLButtonElement;
-    // Render as a "+ Insert" menu trigger rather than a plain text select box.
-    btn.innerHTML =
-      `<span class="insert-trigger-icon" aria-hidden="true">${svg(ICONS.plus, 14)}</span>` +
-      `<span>Insert</span>`;
-    // prosemirror-menu's 100ms `isMenuEvent` window skips auto-closing when an
-    // item is clicked immediately after opening; close it explicitly on item click.
-    // Check disabled state in capture phase before MenuItem's handler runs the command
-    // (which may immediately disable the item, e.g. inserting a table).
-    let closeAfterClick = false;
-    r.dom.addEventListener(
-      "click",
-      (e) => {
-        const item = (e.target as HTMLElement | null)?.closest(".insert-menu-item");
-        closeAfterClick = !!(item && !item.classList.contains("ProseMirror-menu-disabled"));
-      },
-      true,
-    );
-    r.dom.addEventListener("click", () => {
-      if (!closeAfterClick) return;
-      closeAfterClick = false;
-      queueMicrotask(() => {
-        if (r.dom.querySelector(".ProseMirror-menu-dropdown-menu")) btn.click();
+interface ToolbarDropdownOptions {
+  className: string;
+  ariaLabel: string;
+  title: string;
+  items: readonly ToolbarDropdownItem[];
+  renderTrigger: (btn: HTMLButtonElement) => void;
+  updateTrigger?: (btn: HTMLButtonElement, state: EditorState) => void;
+}
+
+/// Top-layer (`popover="manual"`) toolbar dropdown: stays inside `.editor-wrapper`
+/// so it remains interactive inside `<dialog>.showModal()`, never clips against
+/// `.editor-wrapper` or `.modal-body`, and supports `menuNav` + `dialogKeys`.
+function createToolbarDropdown(opts: ToolbarDropdownOptions) {
+  return {
+    render(view: EditorView) {
+      const wrap = document.createElement("div");
+      wrap.className = "ProseMirror-menu-dropdown-wrap";
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `ProseMirror-menu-dropdown ${opts.className}`;
+      btn.title = opts.title;
+      btn.setAttribute("aria-haspopup", "menu");
+      btn.setAttribute("aria-expanded", "false");
+      opts.renderTrigger(btn);
+      wrap.appendChild(btn);
+
+      let popup: FloatingPopupHandle | null = null;
+
+      const open = () => {
+        if (btn.disabled) return;
+        const menu = document.createElement("div");
+        menu.className = `ProseMirror-menu-dropdown-menu ${opts.className}`;
+        menu.setAttribute("role", "menu");
+        menu.setAttribute("aria-label", opts.ariaLabel);
+        // Prevent focus from leaving the editor even when clicking a disabled item
+        // (disabled buttons don't fire mousedown on themselves).
+        menu.addEventListener("mousedown", (e) => e.preventDefault());
+
+        const state = view.state;
+        for (const item of opts.items) {
+          const row = document.createElement("div");
+          row.className = "ProseMirror-menu-dropdown-item";
+          const b = document.createElement("button");
+          b.type = "button";
+          if (item.icon) {
+            b.className = `insert-menu-item${item.className ? ` ${item.className}` : ""}`;
+            b.innerHTML =
+              `<span class="insert-menu-icon">${svg(item.icon, 15)}</span>` +
+              `<span class="insert-menu-label">${item.label}</span>`;
+          } else {
+            if (item.className) b.className = item.className;
+            b.textContent = item.label;
+          }
+          b.title = item.title ?? item.label;
+          const enabled = item.enable ? item.enable(state) : true;
+          const active = item.active ? item.active(state) : false;
+          if (item.active) {
+            b.setAttribute("role", "menuitemcheckbox");
+            b.setAttribute("aria-checked", String(active));
+          } else {
+            b.setAttribute("role", "menuitem");
+          }
+          if (!enabled) b.setAttribute("aria-disabled", "true");
+          b.classList.toggle("ProseMirror-menu-disabled", !enabled);
+          b.classList.toggle("ProseMirror-menu-active", active);
+          // Keep caret and selection in the editor.
+          b.addEventListener("mousedown", (e) => e.preventDefault());
+          b.addEventListener("click", () => {
+            if (!enabled) return;
+            popup?.dispose();
+            item.run(view.state, view.dispatch, view);
+            view.focus();
+          });
+          row.appendChild(b);
+          menu.appendChild(row);
+        }
+
+        const nav = menuNav(
+          menu,
+          '.ProseMirror-menu-dropdown-item button:not(:disabled):not([aria-disabled="true"])',
+        );
+        btn.setAttribute("aria-expanded", "true");
+        popup = openFloatingPopup({
+          el: menu,
+          container: wrap,
+          anchor: btn,
+          gap: 4,
+          ignoreOutside: (t) => !!t && btn.contains(t),
+          onKey(e) {
+            if (!view.dom.isConnected) {
+              popup?.dispose();
+              return;
+            }
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              popup?.dispose();
+              view.focus();
+              return;
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!nav.activate()) {
+                popup?.dispose();
+                view.focus();
+              }
+              return;
+            }
+            if (navKey(nav, e)) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          },
+          onClose() {
+            btn.setAttribute("aria-expanded", "false");
+            popup = null;
+          },
+        });
+      };
+
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (popup) {
+          popup.dispose();
+          view.focus();
+        } else {
+          open();
+        }
       });
-    });
-    return r;
-  }
+
+      const update = (state: EditorState) => {
+        opts.updateTrigger?.(btn, state);
+        if (btn.disabled && popup) popup.dispose();
+        return true;
+      };
+      update(view.state);
+      return { dom: wrap, update };
+    },
+  };
 }
 
 /// Creates an `EditorView` bound to `target`. Transactions go through
@@ -296,84 +366,114 @@ export function createCardEditor(
     customLinkItem,
   ].filter(Boolean) as any[]];
 
-  const typeDropdown = new TypeDropdown(TEXT_STYLES.map((t) => t.item()));
+  const typeDropdown = createToolbarDropdown({
+    className: "type-dropdown",
+    ariaLabel: "Text style",
+    title: "Text style",
+    items: TEXT_STYLES.map((t) => ({
+      label: t.label,
+      title: t.label,
+      enable: (state) => t.command(state) || t.active(state),
+      active: (state) => t.active(state),
+      run: (state, dispatch, view) => t.command(state, dispatch, view),
+    })),
+    renderTrigger(btn) {
+      btn.textContent = "Text style";
+    },
+    updateTrigger(btn, state) {
+      btn.textContent = TEXT_STYLES.find((t) => t.active(state))?.label ?? "Text style";
+      const changeable = TEXT_STYLES.some((t) => t.command(state));
+      btn.disabled = !changeable;
+      btn.title = changeable ? "Text style" : "Text style can't be changed here";
+    },
+  });
 
   const bulletListCmd = setListType(schema.nodes.bullet_list);
   const orderedListCmd = setListType(schema.nodes.ordered_list);
   const blockquoteCmd = wrapIn(schema.nodes.blockquote);
 
-  const insertDropdown = new InsertDropdown([
-    insertDropdownItem({
-      label: "Footnote",
-      title: "Insert footnote",
-      icon: ICONS.footnote,
-      className: "insert-footnote-btn",
-      enable: canInsertFootnote,
-      run: insertFootnote,
-    }),
-    insertDropdownItem({
-      label: "Image",
-      title: "Insert image",
-      icon: ICONS.image,
-      className: "image-menu-trigger",
-      enable: canInsertImage,
-      run(_state, _dispatch, view) {
-        if (view) setTimeout(() => openImagePicker(view), 0);
-        return true;
+  const insertDropdown = createToolbarDropdown({
+    className: "insert-dropdown",
+    ariaLabel: "Insert",
+    title: "Insert",
+    renderTrigger(btn) {
+      btn.innerHTML =
+        `<span class="insert-trigger-icon" aria-hidden="true">${svg(ICONS.plus, 14)}</span>` +
+        `<span>Insert</span>`;
+    },
+    items: [
+      {
+        label: "Footnote",
+        title: "Insert footnote",
+        icon: ICONS.footnote,
+        className: "insert-footnote-btn",
+        enable: canInsertFootnote,
+        run: insertFootnote,
       },
-    }),
-    insertDropdownItem({
-      label: "Table",
-      title: "Insert table",
-      icon: TABLE_ICON,
-      className: "insert-table-btn",
-      enable: (state) => insertTable(state),
-      run: insertTable,
-    }),
-    insertDropdownItem({
-      label: "Matrix",
-      title: "Insert matrix",
-      icon: MATRIX_ICON,
-      className: "insert-matrix-btn",
-      enable: (state) => insertMatrix(state),
-      run: insertMatrix,
-    }),
-    insertDropdownItem({
-      label: "Bullet list",
-      title: "Bullet list",
-      icon: ICONS.bulletList,
-      className: "insert-bullet-list-btn",
-      enable: (state) => bulletListCmd(state),
-      run: bulletListCmd,
-    }),
-    insertDropdownItem({
-      label: "Ordered list",
-      title: "Ordered list",
-      icon: ICONS.orderedList,
-      className: "insert-ordered-list-btn",
-      enable: (state) => orderedListCmd(state),
-      run: orderedListCmd,
-    }),
-    insertDropdownItem({
-      label: "Blockquote",
-      title: "Blockquote",
-      icon: ICONS.blockquote,
-      className: "insert-blockquote-btn",
-      enable: (state) => blockquoteCmd(state),
-      run: blockquoteCmd,
-    }),
-    insertDropdownItem({
-      label: "Alert",
-      title: "Insert or change alert",
-      icon: ICONS.alert,
-      className: "insert-alert-btn",
-      enable: (state) => canInsertAlert(state),
-      run(_state, _dispatch, view) {
-        if (view) setTimeout(() => openAlertPicker(view), 0);
-        return true;
+      {
+        label: "Image",
+        title: "Insert image",
+        icon: ICONS.image,
+        className: "image-menu-trigger",
+        enable: canInsertImage,
+        run(_state, _dispatch, view) {
+          if (view) setTimeout(() => openImagePicker(view), 0);
+          return true;
+        },
       },
-    }),
-  ]);
+      {
+        label: "Table",
+        title: "Insert table",
+        icon: TABLE_ICON,
+        className: "insert-table-btn",
+        enable: (state) => insertTable(state),
+        run: insertTable,
+      },
+      {
+        label: "Matrix",
+        title: "Insert matrix",
+        icon: MATRIX_ICON,
+        className: "insert-matrix-btn",
+        enable: (state) => insertMatrix(state),
+        run: insertMatrix,
+      },
+      {
+        label: "Bullet list",
+        title: "Bullet list",
+        icon: ICONS.bulletList,
+        className: "insert-bullet-list-btn",
+        enable: (state) => bulletListCmd(state),
+        run: bulletListCmd,
+      },
+      {
+        label: "Ordered list",
+        title: "Ordered list",
+        icon: ICONS.orderedList,
+        className: "insert-ordered-list-btn",
+        enable: (state) => orderedListCmd(state),
+        run: orderedListCmd,
+      },
+      {
+        label: "Blockquote",
+        title: "Blockquote",
+        icon: ICONS.blockquote,
+        className: "insert-blockquote-btn",
+        enable: (state) => blockquoteCmd(state),
+        run: blockquoteCmd,
+      },
+      {
+        label: "Alert",
+        title: "Insert or change alert",
+        icon: ICONS.alert,
+        className: "insert-alert-btn",
+        enable: (state) => canInsertAlert(state),
+        run(_state, _dispatch, view) {
+          if (view) setTimeout(() => openAlertPicker(view), 0);
+          return true;
+        },
+      },
+    ],
+  });
 
   const searchItem = new MenuItem({
     title: tip("Find in description", accel("F")),

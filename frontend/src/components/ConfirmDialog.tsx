@@ -5,7 +5,7 @@
 /// auto-focus lands (next animation frame).
 
 import { onCleanup } from "solid-js";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { tip } from "../platform";
 
@@ -39,9 +39,9 @@ export default function ConfirmDialog(props: Props) {
   );
 
   return (
-    <div
+    <dialog
       class="dialog-overlay unsaved-overlay archive-overlay"
-      ref={(el) => onCleanup(focusTrap(el))}
+      ref={(el) => onCleanup(modalDialog(el))}
       onClick={(e) => { if (e.target === e.currentTarget) props.onCancel(); }}
       onKeyDown={(e) => e.stopPropagation()}
     >
@@ -66,6 +66,6 @@ export default function ConfirmDialog(props: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

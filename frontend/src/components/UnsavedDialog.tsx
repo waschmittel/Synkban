@@ -1,5 +1,5 @@
 import { onCleanup } from "solid-js";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { tip } from "../platform";
 
@@ -34,7 +34,7 @@ export default function UnsavedDialog(props: Props) {
   );
 
   return (
-    <div class="dialog-overlay unsaved-overlay" ref={(el) => onCleanup(focusTrap(el))}>
+    <dialog class="dialog-overlay unsaved-overlay" ref={(el) => onCleanup(modalDialog(el))}>
       <div class="dialog-surface unsaved-dialog">
         <p>You have unsaved changes.</p>
         <div class="unsaved-dialog-actions">
@@ -65,6 +65,6 @@ export default function UnsavedDialog(props: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

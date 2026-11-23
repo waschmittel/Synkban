@@ -2,7 +2,7 @@
 
 ## Text styles
 
-`TEXT_STYLES` (`schema.ts`): Plain text, Code block, **Heading 1, 2, 3** — always spelled "Heading n", never "H1", in every menu and tooltip. The toolbar `TypeDropdown` **shows the current style**; unavailable choices stay **listed but greyed**, the current one is marked; where the style can't change at all (table cells) the **whole dropdown is disabled**. Inline marks (bold, italic, inline code) work everywhere including table cells.
+`TEXT_STYLES` (`schema.ts`): Plain text, Code block, Lua block, **Heading 1, 2, 3** — always spelled "Heading n", never "H1", in every menu and tooltip. The toolbar Text-style dropdown (`createToolbarDropdown` in `proseEditor.ts`, backed by `floatingPopup.ts` `popover="manual"`, ADR-0033) **shows the current style**; unavailable choices stay **listed but greyed**, the current one is marked; where the style can't change at all (table cells) the **whole dropdown is disabled**. Inline marks (bold, italic, inline code) work everywhere including table cells.
 
 ## The menu
 
@@ -35,5 +35,5 @@ A modifier chord per operation doesn't scale and collides across OSes (ADR-0008)
 
 ## Menu navigation and image items
 
-- All popup menus (editor menu, image picker; `menuNav.ts`): `↑`/`↓` (wrapping) and `Home`/`End` move a highlight over the enabled items, `Enter` runs the highlighted item (without a highlight it closes the menu), `Esc` closes. Letter/digit shortcuts keep working. Arrow keys therefore no longer move table rows/columns (`W`/`S`/`A`/`D`); `Shift`+arrows still insert.
+- All popup menus (toolbar Text-style & Insert dropdowns, editor menu, highlight/alert/image pickers; `floatingPopup.ts` + `menuNav.ts`): `↑`/`↓` (wrapping) and `Home`/`End` move a highlight over the enabled items, `Enter` runs the highlighted item (without a highlight it closes the menu), `Esc` closes. Letter/digit shortcuts keep working in the `Accel+K` menus. Arrow keys therefore no longer move table rows/columns (`W`/`S`/`A`/`D`); `Shift`+arrows still insert.
 - `M` / the toolbar image button open the image picker (ADR-0020); both are greyed out where an inline image cannot go (code blocks).

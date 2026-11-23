@@ -17,11 +17,20 @@ interface Layer {
 }
 
 const layers: Layer[] = [];
+const openListeners = new Set<(el: HTMLElement) => void>();
+
+/// Subscribe to new overlay registrations (used by floating popovers to dismiss
+/// themselves whenever a modal or higher overlay opens).
+export function onOverlayOpen(cb: (el: HTMLElement) => void): () => void {
+  openListeners.add(cb);
+  return () => openListeners.delete(cb);
+}
 
 /// Register an overlay element. Returns a dispose fn to pop it off the stack.
 /// `onResume` fires when a higher layer closes and this becomes topmost again.
 export function registerOverlay(el: HTMLElement, onResume?: () => void): () => void {
   layers.push({ el, onResume });
+  for (const cb of Array.from(openListeners)) cb(el);
   return () => {
     const i = layers.findIndex((l) => l.el === el);
     if (i === -1) return;

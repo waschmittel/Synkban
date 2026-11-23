@@ -5,7 +5,8 @@
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import type { Mark as PmMark, MarkType } from "prosemirror-model";
-import { registerOverlay } from "./overlayLayers";
+import { modalDialog } from "./modalDialog";
+import { dialogKeys } from "./dialogKeys";
 import schemaSpec from "./schema.json";
 
 export function markActive(state: EditorState, type: MarkType) {
@@ -81,7 +82,7 @@ export interface LinkDialogOptions {
 }
 
 export function showLinkDialog(view: EditorView, opts: LinkDialogOptions) {
-  const overlay = document.createElement("div");
+  const overlay = document.createElement("dialog");
   overlay.className = "link-dialog-overlay";
 
   const dialog = document.createElement("div");
@@ -130,14 +131,22 @@ export function showLinkDialog(view: EditorView, opts: LinkDialogOptions) {
   dialog.appendChild(actions);
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
-  const unregister = registerOverlay(overlay);
+  const releaseModal = modalDialog(overlay);
+  const releaseKeys = dialogKeys((e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      view.focus();
+    }
+  });
 
   requestAnimationFrame(() => {
     input.focus();
     if (opts.prefillUrl) input.select();
   });
 
-  const close = () => { unregister(); overlay.remove(); };
+  const close = () => { releaseKeys(); releaseModal(); overlay.remove(); };
 
   const submit = () => {
     const raw = input.value.trim();

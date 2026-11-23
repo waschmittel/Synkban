@@ -1,7 +1,8 @@
 import { createSignal, For, onCleanup, onMount } from "solid-js";
-import { Portal } from "solid-js/web";
 import { focusTrap } from "../focusTrap";
 import { dialogKeys } from "../dialogKeys";
+import { closeActiveFloatingPopup, hidePopoverSafe, positionFloating, showPopoverSafe } from "../floatingPopup";
+import { onOverlayOpen } from "../overlayLayers";
 import { hasAccel } from "../platform";
 import { addDays, addMonths, daysBetween, firstDayOfWeek, monthGrid, parseDueInput, parseIso, toIso } from "../dueDate";
 
@@ -79,15 +80,24 @@ export default function DuePicker(props: Props) {
     return false;
   };
 
+  const reposition = () => positionFloating(root, props.anchor);
+
   onMount(() => {
-    const r = props.anchor.getBoundingClientRect();
-    const h = root.offsetHeight;
-    const below = r.bottom + 6 + h <= window.innerHeight;
-    root.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - root.offsetWidth - 8))}px`;
-    root.style.top = `${below ? r.bottom + 6 : Math.max(8, r.top - 6 - h)}px`;
+    closeActiveFloatingPopup();
+    showPopoverSafe(root);
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    onCleanup(() => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      hidePopoverSafe(root);
+    });
     input.focus();
     input.select();
   });
+
+  onCleanup(onOverlayOpen((el) => { if (el !== root) props.onClose(); }));
 
   // Document capture: the picker owns these keys before the card/board do.
   onCleanup(
@@ -135,9 +145,9 @@ export default function DuePicker(props: Props) {
   );
 
   return (
-    <Portal>
       <div
         class="due-picker"
+        popover="manual"
         role="dialog"
         aria-label="Due date"
         ref={(el) => {
@@ -205,6 +215,5 @@ export default function DuePicker(props: Props) {
           </button>
         </div>
       </div>
-    </Portal>
   );
 }

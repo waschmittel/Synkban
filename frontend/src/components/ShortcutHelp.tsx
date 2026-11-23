@@ -1,5 +1,5 @@
 import { createSignal, For, onCleanup, Show } from "solid-js";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { accelLabel, tip } from "../platform";
 
@@ -370,7 +370,11 @@ export default function ShortcutHelp(props: Props) {
   );
 
   return (
-    <div class="dialog-overlay shortcut-help-overlay" ref={(el) => onCleanup(focusTrap(el))} onClick={handleOverlayClick}>
+    <dialog
+      class="dialog-overlay shortcut-help-overlay"
+      ref={(el) => onCleanup(modalDialog(el))}
+      onClick={handleOverlayClick}
+    >
       <div class="dialog-surface shortcut-help-modal" role="dialog" aria-label="Keyboard shortcuts">
         <div class="shortcut-help-header">
           <h3>Keyboard shortcuts</h3>
@@ -433,6 +437,6 @@ export default function ShortcutHelp(props: Props) {
           <span>Synkban {__APP_VERSION__}</span>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

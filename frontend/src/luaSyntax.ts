@@ -3,6 +3,8 @@
 
 import { Plugin, TextSelection, type EditorState } from "prosemirror-state";
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view";
+import { hidePopoverSafe, positionFloating, showPopoverSafe } from "./floatingPopup";
+import { onOverlayOpen } from "./overlayLayers";
 import { schema } from "./schema";
 
 export type LuaTokenType =
@@ -560,6 +562,7 @@ export function luaCompletionPlugin(): Plugin {
     view(editorView: EditorView) {
       const popup = document.createElement("div");
       popup.className = "lua-autocomplete";
+      popup.setAttribute("popover", "manual");
       popup.setAttribute("role", "listbox");
       popup.setAttribute("aria-label", "Lua completions");
 
@@ -575,6 +578,7 @@ export function luaCompletionPlugin(): Plugin {
         if (!visible) return;
         visible = false;
         navigated = false;
+        hidePopoverSafe(popup);
         popup.remove();
         items = [];
       };
@@ -598,16 +602,11 @@ export function luaCompletionPlugin(): Plugin {
       };
 
       const position = () => {
-        const coords = editorView.coordsAtPos(editorView.state.selection.head);
-        const r = popup.getBoundingClientRect();
-        const left = Math.max(8, Math.min(coords.left, window.innerWidth - r.width - 8));
-        const below = coords.bottom + 4;
-        const top =
-          below + r.height > window.innerHeight - 8
-            ? Math.max(8, coords.top - r.height - 4)
-            : below;
-        popup.style.left = `${left}px`;
-        popup.style.top = `${top}px`;
+        positionFloating(
+          popup,
+          () => editorView.coordsAtPos(editorView.state.selection.head),
+          { gap: 4 },
+        );
       };
 
       onKey = (e: KeyboardEvent) => {
@@ -662,6 +661,7 @@ export function luaCompletionPlugin(): Plugin {
         hide();
       };
       const onFocusOut = () => hide();
+      const releaseOverlay = onOverlayOpen(() => hide());
       document.addEventListener("pointerdown", onPointerDown, true);
       editorView.dom.addEventListener("focusout", onFocusOut);
 
@@ -697,7 +697,8 @@ export function luaCompletionPlugin(): Plugin {
         }
 
         if (!visible) {
-          document.body.appendChild(popup);
+          (editorView.dom.parentElement ?? document.body).appendChild(popup);
+          showPopoverSafe(popup);
           visible = true;
         }
         highlight();
@@ -744,6 +745,7 @@ export function luaCompletionPlugin(): Plugin {
         destroy() {
           hide();
           onKey = null;
+          releaseOverlay();
           document.removeEventListener("pointerdown", onPointerDown, true);
           editorView.dom.removeEventListener("focusout", onFocusOut);
         },

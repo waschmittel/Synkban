@@ -1,5 +1,5 @@
 import { onCleanup } from "solid-js";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { tip } from "../platform";
 
@@ -34,7 +34,7 @@ export default function ExportPdfDialog(props: Props) {
   );
 
   return (
-    <div class="dialog-overlay unsaved-overlay export-pdf-overlay" ref={(el) => onCleanup(focusTrap(el))}>
+    <dialog class="dialog-overlay unsaved-overlay export-pdf-overlay" ref={(el) => onCleanup(modalDialog(el))}>
       <div class="dialog-surface unsaved-dialog">
         <p>You have unsaved changes. The PDF contains the saved card.</p>
         <div class="unsaved-dialog-actions">
@@ -53,6 +53,6 @@ export default function ExportPdfDialog(props: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

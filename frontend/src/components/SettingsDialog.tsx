@@ -1,7 +1,7 @@
 import { createResource, createSignal, onCleanup, Show } from "solid-js";
 import { api, errorMessage } from "../api";
 import type { Theme, UpdateSettingsPayload } from "../types";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { desktopBridge } from "../settings";
 import { applyTheme } from "../theme";
@@ -149,9 +149,9 @@ export default function SettingsDialog(props: Props) {
   );
 
   return (
-    <div
+    <dialog
       class="dialog-overlay settings-overlay"
-      ref={(el) => onCleanup(focusTrap(el))}
+      ref={(el) => onCleanup(modalDialog(el))}
       onClick={handleOverlayClick}
     >
       <div class="dialog-surface settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
@@ -279,6 +279,6 @@ export default function SettingsDialog(props: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -257,7 +257,9 @@ tc/
 │       ├── focusTrap.ts              # Dialog focus containment
 │       ├── focusRestoration.ts       # Card focus restoration across refetch
 │       ├── dialogKeys.ts             # Capture-phase dialog key-ownership stack
-│       ├── overlayLayers.ts          # Overlay stacking registry
+│       ├── overlayLayers.ts          # Overlay stacking registry & open notifications
+│       ├── modalDialog.ts            # Top-layer <dialog>.showModal() + focusTrap wrapper
+│       ├── floatingPopup.ts          # Top-layer popover="manual" positioning & dismissal
 │       ├── rovingFocus.ts            # ↑↓ roving focus helper
 │       ├── touchDrag.ts              # Touch drag-and-drop support
 │       ├── confirm.tsx               # Imperative confirm() helper

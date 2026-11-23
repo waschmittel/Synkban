@@ -1,5 +1,5 @@
 import { For, Show, createSignal, createEffect, onCleanup, type JSX } from "solid-js";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { handleRovingArrow } from "../rovingFocus";
 import { tip } from "../platform";
@@ -30,7 +30,7 @@ interface Props<T extends { id: string }> {
 /// focusTrap wiring. Adapters supply only the row content and the API calls.
 export default function ArchivePanel<T extends { id: string }>(props: Props<T>) {
   const [confirmDeleteId, setConfirmDeleteId] = createSignal<string | null>(null);
-  let overlayRef!: HTMLDivElement;
+  let overlayRef!: HTMLDialogElement;
 
   // Focus the first row as soon as loading finishes (or the modal container
   // when the archive is empty) so ↑↓ work without an initial click.
@@ -62,9 +62,9 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
   );
 
   return (
-    <div
+    <dialog
       class="archive-overlay dialog-overlay archive-modal-overlay"
-      ref={(el) => { overlayRef = el; onCleanup(focusTrap(el)); }}
+      ref={(el) => { overlayRef = el; onCleanup(modalDialog(el)); }}
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}
       onKeyDown={(e) => e.stopPropagation()}
     >
@@ -151,6 +151,6 @@ export default function ArchivePanel<T extends { id: string }>(props: Props<T>) 
           </For>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

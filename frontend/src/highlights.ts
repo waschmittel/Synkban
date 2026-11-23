@@ -6,7 +6,7 @@
 
 import type { Command, EditorState } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
-import { dialogKeys } from "./dialogKeys";
+import { openFloatingPopup, type AnchorTarget, type FloatingPopupHandle } from "./floatingPopup";
 import { menuNav, navKey } from "./menuNav";
 import { tip } from "./platform";
 import { schema, type HighlightColor } from "./schema";
@@ -192,14 +192,11 @@ export interface PickerOptions {
   at?: { x: number; y: number };
 }
 
-function positionPopup(menu: HTMLElement, view: EditorView, opts: PickerOptions) {
-  const c = opts.at
-    ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
-    : view.coordsAtPos(view.state.selection.head);
-  const r = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(8, Math.min(c.left, window.innerWidth - r.width - 8))}px`;
-  const below = c.bottom + 6;
-  menu.style.top = `${below + r.height > window.innerHeight - 8 ? Math.max(8, c.top - r.height - 6) : below}px`;
+function popupAnchor(view: EditorView, opts: PickerOptions): AnchorTarget {
+  return () =>
+    opts.at
+      ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
+      : view.coordsAtPos(view.state.selection.head);
 }
 
 /// Compact visual swatch popover opened from the right half of the toolbar
@@ -216,7 +213,6 @@ export function openHighlightSwatchPopover(view: EditorView, opts: PickerOptions
   menu.className = "highlight-swatch-popover";
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", "Highlight color");
-  document.body.appendChild(menu);
 
   const current = activeHighlight(view.state);
   const anyOn = hasAnyHighlight(view.state);
@@ -259,33 +255,32 @@ export function openHighlightSwatchPopover(view: EditorView, opts: PickerOptions
   grid.appendChild(clearBtn);
 
   menu.appendChild(grid);
-  positionPopup(menu, view, opts);
 
-  const onKey = (e: KeyboardEvent) => {
-    if (!view.dom.isConnected) return dispose();
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      dispose();
-    }
-  };
-
-  const onPointerDown = (e: PointerEvent) => {
-    if ((e.target as Element | null)?.closest(".highlight-swatch-popover, .highlight-split-chevron")) return;
-    dispose();
-  };
-
-  const releaseKeys = dialogKeys(onKey);
-  document.addEventListener("pointerdown", onPointerDown, true);
-
+  let popup: FloatingPopupHandle | null = null;
   function dispose() {
-    releaseKeys();
-    document.removeEventListener("pointerdown", onPointerDown, true);
-    menu.remove();
-    close = null;
-    view.focus();
+    popup?.dispose();
   }
   close = dispose;
+
+  popup = openFloatingPopup({
+    el: menu,
+    container: view.dom.parentElement ?? document.body,
+    anchor: popupAnchor(view, opts),
+    ignoreOutside: (t) => !!t?.closest(".highlight-split-chevron"),
+    onKey(e) {
+      if (!view.dom.isConnected) return dispose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        dispose();
+      }
+    },
+    onClose() {
+      popup = null;
+      if (close === dispose) close = null;
+      view.focus();
+    },
+  });
 }
 
 /// Full keyboard-driven highlight color picker opened from Accel+K → G:
@@ -301,7 +296,6 @@ export function openHighlightPicker(view: EditorView, opts: PickerOptions = {}):
   menu.className = "table-menu highlight-menu";
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", "Highlight color");
-  document.body.appendChild(menu);
   const nav = menuNav(menu);
 
   const current = activeHighlight(view.state);
@@ -376,37 +370,34 @@ export function openHighlightPicker(view: EditorView, opts: PickerOptions = {}):
   foot.textContent = "1–8 color · 0 clear · Esc to close";
   menu.appendChild(foot);
 
-  positionPopup(menu, view, opts);
-  nav.edge(false);
-
-  const onKey = (e: KeyboardEvent) => {
-    if (!view.dom.isConnected) return dispose();
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.key === "Escape") return dispose();
-    if (e.key === "Enter") return void (nav.activate() || dispose());
-    if (navKey(nav, e)) return;
-    if (e.key === "0") return run(clearHighlight);
-    const hit = HIGHLIGHT_COLORS.find((h) => h.key === e.key);
-    if (hit) run(setHighlight(hit.id));
-  };
-
-  const onPointerDown = (e: PointerEvent) => {
-    if ((e.target as Element | null)?.closest(".highlight-menu")) return;
-    dispose();
-  };
-
-  const releaseKeys = dialogKeys(onKey);
-  document.addEventListener("pointerdown", onPointerDown, true);
-
+  let popup: FloatingPopupHandle | null = null;
   function dispose() {
-    releaseKeys();
-    document.removeEventListener("pointerdown", onPointerDown, true);
-    menu.remove();
-    close = null;
-    view.focus();
+    popup?.dispose();
   }
   close = dispose;
+
+  popup = openFloatingPopup({
+    el: menu,
+    container: view.dom.parentElement ?? document.body,
+    anchor: popupAnchor(view, opts),
+    onKey(e) {
+      if (!view.dom.isConnected) return dispose();
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") return dispose();
+      if (e.key === "Enter") return void (nav.activate() || dispose());
+      if (navKey(nav, e)) return;
+      if (e.key === "0") return run(clearHighlight);
+      const hit = HIGHLIGHT_COLORS.find((h) => h.key === e.key);
+      if (hit) run(setHighlight(hit.id));
+    },
+    onClose() {
+      popup = null;
+      if (close === dispose) close = null;
+      view.focus();
+    },
+  });
+  nav.edge(false);
 }

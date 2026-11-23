@@ -303,8 +303,8 @@ A card's **title, labels, due date, description, and checklist** are edited loca
 
 The description area (styled with a subtle warm note background) gives you structured rich text stored cleanly without raw HTML:
 
-- **Toolbar controls:** Bold, Italic, Inline code, **Highlight** (8-color semantic palette), Add or edit link, **Text style** dropdown (showing the active style), **Insert** dropdown (icon + text: **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, **Alert**), Undo, Redo, and **Find in description** (`Cmd/Ctrl + F`).
-- **Text Styles:** **Plain text**, **Code block**, **Heading 1**, **Heading 2**, **Heading 3** (selectable via the toolbar dropdown, `Ctrl + Shift + 0 / 1 / 2 / 3 / \`, or the Editor Menu).
+- **Toolbar controls:** Bold, Italic, Inline code, **Highlight** (8-color semantic palette), Add or edit link, **Text style** dropdown (showing the active style), **Insert** dropdown (icon + text: **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, **Alert**), Undo, Redo, and **Find in description** (`Cmd/Ctrl + F`). Both dropdowns float cleanly above the card window without clipping and support keyboard navigation (`↑` / `↓` / `Home` / `End`, `Enter`, `Esc`).
+- **Text Styles:** **Plain text**, **Code block**, **Lua block**, **Heading 1**, **Heading 2**, **Heading 3** (selectable via the toolbar dropdown, `Ctrl + Shift + 0 / 1 / 2 / 3 / \`, or the Editor Menu).
 - **Markdown typing shortcuts (start of a line):**
   - `# `, `## `, `### ` → Heading 1, 2, 3
   - `- ` or `* ` → Bulleted list

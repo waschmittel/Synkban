@@ -33,7 +33,7 @@ import type { Command, EditorState } from "prosemirror-state";
 import { toggleMark } from "prosemirror-commands";
 import { linkTarget, markActive, openLinkEditor, removeLink } from "./links";
 import { TEXT_STYLES, schema } from "./schema";
-import { dialogKeys } from "./dialogKeys";
+import { openFloatingPopup, type FloatingPopupHandle } from "./floatingPopup";
 import { accel, hasAccel, isMac, tip } from "./platform";
 import { ICONS, MATRIX_ICON, TABLE_ICON, svg } from "./tableIcons";
 import { menuNav, navKey } from "./menuNav";
@@ -295,7 +295,6 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
   menu.className = "table-menu";
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", "Editor");
-  document.body.appendChild(menu);
 
   const items = (): Item[] => {
     const ctx = cellContext(view.state);
@@ -377,39 +376,8 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
     foot.className = "table-menu-foot";
     foot.textContent = `↑↓ Enter · Esc / ${accel("K")} to close`;
     menu.appendChild(foot);
-    position();
+    popup?.reposition();
     nav.apply();
-  };
-
-  // Below the caret, kept inside the viewport. When taller than both sides
-  // (e.g. shorter viewports or taller OS font metrics), stay on the roomier
-  // side and scroll inside maxHeight instead of flipping over the pointer.
-  const position = () => {
-    const c = opts.at
-      ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
-      : view.coordsAtPos(view.state.selection.head);
-    const margin = 8;
-    const gap = 6;
-    menu.style.maxHeight = "";
-    const r = menu.getBoundingClientRect();
-    const left = Math.max(margin, Math.min(c.left, window.innerWidth - r.width - margin));
-    const below = c.bottom + gap;
-    const spaceBelow = window.innerHeight - margin - below;
-    const spaceAbove = c.top - gap - margin;
-    let top: number;
-    if (r.height <= spaceBelow) {
-      top = below;
-    } else if (r.height <= spaceAbove) {
-      top = c.top - r.height - gap;
-    } else if (spaceBelow >= spaceAbove) {
-      top = below;
-      menu.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
-    } else {
-      top = margin;
-      menu.style.maxHeight = `${Math.max(120, spaceAbove)}px`;
-    }
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -445,22 +413,25 @@ export function openEditorMenu(view: EditorView, opts: MenuOptions = {}): void {
     if (item) run(item);
   };
 
-  const onPointerDown = (e: PointerEvent) => {
-    const target = e.target as Element | null;
-    if (target?.closest(".table-menu")) return;
-    dispose();
-  };
-
-  const releaseKeys = dialogKeys(onKey);
-  document.addEventListener("pointerdown", onPointerDown, true);
-
+  let popup: FloatingPopupHandle | null = null;
   function dispose() {
-    releaseKeys();
-    document.removeEventListener("pointerdown", onPointerDown, true);
-    menu.remove();
-    close = null;
-    view.focus();
+    popup?.dispose();
   }
   close = dispose;
+
+  popup = openFloatingPopup({
+    el: menu,
+    container: view.dom.parentElement ?? document.body,
+    anchor: () =>
+      opts.at
+        ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
+        : view.coordsAtPos(view.state.selection.head),
+    onKey,
+    onClose() {
+      popup = null;
+      if (close === dispose) close = null;
+      view.focus();
+    },
+  });
   refresh();
 }

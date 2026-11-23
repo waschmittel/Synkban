@@ -7,7 +7,7 @@ import { TextSelection, type EditorState } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { GapCursor } from "prosemirror-gapcursor";
 import { api } from "./api";
-import { dialogKeys } from "./dialogKeys";
+import { openFloatingPopup, type FloatingPopupHandle } from "./floatingPopup";
 import { menuNav, navKey } from "./menuNav";
 import { schema } from "./schema";
 import { ICONS, svg } from "./tableIcons";
@@ -84,7 +84,6 @@ export function openImagePicker(view: EditorView): void {
   menu.className = "table-menu image-menu";
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", "Insert image");
-  document.body.appendChild(menu);
   const nav = menuNav(menu);
 
   const choose = (att: Attachment) => {
@@ -141,41 +140,35 @@ export function openImagePicker(view: EditorView): void {
   foot.textContent = "↑↓ Enter to choose · Esc to close";
   menu.appendChild(foot);
 
-  // Below the caret, kept inside the viewport.
-  const c = view.coordsAtPos(view.state.selection.head);
-  const r = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(8, Math.min(c.left, window.innerWidth - r.width - 8))}px`;
-  const below = c.bottom + 6;
-  menu.style.top = `${below + r.height > window.innerHeight - 8 ? Math.max(8, c.top - r.height - 6) : below}px`;
-  nav.edge(false);
-
-  const onKey = (e: KeyboardEvent) => {
-    if (!view.dom.isConnected) return dispose();
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.key === "Escape") return dispose();
-    if (e.key === "Enter") return void (nav.activate() || dispose());
-    if (navKey(nav, e)) return;
-    if (e.key.toLowerCase() === "u") return upload();
-    const n = /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
-    if (images[n]) choose(images[n]);
-  };
-  const onPointerDown = (e: PointerEvent) => {
-    // The toolbar button toggles the picker itself.
-    if ((e.target as Element | null)?.closest(".image-menu, .image-menu-trigger")) return;
-    dispose();
-  };
-  const releaseKeys = dialogKeys(onKey);
-  document.addEventListener("pointerdown", onPointerDown, true);
-
+  let popup: FloatingPopupHandle | null = null;
   function dispose() {
-    releaseKeys();
-    document.removeEventListener("pointerdown", onPointerDown, true);
-    menu.remove();
-    close = null;
-    view.focus();
+    popup?.dispose();
   }
   close = dispose;
+
+  popup = openFloatingPopup({
+    el: menu,
+    container: view.dom.parentElement ?? document.body,
+    anchor: () => view.coordsAtPos(view.state.selection.head),
+    ignoreOutside: (t) => !!t?.closest(".image-menu-trigger"),
+    onKey(e) {
+      if (!view.dom.isConnected) return dispose();
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") return dispose();
+      if (e.key === "Enter") return void (nav.activate() || dispose());
+      if (navKey(nav, e)) return;
+      if (e.key.toLowerCase() === "u") return upload();
+      const n = /^[1-9]$/.test(e.key) ? Number(e.key) - 1 : -1;
+      if (images[n]) choose(images[n]);
+    },
+    onClose() {
+      popup = null;
+      if (close === dispose) close = null;
+      view.focus();
+    },
+  });
+  nav.edge(false);
 }

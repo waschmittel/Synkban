@@ -54,6 +54,58 @@ test("text style dropdown shows the current style; unavailable choices are greye
   await page.keyboard.press("Escape");
 });
 
+test("new card in board view: text style and insert dropdowns are never clipped by the short modal", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Dropdown Top Layer");
+
+  const assertAllItemsUnclipped = async (menuSel: string, expectedCount: number) => {
+    const menu = page.locator(menuSel);
+    await expect(menu).toBeVisible();
+    const items = menu.locator("button");
+    await expect(items).toHaveCount(expectedCount);
+    const info = await menu.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const last = el.querySelectorAll("button");
+      const lastRect = last[last.length - 1].getBoundingClientRect();
+      const hit = document.elementFromPoint(lastRect.left + lastRect.width / 2, lastRect.top + lastRect.height / 2);
+      return {
+        menuBottom: r.bottom,
+        viewportHeight: window.innerHeight,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+        lastInsideViewport: lastRect.bottom <= window.innerHeight && lastRect.top >= 0,
+        lastHitInMenu: !!hit && el.contains(hit),
+      };
+    });
+    expect(info.lastInsideViewport).toBe(true);
+    expect(info.lastHitInMenu).toBe(true);
+    expect(info.scrollHeight).toBeLessThanOrEqual(info.clientHeight + 1);
+  };
+
+  // Text style dropdown: all 6 items visible and clickable without clipping.
+  await typeDropdown(page).click();
+  await assertAllItemsUnclipped(".ProseMirror-menu-dropdown-menu.type-dropdown", 6);
+
+  // Opening Insert closes Text style (exclusive) and shows all 8 items unclipped.
+  await page.locator(".ProseMirror-menu-dropdown.insert-dropdown").click();
+  await expect(page.locator(".ProseMirror-menu-dropdown-menu.type-dropdown")).toHaveCount(0);
+  await assertAllItemsUnclipped(".ProseMirror-menu-dropdown-menu.insert-dropdown", 8);
+
+  // Keyboard navigation inside the toolbar dropdown works (↓ + Enter).
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".ProseMirror-menu-dropdown-menu")).toHaveCount(0);
+  await typeDropdown(page).click();
+  await page.keyboard.press("ArrowDown"); // Plain text
+  await page.keyboard.press("ArrowDown"); // Code block
+  await page.keyboard.press("ArrowDown"); // Lua block
+  await page.keyboard.press("ArrowDown"); // Heading 1
+  await page.keyboard.press("Enter");
+  await expect(typeDropdown(page)).toHaveText("Heading 1");
+  await expect(editor(page).locator("h1")).toHaveCount(1);
+});
+
 test("text style dropdown is disabled inside a table cell", async ({ page, request }) => {
   await openEditor(page, request, "Editor Type Table");
   await page.keyboard.press("ControlOrMeta+k");

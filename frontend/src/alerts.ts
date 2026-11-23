@@ -9,7 +9,7 @@ import { GapCursor } from "prosemirror-gapcursor";
 import type { Node as PmNode } from "prosemirror-model";
 import { TextSelection, type Command, type EditorState } from "prosemirror-state";
 import type { EditorView, NodeView } from "prosemirror-view";
-import { dialogKeys } from "./dialogKeys";
+import { openFloatingPopup, type FloatingPopupHandle } from "./floatingPopup";
 import { menuNav, navKey } from "./menuNav";
 import { tip } from "./platform";
 import { schema, type AlertKind } from "./schema";
@@ -236,7 +236,6 @@ export function openAlertPicker(view: EditorView, opts: AlertPickerOptions = {})
   menu.className = "table-menu alert-menu";
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", "Alert");
-  document.body.appendChild(menu);
   const nav = menuNav(menu);
 
   const existing = alertAt(view.state);
@@ -313,44 +312,39 @@ export function openAlertPicker(view: EditorView, opts: AlertPickerOptions = {})
   foot.textContent = existing ? "N T I W C kind · X remove · Esc" : "N T I W C kind · Esc to close";
   menu.appendChild(foot);
 
-  const c = opts.at
-    ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
-    : view.coordsAtPos(view.state.selection.head);
-  const r = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(8, Math.min(c.left, window.innerWidth - r.width - 8))}px`;
-  const below = c.bottom + 6;
-  menu.style.top = `${below + r.height > window.innerHeight - 8 ? Math.max(8, c.top - r.height - 6) : below}px`;
-  nav.edge(false);
-
-  const onKey = (e: KeyboardEvent) => {
-    if (!view.dom.isConnected) return dispose();
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.key === "Escape") return dispose();
-    if (e.key === "Enter") return void (nav.activate() || dispose());
-    if (navKey(nav, e)) return;
-    const ch = e.key.toLowerCase();
-    if (existing && ch === "x") return run(removeAlert);
-    const hit = ALERT_KINDS.find((a) => a.key.toLowerCase() === ch);
-    if (hit) run(setAlertKind(hit.id));
-  };
-
-  const onPointerDown = (e: PointerEvent) => {
-    if ((e.target as Element | null)?.closest(".alert-menu, .insert-alert-btn, .editor-alert-badge")) return;
-    dispose();
-  };
-
-  const releaseKeys = dialogKeys(onKey);
-  document.addEventListener("pointerdown", onPointerDown, true);
-
+  let popup: FloatingPopupHandle | null = null;
   function dispose() {
-    releaseKeys();
-    document.removeEventListener("pointerdown", onPointerDown, true);
-    menu.remove();
-    close = null;
-    view.focus();
+    popup?.dispose();
   }
   close = dispose;
+
+  popup = openFloatingPopup({
+    el: menu,
+    container: view.dom.parentElement ?? document.body,
+    anchor: () =>
+      opts.at
+        ? { left: opts.at.x, top: opts.at.y, bottom: opts.at.y }
+        : view.coordsAtPos(view.state.selection.head),
+    ignoreOutside: (t) => !!t?.closest(".insert-alert-btn, .editor-alert-badge"),
+    onKey(e) {
+      if (!view.dom.isConnected) return dispose();
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") return dispose();
+      if (e.key === "Enter") return void (nav.activate() || dispose());
+      if (navKey(nav, e)) return;
+      const ch = e.key.toLowerCase();
+      if (existing && ch === "x") return run(removeAlert);
+      const hit = ALERT_KINDS.find((a) => a.key.toLowerCase() === ch);
+      if (hit) run(setAlertKind(hit.id));
+    },
+    onClose() {
+      popup = null;
+      if (close === dispose) close = null;
+      view.focus();
+    },
+  });
+  nav.edge(false);
 }

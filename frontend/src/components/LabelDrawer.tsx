@@ -248,7 +248,10 @@ export default function LabelDrawer(props: Props) {
                       onInput={(e) => setEditingName(e.currentTarget.value)}
                       onKeyDown={(e) => {
                         handleMarkdownShortcut(e);
-                        if (e.key === "Enter") commitEdit(label.id);
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitEdit(label.id);
+                        }
                         if (e.key === "Escape") {
                           e.stopPropagation();
                           setEditingId(null);

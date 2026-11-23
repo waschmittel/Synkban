@@ -19,7 +19,7 @@ import {
 } from "../editorSearch";
 import { pastedImageFiles } from "../pasteImages";
 import { imageRefIds, stripImageRefs } from "../imageRefs";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { handleMarkdownShortcut } from "../mdInput";
 import { accel, hasAccel, hasAccelShift, tip } from "../platform";
 import CardLabelSection from "./CardLabelSection";
@@ -298,7 +298,10 @@ export default function CardDetail(props: Props) {
     setShowUnsavedDialog(false);
     const r = resolveLeave;
     resolveLeave = undefined;
-    if (!ok && focusBeforeLeave?.isConnected) focusBeforeLeave.focus();
+    if (!ok && focusBeforeLeave?.isConnected) {
+      if (focusBeforeLeave === view?.dom) view.focus();
+      else focusBeforeLeave.focus();
+    }
     focusBeforeLeave = null;
     r?.(ok);
   };
@@ -691,19 +694,8 @@ export default function CardDetail(props: Props) {
     if (e.target === e.currentTarget) guardedClose();
   };
 
-  return (
-    <div
-      class={pane ? "notes-detail" : "dialog-overlay modal-overlay"}
-      ref={(el) => !pane && onCleanup(focusTrap(el))}
-      classList={{ "modal-overlay--drop-active": draggingFile() }}
-      onClick={pane ? undefined : handleOverlayClick}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+  const renderInner = () => (
+    <>
       <div class="modal-content" classList={{ "modal-content--pane": pane }} data-pane-card={pane ? props.card.id : undefined}>
         <Show when={draggingFile()}>
           <div class="drop-zone-overlay">
@@ -1015,6 +1007,36 @@ export default function CardDetail(props: Props) {
           />
         )}
       </Show>
+    </>
+  );
+
+  return pane ? (
+    <div
+      class="notes-detail"
+      classList={{ "modal-overlay--drop-active": draggingFile() }}
+      onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {renderInner()}
     </div>
+  ) : (
+    <dialog
+      class="dialog-overlay modal-overlay"
+      ref={(el) => onCleanup(modalDialog(el))}
+      classList={{ "modal-overlay--drop-active": draggingFile() }}
+      onClick={handleOverlayClick}
+      onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {renderInner()}
+    </dialog>
   );
 }

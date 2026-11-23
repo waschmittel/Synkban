@@ -1,7 +1,8 @@
 import { onCleanup } from "solid-js";
 import type { Attachment } from "../types";
 import { api } from "../api";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
+import { dialogKeys } from "../dialogKeys";
 import { tip } from "../platform";
 
 interface Props {
@@ -11,13 +12,22 @@ interface Props {
 }
 
 /// Fullscreen image preview overlay with filename, Download link, and
-/// Close button. Clicking the backdrop closes; parent should handle
-/// Escape via its own keydown listener.
+/// Close button. Clicking the backdrop or pressing Escape closes.
 export default function ImagePreviewOverlay(props: Props) {
+  onCleanup(
+    dialogKeys((e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onClose();
+      }
+    }),
+  );
+
   return (
-    <div
+    <dialog
       class="image-preview-overlay"
-      ref={(el) => onCleanup(focusTrap(el))}
+      ref={(el) => onCleanup(modalDialog(el))}
       onClick={(e) => { if (e.target === e.currentTarget) props.onClose(); }}
     >
       <div class="image-preview-container">
@@ -51,6 +61,6 @@ export default function ImagePreviewOverlay(props: Props) {
           alt={props.attachment.filename}
         />
       </div>
-    </div>
+    </dialog>
   );
 }

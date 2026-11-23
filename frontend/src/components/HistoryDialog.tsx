@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import type { CardContent, Label } from "../types";
 import { api } from "../api";
-import { focusTrap } from "../focusTrap";
+import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { hasAccel } from "../platform";
 import {
@@ -141,9 +141,9 @@ export default function HistoryDialog(props: Props) {
   );
 
   return (
-    <div
+    <dialog
       class="dialog-overlay history-overlay"
-      ref={(el) => onCleanup(focusTrap(el))}
+      ref={(el) => onCleanup(modalDialog(el))}
       onClick={(e) => e.target === e.currentTarget && props.onClose()}
     >
       <div class="dialog-surface history-dialog" role="dialog" aria-label="Card history">
@@ -220,6 +220,6 @@ export default function HistoryDialog(props: Props) {
           </Show>
         </Show>
       </div>
-    </div>
+    </dialog>
   );
 }

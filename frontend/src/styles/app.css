@@ -2227,7 +2227,37 @@ html.theme-dark .list-collapse:hover {
   background-clip: padding-box;
 }
 
-/* ═══ Dialogs & Modals ═══ */
+/* ═══ Dialogs & Modals (top-layer <dialog>.showModal()) ═══ */
+:where(dialog.dialog-overlay, dialog.link-dialog-overlay, dialog.image-preview-overlay) {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  color: inherit;
+  box-sizing: border-box;
+}
+
+dialog.dialog-overlay::backdrop,
+dialog.link-dialog-overlay::backdrop,
+dialog.image-preview-overlay::backdrop {
+  background: transparent;
+}
+
+/* Top-layer floating popovers (popover="manual"): reset UA centering/inset. */
+:where(
+  [popover].ProseMirror-menu-dropdown-menu,
+  [popover].table-menu,
+  [popover].highlight-swatch-popover,
+  [popover].lua-autocomplete,
+  [popover].due-picker
+) {
+  margin: 0;
+  inset: auto;
+}
+
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -2237,7 +2267,6 @@ html.theme-dark .list-collapse:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
   animation: fadeIn 0.18s var(--ease);
 }
 
@@ -2254,7 +2283,6 @@ html.theme-dark .list-collapse:hover {
 .modal-overlay {
   align-items: flex-start;
   padding-top: 56px;
-  z-index: 100;
 }
 
 @keyframes fadeIn {
@@ -2750,7 +2778,6 @@ html.theme-dark .modal-history-btn:hover {
 /* Compact visual swatch popover for the split button's right chevron */
 .highlight-swatch-popover {
   position: fixed;
-  z-index: 310;
   padding: 6px;
   background: var(--color-surface);
   color: var(--color-text);
@@ -3113,7 +3140,6 @@ html.theme-dark .modal-history-btn:hover {
 
 .lua-autocomplete {
   position: fixed;
-  z-index: 315;
   min-width: 220px;
   max-width: 340px;
   max-height: 210px;
@@ -3321,7 +3347,6 @@ html.theme-dark .modal-history-btn:hover {
 /* Table menu (Accel+K / toolbar "Table"): popup beside the caret */
 .table-menu {
   position: fixed;
-  z-index: 310;
   min-width: 230px;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
@@ -3707,11 +3732,16 @@ html.theme-dark .modal-history-btn:hover {
 }
 
 .editor-wrapper .ProseMirror-menu-dropdown-menu {
+  position: fixed;
+  background: var(--color-surface);
+  color: var(--color-text);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border: 1px solid var(--color-border);
   padding: 4px;
   min-width: 120px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
 }
 
 .editor-wrapper .ProseMirror-menu-dropdown-item button {
@@ -3720,11 +3750,17 @@ html.theme-dark .modal-history-btn:hover {
   font-size: 13px;
   width: 100%;
   text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .editor-wrapper .ProseMirror-menu-dropdown-item:hover,
-.editor-wrapper .ProseMirror-menu-dropdown-item:focus-within {
+.editor-wrapper .ProseMirror-menu-dropdown-item:focus-within,
+.editor-wrapper .ProseMirror-menu-dropdown-item:has(.table-menu-item--hi) {
   background: var(--color-surface-3);
+  border-radius: 4px;
 }
 
 /* Text-style dropdown: shows the current style; greyed out where the block
@@ -4503,7 +4539,6 @@ html.theme-dark .history-line--added .history-line-sign {
 .archive-modal-overlay {
   align-items: flex-start;
   padding-top: 80px;
-  z-index: 100;
 }
 
 .archive-modal {
@@ -4955,7 +4990,6 @@ html.theme-dark .history-line--added .history-line-sign {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 300;
   animation: fadeIn 0.15s ease;
   padding: 32px;
 }
@@ -5043,7 +5077,6 @@ html.theme-dark .history-line--added .history-line-sign {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 300;
   animation: fadeIn 0.1s ease;
 }
 
@@ -5195,7 +5228,6 @@ html.theme-dark .history-line--added .history-line-sign {
 
 .due-picker {
   position: fixed;
-  z-index: 3000;
   width: 284px;
   padding: 10px;
   background: var(--color-surface);

@@ -4,9 +4,9 @@
 
 const ITEM = ".table-menu-item:not(:disabled)";
 
-export function menuNav(menu: HTMLElement) {
+export function menuNav(menu: HTMLElement, itemSelector = ITEM) {
   let idx = -1;
-  const items = () => [...menu.querySelectorAll<HTMLButtonElement>(ITEM)];
+  const items = () => [...menu.querySelectorAll<HTMLButtonElement>(itemSelector)];
   /// Re-applies the highlight (after the menu was re-rendered).
   const apply = () => {
     const all = items();

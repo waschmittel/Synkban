@@ -82,8 +82,9 @@ test("unsaved dialog owns Escape before its auto-focus lands", async ({ page, re
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".unsaved-dialog")).toBeVisible();
-  // Auto-focus suppressed: focus is still on the input behind the dialog.
-  await expect(titleInput).toBeFocused();
+  // Even with rAF frozen, dialog.showModal() moves focus off the input behind
+  // the dialog, and dialogKeys still owns Escape immediately.
+  await expect(titleInput).not.toBeFocused();
 
   // Escape must still cancel the dialog (and not leak to the modal behind).
   await page.keyboard.press("Escape");
