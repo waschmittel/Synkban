@@ -22,6 +22,7 @@ Behaviour is verified through the real surfaces. Playwright specs in `frontend/e
   - **API persistence after UI actions:** Clicking a button that fires an async `PUT`/`POST`/`DELETE` does not guarantee the request has completed on the next line. Either wait for the UI state that settles after the request (e.g. dropdown/modal closing) or poll `request.get(...)` with `expect.poll(...)` before asserting backend state.
   - **HTML5 drag-and-drop:** Put the entire sequence (`mouse.up()` → `mouse.move(src)` → `mouse.down()` → `mouse.move(tgt)`) inside `toPass()` so retries can restart a missed `dragstart`.
   - **Network interception:** Wait for `networkidle` after initial page load before installing offline/abort `page.route` interceptors so in-flight mount requests don't race the simulated outage.
+- **Server keep-alive (75 s) outlives the client's** (Node's agent: 5 s): at actix's default 5 s both closed together and `request.*` calls after ~5 s idle failed with `ECONNRESET` (`tests/keep_alive.rs`).
 - Tooltips and shortcuts are guarded by `e2e/tooltips.spec.ts` (ADR-0008).
 - Regressions get a spec that pins the *mechanism* (e.g. stubbed `requestAnimationFrame` to hold the pre-focus state, ADR-0009).
 - Frontend: `npx vite build` must be clean; backend: `cargo build` with zero warnings.

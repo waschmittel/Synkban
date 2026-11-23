@@ -103,14 +103,25 @@ export default function BoardPage() {
     }
   );
   const boardList = () => (allBoards.error ? [] : allBoards() ?? []);
-  const cycleBoard = (dir: 1 | -1) => {
-    const list = boardList();
+  // Steps requested before the list is (re)loaded run once it is: a quick '.'
+  // right after opening a board must not be dropped. A failed load drops them.
+  const [pendingCycle, setPendingCycle] = createSignal(0);
+  const cycleBoard = (dir: 1 | -1) =>
+    batch(() => {
+      if (allBoards.error) refetchBoards();
+      setPendingCycle((n) => n + dir);
+    });
+  createEffect(() => {
+    const steps = pendingCycle();
+    if (!steps || allBoards.loading) return;
+    setPendingCycle(0);
+    const list = untrack(boardList);
     if (list.length < 2) return;
-    const idx = list.findIndex((b) => b.id === params.id);
+    const idx = list.findIndex((b) => b.id === untrack(() => params.id));
     if (idx < 0) return;
-    const next = (idx + dir + list.length) % list.length;
+    const next = (((idx + steps) % list.length) + list.length) % list.length;
     navigate(`/board/${list[next].id}`);
-  };
+  });
 
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
   /// The open card (modal or Notes pane) while it has unsaved edits.

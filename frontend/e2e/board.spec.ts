@@ -940,6 +940,66 @@ test("'j' and 'k' are aliases for ',' and '.' board cycling", async ({
   await expect(page).toHaveURL(urlAt(start));
 });
 
+// GET /api/boards (with stats) is slow on a busy server: presses made while it
+// loads used to be dropped silently.
+test("board cycling pressed before the board list loads runs once it arrives", async ({
+  page,
+  request,
+}) => {
+  const a = await (
+    await request.post("/api/boards", { data: { title: `Early A ${Date.now()}` } })
+  ).json();
+  await request.post(`/api/boards/${a.id}/lists`, { data: { title: "Early list" } });
+  await request.post("/api/boards", { data: { title: `Early B ${Date.now()}` } });
+  await request.post("/api/boards", { data: { title: `Early C ${Date.now()}` } });
+
+  let release!: () => void;
+  const released = new Promise<void>((r) => (release = r));
+  await page.route("**/api/boards", async (route) => {
+    if (route.request().method() === "GET") await released;
+    await route.continue();
+  });
+  await page.goto(`/board/${a.id}`);
+  await expect(page.locator(".list", { hasText: "Early list" })).toBeVisible();
+  await page.keyboard.press(".");
+  await page.keyboard.press(".");
+  await expect(page).toHaveURL(new RegExp(`/board/${a.id}$`));
+
+  release();
+  await expect(page.locator(".board-dock")).toBeVisible();
+  const ids = await dockBoardIds(page);
+  const target = ids[(ids.indexOf(a.id) + 2) % ids.length];
+  await expect(page).toHaveURL(new RegExp(`/board/${target}$`));
+});
+
+test("board cycling after a failed board-list load refetches it, then cycles", async ({
+  page,
+  request,
+}) => {
+  const a = await (
+    await request.post("/api/boards", { data: { title: `Retry A ${Date.now()}` } })
+  ).json();
+  await request.post(`/api/boards/${a.id}/lists`, { data: { title: "Retry list" } });
+  await request.post("/api/boards", { data: { title: `Retry B ${Date.now()}` } });
+
+  let fail = true;
+  await page.route("**/api/boards", (route) =>
+    fail && route.request().method() === "GET"
+      ? route.fulfill({ status: 500, body: "boom" })
+      : route.continue()
+  );
+  await page.goto(`/board/${a.id}`);
+  await expect(page.locator(".list", { hasText: "Retry list" })).toBeVisible();
+  await expect(page.locator(".board-dock")).toHaveCount(0);
+
+  fail = false;
+  await page.keyboard.press(",");
+  await expect(page.locator(".board-dock")).toBeVisible();
+  const ids = await dockBoardIds(page);
+  const target = ids[(ids.indexOf(a.id) - 1 + ids.length) % ids.length];
+  await expect(page).toHaveURL(new RegExp(`/board/${target}$`));
+});
+
 test("dock dots highlight the active board, show its name, and navigate on click", async ({
   page,
   request,

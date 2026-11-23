@@ -17,6 +17,7 @@ Matching `metaKey || ctrlKey` steals macOS's Ctrl text bindings in every input (
 - **The help is contextual:** tabs Boards / Board / Notes / Card / Editor, opened on the one for where focus is (`helpContextOf`: the description editor → Editor, the card dialog or pane → Card, else the board's view), marked "●". `←/→` or `1`–`5` switch tabs, `?`/`Esc` close, focus returns to where it was.
 - **Global single-letter shortcuts** register through `shortcutRouter.ts` and are gated by `isInInput` (inputs, textareas, contentEditable, and anything inside `.modal-overlay`, `.label-drawer`, `.shortcut-help-overlay`, `.archive-overlay`, `.settings-overlay`, `.filter-bar`).
 - `Backspace` is suppressed at board-page level to prevent browser-back.
+- **A shortcut whose data is still loading waits, never no-ops:** `,`/`.` pressed before the board list (`GET /api/boards`, slow on big data dirs) has loaded queue their steps and run once it arrives; an errored list is refetched first (`e2e/board.spec.ts` "board cycling pressed before…" / "…after a failed board-list load").
 
 ## The map
 

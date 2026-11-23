@@ -85,6 +85,41 @@ pub(crate) fn remove_dir_if_empty(dir: &Path) {
     }
 }
 
+/// A file or directory deleted by a concurrent request while we walked to it.
+pub(crate) fn is_gone(err: &AppError) -> bool {
+    matches!(err, AppError::Io(e) if e.kind() == std::io::ErrorKind::NotFound)
+}
+
+/// `fs::read_dir` for readers racing concurrent deletes: a missing `dir` is
+/// empty and entries removed mid-listing are skipped, so a scan never fails
+/// (500) just because another request deleted something it was about to visit.
+pub(crate) fn read_dir_live(dir: &Path) -> Result<Vec<fs::DirEntry>, AppError> {
+    let gone = |e: &std::io::Error| e.kind() == std::io::ErrorKind::NotFound;
+    let iter = match fs::read_dir(dir) {
+        Ok(iter) => iter,
+        Err(e) if gone(&e) => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut out = Vec::new();
+    for entry in iter {
+        match entry {
+            Ok(entry) => out.push(entry),
+            Err(e) if gone(&e) => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(out)
+}
+
+/// `entry.file_type()?.is_dir()`, with a vanished entry counting as "not a dir".
+pub(crate) fn is_dir_live(entry: &fs::DirEntry) -> Result<bool, AppError> {
+    match entry.file_type() {
+        Ok(t) => Ok(t.is_dir()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+
 pub(crate) fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, AppError> {
     let data = fs::read_to_string(path)?;
     serde_json::from_str(&data)
@@ -166,9 +201,6 @@ pub(crate) fn is_leap(y: i64) -> bool {
 
 pub fn get_latest_mtime(data_dir: &Path) -> Result<u64, AppError> {
     let dir = boards_dir(data_dir);
-    if !dir.exists() {
-        return Ok(0);
-    }
     let mut latest = 0u64;
     walk_mtime(&dir, &mut latest)?;
     Ok(latest)
@@ -181,13 +213,8 @@ pub fn get_per_board_mtimes(
     data_dir: &Path,
 ) -> Result<std::collections::HashMap<String, u64>, AppError> {
     let mut out = std::collections::HashMap::new();
-    let dir = boards_dir(data_dir);
-    if !dir.exists() {
-        return Ok(out);
-    }
-    for entry in fs::read_dir(&dir)? {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
+    for entry in read_dir_live(&boards_dir(data_dir))? {
+        if !is_dir_live(&entry)? {
             continue;
         }
         let board_id = entry.file_name().to_string_lossy().to_string();
@@ -208,9 +235,7 @@ pub fn get_per_board_mtimes(
 }
 
 fn walk_mtime(dir: &Path, latest: &mut u64) -> Result<(), AppError> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let ft = entry.file_type()?;
+    for entry in read_dir_live(dir)? {
         if let Ok(meta) = entry.metadata() {
             if let Ok(modified) = meta.modified() {
                 let millis = modified
@@ -222,7 +247,7 @@ fn walk_mtime(dir: &Path, latest: &mut u64) -> Result<(), AppError> {
                 }
             }
         }
-        if ft.is_dir() {
+        if is_dir_live(&entry)? {
             walk_mtime(&entry.path(), latest)?;
         }
     }

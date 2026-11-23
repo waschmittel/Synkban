@@ -6,7 +6,8 @@
 //! - a *card* is a `*.json` file under a list's `cards/` dir (or under
 //!   `archived_cards/` for orphans)
 //!
-//! Missing directories yield empty results, never errors. Every other store
+//! Missing directories yield empty results, never errors — including ones
+//! (and files) a concurrent request deletes mid-walk (`read_dir_live`). Every other store
 //! module that needs to enumerate entities goes through these functions
 //! instead of hand-rolling `fs::read_dir` loops.
 
@@ -17,19 +18,15 @@ use crate::errors::AppError;
 use crate::models::{Card, List};
 use crate::store::boards::BoardFile;
 use crate::store::cards::read_card;
-use crate::store::io::read_json;
+use crate::store::io::{is_dir_live, is_gone, read_dir_live, read_json};
 use crate::store::paths::*;
 
 /// IDs (= directory names) of all board directories that contain a `board.json`.
 pub(crate) fn board_ids(data_dir: &Path) -> Result<Vec<String>, AppError> {
-    let dir = boards_dir(data_dir);
     let mut ids = Vec::new();
-    if dir.exists() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() && entry.path().join("board.json").exists() {
-                ids.push(entry.file_name().to_string_lossy().to_string());
-            }
+    for entry in read_dir_live(&boards_dir(data_dir))? {
+        if is_dir_live(&entry)? && entry.path().join("board.json").exists() {
+            ids.push(entry.file_name().to_string_lossy().to_string());
         }
     }
     Ok(ids)
@@ -44,6 +41,7 @@ pub(crate) fn board_files(data_dir: &Path) -> Result<Vec<BoardFile>, AppError> {
         let path = board_dir(data_dir, &id).join("board.json");
         match read_json(&path) {
             Ok(bf) => boards.push(bf),
+            Err(e) if is_gone(&e) => {}
             Err(e) => crate::store::io::warn_skip(data_dir, &path, "board", &e),
         }
     }
@@ -53,14 +51,10 @@ pub(crate) fn board_files(data_dir: &Path) -> Result<Vec<BoardFile>, AppError> {
 /// IDs (= directory names) of all list directories of a board that contain a
 /// `list.json`.
 pub(crate) fn list_ids(data_dir: &Path, board_id: &str) -> Result<Vec<String>, AppError> {
-    let dir = lists_dir(data_dir, board_id);
     let mut ids = Vec::new();
-    if dir.exists() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() && entry.path().join("list.json").exists() {
-                ids.push(entry.file_name().to_string_lossy().to_string());
-            }
+    for entry in read_dir_live(&lists_dir(data_dir, board_id))? {
+        if is_dir_live(&entry)? && entry.path().join("list.json").exists() {
+            ids.push(entry.file_name().to_string_lossy().to_string());
         }
     }
     Ok(ids)
@@ -75,6 +69,7 @@ pub(crate) fn lists(data_dir: &Path, board_id: &str) -> Result<Vec<List>, AppErr
         let path = list_dir(data_dir, board_id, &id).join("list.json");
         match read_json(&path) {
             Ok(list) => out.push(list),
+            Err(e) if is_gone(&e) => {}
             Err(e) => crate::store::io::warn_skip(data_dir, &path, "list", &e),
         }
     }
@@ -97,18 +92,17 @@ pub(crate) fn orphaned_cards(data_dir: &Path, board_id: &str) -> Result<Vec<Card
 /// (history is served on demand) and are never written back from here.
 fn read_cards_in(data_dir: &Path, dir: &Path) -> Result<Vec<Card>, AppError> {
     let mut out = Vec::new();
-    if dir.exists() {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") {
-                match read_card(&path) {
-                    Ok(mut card) => {
-                        card.history = Vec::new();
-                        out.push(card);
-                    }
-                    Err(e) => crate::store::io::warn_skip(data_dir, &path, "card", &e),
+    for entry in read_dir_live(dir)? {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "json") {
+            match read_card(&path) {
+                Ok(mut card) => {
+                    card.history = Vec::new();
+                    out.push(card);
                 }
+                // Moved or deleted since listed: not corrupt.
+                Err(e) if is_gone(&e) => {}
+                Err(e) => crate::store::io::warn_skip(data_dir, &path, "card", &e),
             }
         }
     }
@@ -192,6 +186,49 @@ mod tests {
         assert!(list_ids(d.path(), "nope").unwrap().is_empty());
         assert!(cards(d.path(), "nope", "nope").unwrap().is_empty());
         assert!(orphaned_cards(d.path(), "nope").unwrap().is_empty());
+    }
+
+    /// Scans racing deletes (other clients, parallel e2e specs) must neither
+    /// fail (`GET /api/boards` 500ed, emptying the board dock) nor report the
+    /// vanished files as corrupt.
+    #[test]
+    fn scans_tolerate_concurrent_deletes() {
+        use crate::store::boards::{delete_board, list_boards_with_stats, update_board};
+        use crate::store::io::{drain_warnings, get_latest_mtime, get_per_board_mtimes};
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let d = tmp();
+        let data = d.path().to_path_buf();
+        let done = AtomicBool::new(false);
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                for _ in 0..150 {
+                    let b = create_board(&data, "Churn").unwrap();
+                    for _ in 0..3 {
+                        let l = create_list(&data, &b.id, "L").unwrap();
+                        create_card(&data, &l.id, "C").unwrap();
+                    }
+                    update_board(&data, &b.id, None, None, Some(true), None).unwrap();
+                    delete_board(&data, &b.id).unwrap();
+                }
+                done.store(true, Ordering::Relaxed);
+            });
+            let mut scans = 0;
+            while !done.load(Ordering::Relaxed) || scans == 0 {
+                list_boards_with_stats(&data, Some("2026-01-01")).unwrap();
+                get_per_board_mtimes(&data).unwrap();
+                get_latest_mtime(&data).unwrap();
+                assert_eq!(collect_warnings(&data), Vec::<String>::new());
+                assert_eq!(drain_warnings(), Vec::<String>::new());
+                scans += 1;
+            }
+        });
+    }
+
+    #[test]
+    fn vanished_dir_is_empty() {
+        let d = tmp();
+        assert!(read_dir_live(&d.path().join("gone")).unwrap().is_empty());
     }
 
     #[test]

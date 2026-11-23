@@ -273,10 +273,16 @@ pub async fn run_server(
             .configure(configure_routes)
             .default_service(web::get().to(serve_embedded))
     })
+    .keep_alive(KEEP_ALIVE)
     .bind(&bind)?
     .run()
     .await
 }
+
+/// Idle keep-alive, longer than clients' own (Node's agent: 5 s). At actix's
+/// default 5 s both sides close together and a request on the reused socket
+/// gets ECONNRESET (Node doesn't retry; e2e API calls flaked).
+const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(75);
 
 pub async fn run_desktop_server(
     data_dir: &str,
@@ -323,6 +329,7 @@ pub async fn run_desktop_server(
             .configure(configure_routes)
             .default_service(web::get().to(serve_embedded))
     })
+    .keep_alive(KEEP_ALIVE)
     .bind("127.0.0.1:0")?;
 
     let port = server.addrs()[0].port();

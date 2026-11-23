@@ -1,7 +1,6 @@
 //! Label CRUD. Labels live inside `board.json` (see `BoardFile` in
 //! `super::boards`); there is no separate labels file.
 
-use std::fs;
 use std::path::Path;
 
 use crate::errors::AppError;
@@ -9,7 +8,7 @@ use crate::models::{CardPatch, Label};
 use crate::store::boards::{read_board_file, write_board_file, BoardFile};
 use crate::store::cards::update_card;
 use crate::store::io::read_json;
-use crate::store::paths::{board_dir, boards_dir, check_id, is_valid_hex_color};
+use crate::store::paths::{board_dir, check_id, is_valid_hex_color};
 use crate::store::walk;
 
 /// Distinct pastel colors for labels, arranged for max visual separation on sequential assignment.
@@ -201,28 +200,20 @@ pub fn delete_label(data_dir: &Path, board_id: &str, label_id: &str) -> Result<(
 /// Find the board_id that owns the given label_id (scans all boards).
 fn find_board_for_label(data_dir: &Path, label_id: &str) -> Result<String, AppError> {
     check_id(label_id)?;
-    let dir = boards_dir(data_dir);
-    if dir.exists() {
-        for entry in fs::read_dir(&dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_dir() {
-                let board_id = entry.file_name().to_string_lossy().to_string();
-                let board_json = board_dir(data_dir, &board_id).join("board.json");
-                if board_json.exists() {
-                    // Skip a corrupt board.json instead of failing the whole
-                    // label op — the label's real owner may be another board.
-                    let bf: BoardFile = match read_json(&board_json) {
-                        Ok(bf) => bf,
-                        Err(e) => {
-                            crate::store::io::warn_skip(data_dir, &board_json, "board", &e);
-                            continue;
-                        }
-                    };
-                    if bf.labels.iter().any(|l| l.id == label_id) {
-                        return Ok(board_id);
-                    }
-                }
+    for board_id in crate::store::walk::board_ids(data_dir)? {
+        let board_json = board_dir(data_dir, &board_id).join("board.json");
+        // Skip a corrupt board.json instead of failing the whole label op —
+        // the label's real owner may be another board.
+        let bf: BoardFile = match read_json(&board_json) {
+            Ok(bf) => bf,
+            Err(e) if crate::store::io::is_gone(&e) => continue,
+            Err(e) => {
+                crate::store::io::warn_skip(data_dir, &board_json, "board", &e);
+                continue;
             }
+        };
+        if bf.labels.iter().any(|l| l.id == label_id) {
+            return Ok(board_id);
         }
     }
     Err(AppError::NotFound("Label not found".into()))
