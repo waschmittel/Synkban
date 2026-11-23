@@ -1,4 +1,4 @@
-import { type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 // Drive the touch-drag bridge (src/touchDrag.ts): long-press `srcSel`, then drag
 // to a point (fx, fy) inside `dstSel` and release. Shared by touch.spec.ts and
@@ -20,6 +20,20 @@ export async function touchDrag(
   fy: number
 ) {
   await page.locator(srcSel).scrollIntoViewIfNeeded();
+  // Slide-in/transition animations (e.g. the label drawer) move the boxes: wait
+  // until both are stable across two frames before measuring.
+  const box = (sel: string) =>
+    page.locator(sel).evaluate(
+      (el) =>
+        new Promise<string>((res) => {
+          const r = () => JSON.stringify(el.getBoundingClientRect());
+          const a = r();
+          requestAnimationFrame(() => requestAnimationFrame(() => res(a === r() ? a : "")));
+        })
+    );
+  for (const sel of [srcSel, dstSel]) {
+    await expect.poll(() => box(sel)).not.toBe("");
+  }
   const src = (await page.locator(srcSel).boundingBox())!;
   const dst = (await page.locator(dstSel).boundingBox())!;
   await page.evaluate(
