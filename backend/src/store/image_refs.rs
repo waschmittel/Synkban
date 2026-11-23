@@ -6,11 +6,17 @@ use std::collections::HashSet;
 
 use serde_json::Value;
 
-/// Attachment ids the description references inline.
+/// Attachment ids the description references inline. Ids that are not a safe
+/// path segment (hand-edited or synced files) are skipped, since callers join
+/// them onto the attachment dir.
 pub(crate) fn referenced_ids(description: &str) -> HashSet<String> {
     fn walk(node: &Value, out: &mut HashSet<String>) {
         if node.get("type").and_then(Value::as_str) == Some("image") {
-            if let Some(a) = node.pointer("/attrs/att").and_then(Value::as_str) {
+            if let Some(a) = node
+                .pointer("/attrs/att")
+                .and_then(Value::as_str)
+                .filter(|a| crate::store::paths::check_id(a).is_ok())
+            {
                 out.insert(a.to_string());
             }
         }
@@ -97,6 +103,16 @@ mod tests {
     fn lists_referenced_ids() {
         assert_eq!(referenced_ids(DOC), keep(&["x", "y"]));
         assert!(referenced_ids("plain").is_empty());
+    }
+
+    #[test]
+    fn skips_unsafe_referenced_ids() {
+        for bad in ["../../secret", "/etc/passwd", "a\\\\b", "C:x", ""] {
+            let doc = format!(
+                r#"{{"type":"doc","content":[{{"type":"image","attrs":{{"att":"{bad}"}}}},{{"type":"image","attrs":{{"att":"ok-1"}}}}]}}"#
+            );
+            assert_eq!(referenced_ids(&doc), keep(&["ok-1"]), "{bad}");
+        }
     }
 
     #[test]

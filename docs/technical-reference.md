@@ -36,6 +36,7 @@ Then open **`http://localhost:8080`** in your browser.
 | `DATA_DIR` | *(see below)* | Path to the **Data Directory** (created automatically if absent). |
 | `HOST` | `127.0.0.1` | Bind address (`0.0.0.0` in the official Docker image). |
 | `PORT` | `8080` | Bind port. |
+| `ALLOWED_HOSTS` | *(loopback only; any if `HOST` is `0.0.0.0`/`::`)* | Extra host names the server answers to, comma-separated, or `*`. Requests for other hosts and cross-site writes get 403 (DNS-rebinding/CSRF guard). Set it to your domain behind a reverse proxy. |
 | `SYNKBAN_CONFIG_DIR` | `~/.config/synkban` | Directory for machine-local settings (`synkban.toml`) and crash drafts (`draft.json`). Uses `%USERPROFILE%\.config\synkban` on Windows; `/app/config` in Docker. |
 
 Example running on a custom port and folder:

@@ -1,15 +1,17 @@
 pub mod config;
 pub mod drafts;
 pub mod errors;
+pub mod guard;
 pub mod handlers;
 pub mod models;
 pub mod pdf;
 pub mod schema;
 pub mod store;
 
-use actix_cors::Cors;
 use actix_web::dev::Service;
+use actix_web::middleware::from_fn;
 use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
+pub use guard::AllowedHosts;
 use include_dir::{include_dir, Dir};
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -243,7 +245,12 @@ fn reconcile_attachments(data_dir: &std::path::Path) {
     }
 }
 
-pub async fn run_server(host: &str, port: u16, data_dir: &str) -> std::io::Result<()> {
+pub async fn run_server(
+    host: &str,
+    port: u16,
+    data_dir: &str,
+    allowed_hosts: AllowedHosts,
+) -> std::io::Result<()> {
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir)?;
     reconcile_attachments(&data_dir);
@@ -251,16 +258,16 @@ pub async fn run_server(host: &str, port: u16, data_dir: &str) -> std::io::Resul
     let bind = format!("{host}:{port}");
     println!("Server running at http://{bind}");
     println!("Data directory: {}", data_dir.display());
+    match &allowed_hosts {
+        AllowedHosts::Any => println!("Allowed hosts: any (set ALLOWED_HOSTS to restrict)"),
+        AllowedHosts::List(l) => println!("Allowed hosts: {}", l.join(", ")),
+    }
+    let allowed_hosts = web::Data::new(allowed_hosts);
 
     HttpServer::new(move || {
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .max_age(3600);
-
         App::new()
-            .wrap(cors)
+            .wrap(from_fn(guard::middleware))
+            .app_data(allowed_hosts.clone())
             .app_data(web::Data::new(data_dir.clone()))
             .app_data(web::PayloadConfig::new(52 * 1024 * 1024))
             .configure(configure_routes)
@@ -284,12 +291,6 @@ pub async fn run_desktop_server(
 
     let server = HttpServer::new(move || {
         let token = token.clone();
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .max_age(3600);
-
         App::new()
             .wrap_fn(move |req, srv| {
                 let token = token.clone();
@@ -314,7 +315,9 @@ pub async fn run_desktop_server(
                     Ok(res)
                 }
             })
-            .wrap(cors)
+            // Outermost: rejects foreign hosts/origins before the token check.
+            .wrap(from_fn(guard::middleware))
+            .app_data(web::Data::new(AllowedHosts::loopback()))
             .app_data(web::Data::new(data_dir.clone()))
             .app_data(web::PayloadConfig::new(52 * 1024 * 1024))
             .configure(configure_routes)

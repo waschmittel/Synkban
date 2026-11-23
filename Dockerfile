@@ -2,7 +2,7 @@ FROM node:22-bookworm-slim AS frontend-build
 ARG SYNKBAN_VERSION=dev
 ENV SYNKBAN_VERSION=${SYNKBAN_VERSION}
 WORKDIR /app/frontend
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
 COPY frontend/package.json frontend/pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./

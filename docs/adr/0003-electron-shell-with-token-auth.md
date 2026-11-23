@@ -1,6 +1,6 @@
 # Desktop mode is an Electron shell around the Rust binary, guarded by a token
 
-`electron/main.js` spawns the release binary with `DESKTOP_TOKEN=<uuid>`, reads `DESKTOP_PORT=<port>` from its stdout, then opens a `BrowserWindow` at `http://127.0.0.1:<port>/?token=<token>`. `lib.rs::run_desktop_server` binds `127.0.0.1:0` and wraps every request in token middleware (`synkban_token` cookie or `?token=`; the first load sets the cookie). Web mode (`run_server`) is unchanged.
+`electron/main.js` spawns the release binary with `DESKTOP_TOKEN=<uuid>`, reads `DESKTOP_PORT=<port>` from its stdout, then opens a `BrowserWindow` at `http://127.0.0.1:<port>/?token=<token>`. `lib.rs::run_desktop_server` binds `127.0.0.1:0` and wraps every request in token middleware (`synkban_token` cookie or `?token=`; the first load sets the cookie). The Host/Origin guard (ADR-0034, loopback only) runs in front of it. Web mode (`run_server`) has no token.
 
 ## Why
 

@@ -7,9 +7,11 @@ Options:
   -V, --version          Print version
 
 Environment:
-  HOST       Bind address (default 127.0.0.1)
-  PORT       Bind port (default 8080)
-  DATA_DIR   Data storage directory
+  HOST           Bind address (default 127.0.0.1)
+  PORT           Bind port (default 8080)
+  DATA_DIR       Data storage directory
+  ALLOWED_HOSTS  Extra host names to answer to, comma-separated, or *
+                 (default: loopback only; any when HOST is 0.0.0.0 or ::)
 
 Data directory resolution: --data-dir > DATA_DIR > data_dir in
 ~/.config/synkban/synkban.toml > ~/.config/synkban/data";
@@ -74,5 +76,7 @@ fn main() -> std::io::Result<()> {
     }
 
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(synkban::run_server(&host, port, &data_dir))
+    let allowed =
+        synkban::AllowedHosts::for_web(&host, std::env::var("ALLOWED_HOSTS").ok().as_deref());
+    rt.block_on(synkban::run_server(&host, port, &data_dir, allowed))
 }

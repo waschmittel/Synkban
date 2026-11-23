@@ -1041,3 +1041,189 @@ async fn rejects_empty_titles_invalid_colors_dates_checklists_filenames_and_ids(
         );
     }
 }
+
+// ---- Host/Origin guard (ADR-0034) ----
+
+/// All routes behind the web-mode guard with the given allow-list.
+macro_rules! make_guarded_app {
+    ($data_dir:expr, $allowed:expr) => {
+        App::new()
+            .wrap(actix_web::middleware::from_fn(synkban::guard::middleware))
+            .app_data(web::Data::new($allowed))
+            .app_data(data_app_data($data_dir))
+            .configure(synkban::configure_routes)
+    };
+}
+
+fn board_req(host: &str, origin: Option<&str>) -> test::TestRequest {
+    let req = test::TestRequest::post()
+        .uri("/api/boards")
+        .insert_header(("Host", host))
+        .set_json(json!({"title": "B"}));
+    match origin {
+        Some(o) => req.insert_header(("Origin", o)),
+        None => req,
+    }
+}
+
+#[actix_web::test]
+async fn guard_rejects_rebinding_host() {
+    let dir = TempDir::new().unwrap();
+    let app = test::init_service(make_guarded_app!(
+        dir.path(),
+        synkban::AllowedHosts::loopback()
+    ))
+    .await;
+    let req = test::TestRequest::get()
+        .uri("/api/boards")
+        .insert_header(("Host", "evil.example:8080"))
+        .to_request();
+    assert_forbidden!(app, req);
+    // Non-API routes too, so a rebound page can't even load.
+    let req = test::TestRequest::get()
+        .uri("/")
+        .insert_header(("Host", "evil.example:8080"))
+        .to_request();
+    assert_forbidden!(app, req);
+}
+
+#[actix_web::test]
+async fn guard_rejects_cross_site_mutation_and_keeps_data() {
+    let dir = TempDir::new().unwrap();
+    let app = test::init_service(make_guarded_app!(
+        dir.path(),
+        synkban::AllowedHosts::loopback()
+    ))
+    .await;
+    for origin in ["https://evil.example", "null"] {
+        assert_forbidden!(app, board_req("localhost:8080", Some(origin)).to_request());
+    }
+    let req = test::TestRequest::get()
+        .uri("/api/boards")
+        .insert_header(("Host", "localhost:8080"))
+        .to_request();
+    let boards = read_json_body(test::call_and_read_body(&app, req).await);
+    assert_eq!(boards, json!([]));
+}
+
+#[actix_web::test]
+async fn guard_allows_same_site_and_non_browser_requests() {
+    let dir = TempDir::new().unwrap();
+    let app = test::init_service(make_guarded_app!(
+        dir.path(),
+        synkban::AllowedHosts::loopback()
+    ))
+    .await;
+    for (host, origin) in [
+        ("localhost:8080", Some("http://localhost:8080")),
+        ("127.0.0.1:8091", Some("http://127.0.0.1:8091")),
+        ("[::1]:8080", Some("http://[::1]:8080")),
+        ("localhost:3000", Some("http://localhost:3000")),
+        ("localhost:8080", None),
+    ] {
+        let resp = test::call_service(&app, board_req(host, origin).to_request()).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "{host} {origin:?}");
+    }
+}
+
+#[actix_web::test]
+async fn guard_any_host_still_blocks_foreign_origin() {
+    let dir = TempDir::new().unwrap();
+    let app = test::init_service(make_guarded_app!(dir.path(), synkban::AllowedHosts::Any)).await;
+    let resp = test::call_service(
+        &app,
+        board_req("nas.lan:8080", Some("http://nas.lan:8080")).to_request(),
+    )
+    .await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    assert_forbidden!(
+        app,
+        board_req("nas.lan:8080", Some("https://evil.example")).to_request()
+    );
+}
+
+#[actix_web::test]
+async fn no_cors_headers_for_foreign_origin() {
+    let dir = TempDir::new().unwrap();
+    let app = test::init_service(make_guarded_app!(
+        dir.path(),
+        synkban::AllowedHosts::loopback()
+    ))
+    .await;
+    let req = test::TestRequest::get()
+        .uri("/api/boards")
+        .insert_header(("Host", "localhost:8080"))
+        .insert_header(("Origin", "https://evil.example"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp
+        .headers()
+        .get(actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN)
+        .is_none());
+    let req = test::TestRequest::default()
+        .method(actix_web::http::Method::OPTIONS)
+        .uri("/api/boards")
+        .insert_header(("Host", "localhost:8080"))
+        .insert_header(("Origin", "https://evil.example"))
+        .insert_header(("Access-Control-Request-Method", "PUT"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp
+        .headers()
+        .get(actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN)
+        .is_none());
+}
+
+#[actix_web::test]
+async fn pdf_export_ignores_traversal_image_ref() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("secret.png"), b"not for export").unwrap();
+    let app = test::init_service(make_app!(dir.path())).await;
+    let board = post_json!(app, "/api/boards", json!({"title": "B"}));
+    let list = post_json!(
+        app,
+        &format!("/api/boards/{}/lists", board["id"].as_str().unwrap()),
+        json!({"title": "L"})
+    );
+    let card = post_json!(
+        app,
+        &format!("/api/lists/{}/cards", list["id"].as_str().unwrap()),
+        json!({"title": "C"})
+    );
+    let cid = card["id"].as_str().unwrap();
+    // Plant the reference straight in the file, as a synced/hand-edited card would.
+    let path = walk_card_file(dir.path(), cid);
+    let mut raw: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    raw["description"] = json!(
+        json!({"type":"doc","content":[{"type":"image","attrs":{"att":"../../../../secret.png"}}]})
+            .to_string()
+    );
+    std::fs::write(&path, raw.to_string()).unwrap();
+    // `../` ×4 from attachments/{card} lands on the data dir's secret.png.
+    let bid = board["id"].as_str().unwrap();
+    std::fs::create_dir_all(dir.path().join(format!("boards/{bid}/attachments/{cid}"))).unwrap();
+    let export = synkban::store::export_card(dir.path(), cid).unwrap();
+    assert!(export.originals.is_empty());
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/cards/{cid}/pdf"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+fn walk_card_file(root: &Path, card_id: &str) -> PathBuf {
+    let name = format!("{card_id}.json");
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.file_name().is_some_and(|n| n == name.as_str()) {
+                return p;
+            }
+        }
+    }
+    panic!("card file not found")
+}

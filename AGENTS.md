@@ -45,7 +45,7 @@ After any change:
 - **`store/`** is the only data I/O (ADR-0001): `paths.rs` (pure path helpers + `check_id` / `is_valid_iso_date`), `io.rs` (JSON, file-op tracking, warnings), `boards.rs`, `labels.rs`, `lists.rs`, `cards.rs` (`CardLocation`, history), `card_index.rs`, `attachments.rs`, `gc.rs`, `walk.rs` (the only `read_dir` walker). `mod.rs` re-exports a flat API.
 - **Handlers** are thin: extract, call store, return JSON; mutating ones log action + file list.
 - `models.rs` all types/DTOs; `errors.rs` `AppError` (`NotFound`, `Io`, `TooLarge` 413, `BadRequest` 400, `Conflict` 409); `config.rs` settings file (ADR-0002); `drafts.rs` the crash draft of the open card in the config dir (ADR-0024; `SYNKBAN_DRAFTS=0` turns it off for shared e2e servers); `schema.rs` ProseMirror description validator driven by `frontend/src/schema.json` (ADR-0015); `pdf.rs` PDF/A export (ADR-0012); static files via `include_dir!("$CARGO_MANIFEST_DIR/static")`.
-- `lib.rs` exposes `run_server` and `run_desktop_server` (token + random port, ADR-0003); `main.rs` is a thin entry; `build.rs` is a no-op. `log_timestamp()` gives UTC `HH:MM:SS`.
+- `lib.rs` exposes `run_server` and `run_desktop_server` (token + random port, ADR-0003), both behind `guard.rs` (no CORS; Host/Origin check, ADR-0034); `main.rs` is a thin entry; `build.rs` is a no-op. `log_timestamp()` gives UTC `HH:MM:SS`.
 
 ### Frontend (`frontend/src/`)
 
@@ -94,6 +94,7 @@ After any change:
 | 0031 | Semantic text highlights (`highlights.ts`) and dedicated alert blocks (`alerts.ts`) |
 | 0032 | Adaptive contrast for board & label colours, board-matched highlights, and manual label colours (`colorContrast.ts`) |
 | 0033 | Top-layer overlays: `<dialog>.showModal()` (`modalDialog.ts`) and `popover="manual"` (`floatingPopup.ts`) |
+| 0034 | No CORS; Host/Origin guard against cross-site and DNS rebinding (`guard.rs`, `ALLOWED_HOSTS`) |
 
 ## Data model (summary)
 

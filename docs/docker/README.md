@@ -24,6 +24,7 @@ docker run -d \
 | `SYNKBAN_CONFIG_DIR` | `/app/config` | Directory for `synkban.toml` (settings) and `draft.json` (crash recovery) |
 | `HOST` | `0.0.0.0` | Bind address inside the container |
 | `PORT` | `8080` | Bind port inside the container |
+| `ALLOWED_HOSTS` | *(any)* | Comma-separated host names the server answers to (e.g. `synkban.example.com`); recommended so other hosts get 403. Cross-site writes are always refused. |
 
 > **Note:** The container runs as non-root user `app` (UID `10001`). Make sure host-mounted directories are writable by UID `10001` (e.g. `chown -R 10001:10001 ./data ./config`).
 
