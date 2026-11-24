@@ -11,11 +11,13 @@ pub(crate) mod image_refs;
 pub mod io;
 pub mod labels;
 pub mod lists;
+pub mod mirror_snapshot;
 pub mod paths;
 pub(crate) mod walk;
 
 pub use attachments::{
-    copy_attachment, create_attachment, delete_attachment, get_attachment_data, get_thumbnail_data,
+    copy_attachment, copy_attachment_blob, create_attachment, delete_attachment,
+    get_attachment_data, get_thumbnail_data,
 };
 pub use boards::{
     create_board, delete_board, get_board, list_archived_boards, list_boards,
@@ -31,5 +33,8 @@ pub use labels::{
     update_label_by_id,
 };
 pub use lists::{create_list, delete_list, update_list};
+pub use mirror_snapshot::{
+    snapshot_for_mirror, MirrorArchivedCard, MirrorBoard, MirrorList, MirrorSnapshot,
+};
 pub use paths::is_valid_iso_date;
 pub use walk::collect_warnings;

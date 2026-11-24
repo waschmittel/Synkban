@@ -1,11 +1,12 @@
 import { createResource, createSignal, onCleanup, Show } from "solid-js";
 import { api, errorMessage } from "../api";
-import type { Theme, UpdateSettingsPayload } from "../types";
+import type { MirrorSchedule, MirrorStatus, Theme, UpdateSettingsPayload } from "../types";
 import { modalDialog } from "../modalDialog";
 import { dialogKeys } from "../dialogKeys";
 import { desktopBridge } from "../settings";
 import { applyTheme } from "../theme";
 import { tip } from "../platform";
+import { timeAgo } from "../timeAgo";
 
 interface Props {
   onClose: () => void;
@@ -22,10 +23,15 @@ export default function SettingsDialog(props: Props) {
   // Staged edits: null = untouched, otherwise the pending value.
   const [stagedStartup, setStagedStartup] = createSignal<"overview" | "last" | null>(null);
   const [stagedTheme, setStagedTheme] = createSignal<Theme | null>(null);
-  // undefined = untouched, string = new custom dir, null = revert to default.
+  // undefined = untouched, string = new custom dir, null = revert to default / clear.
   const [stagedDataDir, setStagedDataDir] = createSignal<string | null | undefined>(undefined);
+  const [stagedMirrorDir, setStagedMirrorDir] = createSignal<string | null | undefined>(undefined);
+  const [stagedMirrorSchedule, setStagedMirrorSchedule] = createSignal<MirrorSchedule | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [mirroring, setMirroring] = createSignal(false);
+  const [mirrorRunStatus, setMirrorRunStatus] = createSignal<MirrorStatus | null>(null);
+  const [mirrorRunError, setMirrorRunError] = createSignal<string | null>(null);
 
   const startupView = () => stagedStartup() ?? loaded()?.startup_view ?? "overview";
   const theme = () => stagedTheme() ?? loaded()?.theme ?? "system";
@@ -48,11 +54,30 @@ export default function SettingsDialog(props: Props) {
     return staged ?? s.default_data_dir;
   };
   const dataDirChanged = () => loaded() !== undefined && dataDir() !== loaded()!.data_dir;
+
+  const mirrorDir = () => {
+    const s = loaded();
+    if (!s) return null;
+    const staged = stagedMirrorDir();
+    return staged === undefined ? s.mirror_dir : staged;
+  };
+  const mirrorDirChanged = () =>
+    loaded() !== undefined && (mirrorDir() ?? null) !== (loaded()!.mirror_dir ?? null);
+  const mirrorSchedule = (): MirrorSchedule =>
+    stagedMirrorSchedule() ?? loaded()?.mirror_schedule ?? "off";
+  const mirrorScheduleChanged = () =>
+    loaded() !== undefined && mirrorSchedule() !== loaded()!.mirror_schedule;
+
+  const activeMirrorStatus = (): MirrorStatus | null =>
+    mirrorRunStatus() ?? loaded()?.mirror_status ?? null;
+
   const dirty = () =>
     loaded() !== undefined &&
     (startupView() !== loaded()!.startup_view ||
       theme() !== loaded()!.theme ||
-      dataDirChanged());
+      dataDirChanged() ||
+      mirrorDirChanged() ||
+      mirrorScheduleChanged());
 
   // All close paths (Cancel, X, overlay click, Escape) discard staged edits.
   const close = () => {
@@ -64,6 +89,38 @@ export default function SettingsDialog(props: Props) {
     if (!desktop) return;
     const dir = await desktop.pickDataDir(dataDir());
     if (dir) setStagedDataDir(dir);
+  };
+
+  const browseMirror = async () => {
+    if (!desktop) return;
+    const dir = await desktop.pickMirrorDir(mirrorDir() ?? "");
+    if (dir) {
+      setStagedMirrorDir(dir);
+      if (mirrorSchedule() === "off" && !loaded()?.mirror_dir) {
+        setStagedMirrorSchedule("daily");
+      }
+    }
+  };
+
+  const clearMirror = () => {
+    setStagedMirrorDir(null);
+    setStagedMirrorSchedule("off");
+  };
+
+  const runMirrorNow = async () => {
+    if (!desktop || mirroring() || saving()) return;
+    setMirroring(true);
+    setMirrorRunError(null);
+    try {
+      const status = await api.runMirror();
+      setMirrorRunStatus(status);
+    } catch (e) {
+      setMirrorRunError(errorMessage(e, "Mirror update failed"));
+      // Refresh settings so mirror_status reflects the persisted error & attempt time.
+      void refetchSettings();
+    } finally {
+      setMirroring(false);
+    }
   };
 
   const save = async () => {
@@ -80,6 +137,8 @@ export default function SettingsDialog(props: Props) {
       if (startupView() !== s.startup_view) payload.startup_view = startupView();
       if (theme() !== s.theme) payload.theme = theme();
       if (dataDirChanged()) payload.data_dir = stagedDataDir() ?? null;
+      if (mirrorDirChanged()) payload.mirror_dir = stagedMirrorDir() ?? null;
+      if (mirrorScheduleChanged()) payload.mirror_schedule = mirrorSchedule();
       await api.updateSettings(payload);
       // Preview already applied the theme; keep it (do not revert on close).
       applyTheme(theme());
@@ -147,6 +206,44 @@ export default function SettingsDialog(props: Props) {
       </span>
     </label>
   );
+
+  const ScheduleChoice = (p: { value: MirrorSchedule; label: string }) => {
+    const disabled = () => !mirrorDir() && p.value !== "off";
+    return (
+      <label
+        class="settings-seg"
+        classList={{
+          "settings-seg--selected": mirrorSchedule() === p.value,
+          "settings-seg--disabled": disabled(),
+        }}
+      >
+        <input
+          type="radio"
+          name="mirror-schedule"
+          checked={mirrorSchedule() === p.value}
+          disabled={disabled()}
+          onChange={() => setStagedMirrorSchedule(p.value)}
+        />
+        <span>{p.label}</span>
+      </label>
+    );
+  };
+
+  const mirrorStatusLabel = () => {
+    if (mirroring()) return "Mirroring…";
+    const st = activeMirrorStatus();
+    if (!st || !st.last_succeeded_at) return "Not mirrored yet";
+    const cards = st.cards_mirrored;
+    const count = cards !== undefined && cards !== null ? ` · ${cards} card${cards === 1 ? "" : "s"}` : "";
+    return `Last updated ${timeAgo(st.last_succeeded_at)}${count}`;
+  };
+
+  const mirrorStatusTitle = () => {
+    const ts = activeMirrorStatus()?.last_succeeded_at;
+    return ts ? new Date(ts).toLocaleString() : undefined;
+  };
+
+  const mirrorErrText = () => mirrorRunError() ?? activeMirrorStatus()?.last_error ?? null;
 
   return (
     <dialog
@@ -217,7 +314,7 @@ export default function SettingsDialog(props: Props) {
               </div>
             </section>
 
-            <section class="settings-section">
+            <section class="settings-section" data-section="data-dir">
               <h4 class="settings-section-title">Data folder</h4>
               <Show
                 when={desktop}
@@ -253,6 +350,72 @@ export default function SettingsDialog(props: Props) {
                     Synkban restarts to switch folders. Existing boards stay in
                     the old folder and are not moved.
                   </p>
+                </Show>
+              </Show>
+            </section>
+
+            <section class="settings-section" data-section="readable-mirror">
+              <h4 class="settings-section-title">Readable mirror</h4>
+              <Show
+                when={desktop}
+                fallback={
+                  <p class="settings-hint">
+                    Automatic mirroring runs in the Desktop App. On a server, run{" "}
+                    <code>synkban export &lt;folder&gt;</code> to create or update
+                    a read-only HTML mirror (<code>index.html</code> + attachments).
+                  </p>
+                }
+              >
+                <p class="settings-hint settings-hint--spaced">
+                  Maintains a browseable, read-only HTML copy (<code>index.html</code>) of
+                  saved boards, cards, and attachments while Synkban is open. Permanently
+                  deleted items are also removed from the mirror.
+                </p>
+                <div class="settings-path" title={mirrorDir() ?? undefined}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  <code classList={{ "settings-path-placeholder": !mirrorDir() }}>
+                    {mirrorDir() ?? "No folder selected"}
+                  </code>
+                </div>
+                <div class="settings-path-actions">
+                  <button class="btn btn-outline settings-btn" onClick={browseMirror}>
+                    Browse…
+                  </button>
+                  <Show when={mirrorDir()}>
+                    <button class="btn btn-outline settings-btn" onClick={clearMirror}>
+                      Clear
+                    </button>
+                  </Show>
+                </div>
+                <div class="settings-segmented" role="radiogroup" aria-label="Mirror schedule">
+                  <ScheduleChoice value="off" label="Off" />
+                  <ScheduleChoice value="daily" label="Daily" />
+                  <ScheduleChoice value="weekly" label="Weekly" />
+                </div>
+                <Show when={mirrorDirChanged() && Boolean(s().mirror_dir)}>
+                  <p class="settings-note">
+                    Existing files in the previous mirror folder stay untouched on disk.
+                  </p>
+                </Show>
+                <Show when={Boolean(s().mirror_dir) && !mirrorDirChanged()}>
+                  <div class="settings-mirror-row">
+                    <span class="settings-mirror-status" title={mirrorStatusTitle()}>
+                      {mirrorStatusLabel()}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn-outline settings-btn"
+                      onClick={runMirrorNow}
+                      disabled={mirroring() || saving()}
+                    >
+                      {mirroring() ? "Mirroring…" : "Mirror now"}
+                    </button>
+                  </div>
+                  <Show when={mirrorErrText()}>
+                    {(err) => <p class="settings-error">{err()}</p>}
+                  </Show>
                 </Show>
               </Show>
             </section>

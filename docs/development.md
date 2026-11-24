@@ -54,12 +54,13 @@ Output: `backend/target/release/synkban` — a single binary you can copy anywhe
 
 Base URL: `/api`
 
-### Settings
+### Settings & Readable Mirror
 
-| Method | Path        | Body                                            | Response           | Description                                                                                                                                                       |
-| ------ | ----------- | ----------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/settings` | —                                               | `SettingsResponse` | Settings from `~/.config/synkban/synkban.toml` + effective/default data dir. `last_board_id` is omitted when the board no longer exists or is archived.           |
-| PUT    | `/settings` | `{ startup_view?, last_board_id?, data_dir? }`  | `SettingsResponse` | Writes the config file. `last_board_id`/`data_dir` are double-Option: `null` clears/reverts to default, absent leaves unchanged. A `data_dir` change needs a restart. |
+| Method | Path        | Body                                                                                          | Response           | Description                                                                                                                                                                                             |
+| ------ | ----------- | --------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/settings` | —                                                                                             | `SettingsResponse` | Settings from `~/.config/synkban/synkban.toml` + effective/default data dir (plus Desktop-only `mirror_dir`, `mirror_schedule`, `mirror_status`). `last_board_id` self-heals if deleted/archived.       |
+| PUT    | `/settings` | `{ startup_view?, theme?, last_board_id?, data_dir?, mirror_dir?, mirror_schedule? }`         | `SettingsResponse` | Writes config. `last_board_id`/`data_dir`/`mirror_dir` are double-Option (`null` clears/reverts). Mirror fields are rejected (`400`) in Web Mode and overlap-validated in Desktop Mode. `data_dir` change needs restart. |
+| POST   | `/mirror/run` | —                                                                                           | `MirrorStatus`     | Desktop Mode only (`400` in Web Mode). Runs the configured Readable Mirror immediately and updates `mirror-state.json`.                                                                                   |
 
 ### Change polling
 
@@ -201,8 +202,9 @@ tc/
 ├── backend/
 │   ├── Cargo.toml                    # Rust dependencies
 │   ├── src/
-│   │   ├── main.rs                   # Thin entry point (delegates to lib)
-│   │   ├── lib.rs                    # Server setup (web + desktop modes), routes, token auth, embedded static serving
+│   │   ├── main.rs                   # Thin entry point + `synkban export` CLI subcommand
+│   │   ├── lib.rs                    # Server setup (web + desktop modes + mirror scheduler), routes, token auth, embedded static serving
+│   │   ├── mirror/                   # Readable Mirror HTML exporter, manifest, canonical path guards, Desktop status
 │   │   ├── models.rs                 # Data structs + request/response types
 │   │   ├── errors.rs                 # AppError → HTTP error responses
 │   │   ├── store/                    # File-based JSON storage layer (modular)
@@ -216,13 +218,16 @@ tc/
 │   │   │   ├── cards.rs              # Card CRUD, archive/orphan logic
 │   │   │   ├── card_index.rs        # Card-location lookup across the tree
 │   │   │   ├── attachments.rs        # Attachment binaries + thumbnails + sidecar metadata
+│   │   │   ├── mirror_snapshot.rs    # Read-only workspace snapshot for Readable Mirror
 │   │   │   └── gc.rs                 # Startup reconcile/GC for attachment storage
 │   │   └── handlers/
 │   │       ├── mod.rs
 │   │       ├── boards.rs             # Board + change-poll + archive handlers
 │   │       ├── labels.rs             # Label handlers
 │   │       ├── lists.rs              # List handlers
-│   │       └── cards.rs              # Card + attachment handlers
+│   │       ├── cards.rs              # Card + attachment handlers
+│   │       ├── mirror.rs             # Desktop-only POST /api/mirror/run
+│   │       └── settings.rs           # Settings GET/PUT handlers
 │   ├── tests/integration.rs          # Actix integration tests (HTTP-level)
 │   └── static/                       # (gitignored) frontend build output copied here before cargo build
 │
@@ -411,9 +416,9 @@ Empty parent directories (`lists/`, `archived_cards/`, `attachments/`, etc.) are
 
 The `description` field stores a ProseMirror document as a JSON string. Empty descriptions are stored as `""`. ProseMirror is safe by design — it uses a schema-constrained document model, not raw HTML. `attachments` and `description_text` are **not** on disk in the card file — attachments come from their sidecars, `description_text` is derived from `description` at read time.
 
-### Backup / Migration
+### Backup / Migration / Readable Mirror
 
-Data is plain JSON files. To back up: copy the `data/` directory. To migrate: move the directory to the new host and point `DATA_DIR` at it.
+Data is plain JSON files. To back up: copy the `data/` directory. To migrate: move the directory to the new host and point `DATA_DIR` at it. To generate a read-only browser-browseable copy (`index.html` + semantic card HTML + attachments), run `synkban export <output-dir>` or configure **Settings → Readable mirror** in Desktop Mode.
 
 ### Position field
 

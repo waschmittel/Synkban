@@ -42,10 +42,10 @@ After any change:
 
 ### Backend (`backend/src/`)
 
-- **`store/`** is the only data I/O (ADR-0001): `paths.rs` (pure path helpers + `check_id` / `is_valid_iso_date`), `io.rs` (JSON, file-op tracking, warnings), `boards.rs`, `labels.rs`, `lists.rs`, `cards.rs` (`CardLocation`, history), `card_index.rs`, `attachments.rs`, `gc.rs`, `walk.rs` (the only `read_dir` walker). `mod.rs` re-exports a flat API.
+- **`store/`** is the only data I/O (ADR-0001): `paths.rs` (pure path helpers + `check_id` / `is_valid_iso_date`), `io.rs` (JSON, file-op tracking, warnings), `boards.rs`, `labels.rs`, `lists.rs`, `cards.rs` (`CardLocation`, history), `card_index.rs`, `attachments.rs`, `gc.rs`, `mirror_snapshot.rs`, `walk.rs` (the only `read_dir` walker). `mod.rs` re-exports a flat API.
 - **Handlers** are thin: extract, call store, return JSON; mutating ones log action + file list.
-- `models.rs` all types/DTOs; `errors.rs` `AppError` (`NotFound`, `Io`, `TooLarge` 413, `BadRequest` 400, `Conflict` 409); `config.rs` settings file (ADR-0002); `drafts.rs` the crash draft of the open card in the config dir (ADR-0024; `SYNKBAN_DRAFTS=0` turns it off for shared e2e servers); `schema.rs` ProseMirror description validator driven by `frontend/src/schema.json` (ADR-0015); `pdf.rs` PDF/A export (ADR-0012); static files via `include_dir!("$CARGO_MANIFEST_DIR/static")`.
-- `lib.rs` exposes `run_server` and `run_desktop_server` (token + random port, ADR-0003), both behind `guard.rs` (no CORS; Host/Origin check, ADR-0034); `main.rs` is a thin entry; `build.rs` is a no-op. `log_timestamp()` gives UTC `HH:MM:SS`.
+- `models.rs` all types/DTOs; `errors.rs` `AppError` (`NotFound`, `Io`, `TooLarge` 413, `BadRequest` 400, `Conflict` 409); `config.rs` settings file (ADR-0002); `drafts.rs` the crash draft of the open card in the config dir (ADR-0024; `SYNKBAN_DRAFTS=0` turns it off for shared e2e servers); `schema.rs` ProseMirror description validator driven by `frontend/src/schema.json` (ADR-0015); `pdf.rs` PDF/A export (ADR-0012); `mirror/` Readable Mirror HTML exporter + Desktop scheduler + `mirror-state.json` (ADR-0035); static files via `include_dir!("$CARGO_MANIFEST_DIR/static")`.
+- `lib.rs` exposes `run_server` (`DesktopMode(false)`) and `run_desktop_server` (`DesktopMode(true)`, token + random port, ADR-0003), both behind `guard.rs` (no CORS; Host/Origin check, ADR-0034); `main.rs` is a thin entry (including `synkban export <output-dir>`); `build.rs` is a no-op. `log_timestamp()` gives UTC `HH:MM:SS`.
 
 ### Frontend (`frontend/src/`)
 
@@ -95,6 +95,7 @@ After any change:
 | 0032 | Adaptive contrast for board & label colours, board-matched highlights, and manual label colours (`colorContrast.ts`) |
 | 0033 | Top-layer overlays: `<dialog>.showModal()` (`modalDialog.ts`) and `popover="manual"` (`floatingPopup.ts`) |
 | 0034 | No CORS; Host/Origin guard against cross-site and DNS rebinding (`guard.rs`, `ALLOWED_HOSTS`) |
+| 0035 | Readable mirror (`mirror/`, `synkban export`, Desktop scheduler & manifest safety) |
 
 ## Data model (summary)
 
@@ -115,8 +116,9 @@ data/boards/{board-id}/attachments/{card-id}/{att-id}[ _thumb | .json ]
 ## API Endpoints
 
 ```
-GET    /api/settings                          → SettingsResponse (startup_view, theme, last_board_id [self-healing: absent when the board no longer exists/is archived], data_dir, configured_data_dir, default_data_dir)
-PUT    /api/settings  {startup_view?, theme?, last_board_id??, data_dir??}  → SettingsResponse — writes ~/.config/synkban/synkban.toml; theme ∈ {system,light,dark} (validated, 400 otherwise); double-Option fields (last_board_id/data_dir): null clears/reverts, absent leaves unchanged. data_dir change needs a restart to take effect.
+GET    /api/settings                          → SettingsResponse (startup_view, theme, last_board_id [self-healing: absent when the board no longer exists/is archived], data_dir, configured_data_dir, default_data_dir, mirror_dir [Desktop only], mirror_schedule [Desktop only], mirror_status [Desktop only])
+PUT    /api/settings  {startup_view?, theme?, last_board_id??, data_dir??, mirror_dir??, mirror_schedule?}  → SettingsResponse — writes ~/.config/synkban/synkban.toml; theme ∈ {system,light,dark} (validated, 400 otherwise); mirror_* rejected (400) in Web Mode, validated against data_dir/config_dir overlap (400) in Desktop Mode; double-Option fields (last_board_id/data_dir/mirror_dir): null clears/reverts, absent leaves unchanged. data_dir change needs a restart to take effect.
+POST   /api/mirror/run                        → MirrorStatus (Desktop Mode only, else 400; runs configured Readable Mirror synchronously)
 GET    /api/changes                          → { mtime: u64 } (newest file mtime, for poll efficiency)
 GET    /api/warnings                          → { warnings: string[] } (data-integrity warnings: corrupt/unreadable files the walker skipped)
 GET    /api/boards?today=YYYY-MM-DD          → Board[] (non-archived only) with stats {cards, overdue (due < today), edited_at (newest mtime, ms)} (today calendar-validated, 400 otherwise)

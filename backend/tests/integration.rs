@@ -1227,3 +1227,223 @@ fn walk_card_file(root: &Path, card_id: &str) -> PathBuf {
     }
     panic!("card file not found")
 }
+
+// -- Readable Mirror: Web vs Desktop settings, POST /api/mirror/run, and CLI `synkban export` --
+
+static CONFIG_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct ConfigEnvGuard {
+    prev: Option<std::ffi::OsString>,
+}
+
+impl ConfigEnvGuard {
+    fn set(dir: &Path) -> Self {
+        let prev = std::env::var_os("SYNKBAN_CONFIG_DIR");
+        std::env::set_var("SYNKBAN_CONFIG_DIR", dir);
+        Self { prev }
+    }
+}
+
+impl Drop for ConfigEnvGuard {
+    fn drop(&mut self) {
+        if let Some(ref p) = self.prev {
+            std::env::set_var("SYNKBAN_CONFIG_DIR", p);
+        } else {
+            std::env::remove_var("SYNKBAN_CONFIG_DIR");
+        }
+    }
+}
+
+#[actix_web::test]
+async fn web_mode_rejects_mirror_configuration_and_run() {
+    let dir = TempDir::new().unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(data_app_data(dir.path()))
+            .app_data(web::Data::new(synkban::DesktopMode(false)))
+            .configure(synkban::configure_routes),
+    )
+    .await;
+
+    let get_resp = test::call_service(
+        &app,
+        test::TestRequest::get().uri("/api/settings").to_request(),
+    )
+    .await;
+    assert_eq!(get_resp.status(), StatusCode::OK);
+    let settings = read_json_body(test::read_body(get_resp).await);
+    assert!(settings["mirror_dir"].is_null());
+    assert_eq!(settings["mirror_schedule"], "off");
+    assert!(settings["mirror_status"].is_null());
+
+    let put_resp = test::call_service(
+        &app,
+        test::TestRequest::put()
+            .uri("/api/settings")
+            .set_json(json!({ "mirror_schedule": "daily" }))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(put_resp.status(), StatusCode::BAD_REQUEST);
+
+    let run_resp = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri("/api/mirror/run")
+            .to_request(),
+    )
+    .await;
+    assert_eq!(run_resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[::core::prelude::v1::test]
+fn desktop_mode_configures_validates_and_runs_mirror() {
+    let _lock = CONFIG_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let root = TempDir::new().unwrap();
+    let data_dir = root.path().join("data");
+    let cfg_dir = root.path().join("cfg");
+    let mirror_dir = root.path().join("mirror");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    let _env_guard = ConfigEnvGuard::set(&cfg_dir);
+
+    actix_web::rt::System::new().block_on(async move {
+        let wake = synkban::MirrorWake::new();
+        let app = test::init_service(
+            App::new()
+                .app_data(data_app_data(&data_dir))
+                .app_data(web::Data::new(synkban::DesktopMode(true)))
+                .app_data(web::Data::new(wake))
+                .configure(synkban::configure_routes),
+        )
+        .await;
+
+        seed_board_list_card!(app);
+
+        // Rejects overlap with data_dir
+        let bad_overlap = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/settings")
+                .set_json(json!({
+                    "mirror_dir": data_dir.join("sub").to_string_lossy(),
+                    "mirror_schedule": "daily"
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(bad_overlap.status(), StatusCode::BAD_REQUEST);
+
+        // Rejects schedule without folder
+        let bad_sched = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/settings")
+                .set_json(json!({ "mirror_schedule": "weekly" }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(bad_sched.status(), StatusCode::BAD_REQUEST);
+
+        // Valid configuration succeeds
+        let ok_put = test::call_service(
+            &app,
+            test::TestRequest::put()
+                .uri("/api/settings")
+                .set_json(json!({
+                    "mirror_dir": mirror_dir.to_string_lossy(),
+                    "mirror_schedule": "daily"
+                }))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(ok_put.status(), StatusCode::OK);
+        let updated = read_json_body(test::read_body(ok_put).await);
+        assert_eq!(updated["mirror_dir"], mirror_dir.to_string_lossy().as_ref());
+        assert_eq!(updated["mirror_schedule"], "daily");
+
+        // Manual run produces the mirror and updates mirror_status
+        let run_resp = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/api/mirror/run")
+                .to_request(),
+        )
+        .await;
+        assert_eq!(run_resp.status(), StatusCode::OK);
+        let status = read_json_body(test::read_body(run_resp).await);
+        assert_eq!(status["running"], false);
+        assert_eq!(status["cards_mirrored"], 1);
+        assert!(status["last_succeeded_at"].as_u64().is_some());
+        assert!(mirror_dir.join("index.html").exists());
+        assert!(mirror_dir.join("style.css").exists());
+        assert!(mirror_dir.join("README.md").exists());
+
+        let get_resp = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/api/settings").to_request(),
+        )
+        .await;
+        let settings = read_json_body(test::read_body(get_resp).await);
+        assert_eq!(settings["mirror_status"]["cards_mirrored"], 1);
+    });
+}
+
+#[actix_web::test]
+async fn cli_export_writes_mirror_and_rejects_overlap() {
+    let root = TempDir::new().unwrap();
+    let data = root.path().join("data");
+    let cfg = root.path().join("cfg");
+    let mirror = root.path().join("mirror");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(&cfg).unwrap();
+
+    let b = synkban::store::create_board(&data, "CLI Board").unwrap();
+    let l = synkban::store::create_list(&data, &b.id, "Inbox").unwrap();
+    synkban::store::create_card(&data, &l.id, "Exported card").unwrap();
+
+    let bin = env!("CARGO_BIN_EXE_synkban");
+
+    // Missing output dir -> exit 2
+    let bad_args = std::process::Command::new(bin)
+        .arg("export")
+        .env("SYNKBAN_CONFIG_DIR", &cfg)
+        .output()
+        .unwrap();
+    assert_eq!(bad_args.status.code(), Some(2));
+
+    // Overlapping dir -> exit 1
+    let overlap = std::process::Command::new(bin)
+        .args([
+            "export",
+            data.to_str().unwrap(),
+            "--data-dir",
+            data.to_str().unwrap(),
+        ])
+        .env("SYNKBAN_CONFIG_DIR", &cfg)
+        .output()
+        .unwrap();
+    assert_eq!(overlap.status.code(), Some(1));
+
+    // Valid export -> exit 0
+    let ok = std::process::Command::new(bin)
+        .args([
+            "export",
+            mirror.to_str().unwrap(),
+            "--data-dir",
+            data.to_str().unwrap(),
+        ])
+        .env("SYNKBAN_CONFIG_DIR", &cfg)
+        .output()
+        .unwrap();
+    assert!(
+        ok.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&ok.stdout);
+    assert!(stdout.contains("1 board(s), 1 card(s)"), "stdout: {stdout}");
+    assert!(mirror.join("index.html").exists());
+    assert!(mirror.join("style.css").exists());
+    assert!(mirror.join("README.md").exists());
+}

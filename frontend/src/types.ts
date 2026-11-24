@@ -126,6 +126,16 @@ export interface Draft {
 
 export type Theme = "system" | "light" | "dark";
 
+export type MirrorSchedule = "off" | "daily" | "weekly";
+
+export interface MirrorStatus {
+  running: boolean;
+  last_succeeded_at?: number | null;
+  last_attempt_at?: number | null;
+  last_error?: string | null;
+  cards_mirrored?: number | null;
+}
+
 export interface Settings {
   startup_view: "overview" | "last";
   theme: Theme;
@@ -135,6 +145,12 @@ export interface Settings {
   /** data_dir as stored in synkban.toml, if set. */
   configured_data_dir: string | null;
   default_data_dir: string;
+  /** Desktop-only readable mirror folder (null in Web Mode or when unset). */
+  mirror_dir: string | null;
+  /** Desktop-only readable mirror schedule ("off" in Web Mode). */
+  mirror_schedule: MirrorSchedule;
+  /** Desktop-only readable mirror status (null in Web Mode). */
+  mirror_status: MirrorStatus | null;
 }
 
 export interface UpdateSettingsPayload {
@@ -145,4 +161,8 @@ export interface UpdateSettingsPayload {
   last_board_id?: string | null;
   /** null reverts to the default dir; absent leaves it unchanged. */
   data_dir?: string | null;
+  /** Desktop-only: null clears the mirror folder; absent leaves it unchanged. */
+  mirror_dir?: string | null;
+  /** Desktop-only: "off" | "daily" | "weekly". */
+  mirror_schedule?: MirrorSchedule;
 }

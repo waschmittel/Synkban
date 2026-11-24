@@ -7,6 +7,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('synkbanDesktop', {
   // Native folder picker; resolves the chosen path or null when cancelled.
   pickDataDir: (currentDir) => ipcRenderer.invoke('synkban:pick-data-dir', currentDir),
+  // Native folder picker for the Desktop-only readable mirror.
+  pickMirrorDir: (currentDir) => ipcRenderer.invoke('synkban:pick-mirror-dir', currentDir),
   // Full app relaunch (respawns the backend so it picks up the new data dir).
   relaunch: () => ipcRenderer.invoke('synkban:relaunch'),
 });

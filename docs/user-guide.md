@@ -41,6 +41,7 @@ Synkban is a **local-first, keyboard-driven kanban board and structured note-tak
 - [Syncing, Backups & Crash Safety](#syncing-backups--crash-safety)
   - [Syncing Across Devices](#syncing-across-devices)
   - [Backups & Moving to a New Computer](#backups--moving-to-a-new-computer)
+  - [Readable Mirror (HTML Export)](#readable-mirror-html-export)
   - [Crash-Safe Drafts](#crash-safe-drafts)
   - [Warnings & Offline Protection](#warnings--offline-protection)
 - [Settings & Appearance](#settings--appearance)
@@ -133,7 +134,8 @@ brew install waschmittel/synkban/synkban
 | **Label** | A coloured tag defined per board. Display order is shared across the board, card faces, card detail, and Filter Bar. |
 | **Archive** | Safe holding area for soft-deleted boards and cards. Items must be archived before they can be permanently deleted. |
 | **Data Directory** | The folder where all your boards, cards, and attachments live (`boards/`). This is the folder you back up and sync across devices. |
-| **Config Directory** | Machine-local folder (`~/.config/synkban` by default) where Synkban keeps per-machine **Settings** and crash recovery. Never synced. |
+| **Config Directory** | Machine-local folder (`~/.config/synkban` by default) where Synkban keeps per-machine **Settings**, crash recovery, and mirror run status. Never synced. |
+| **Readable Mirror** | Optional, read-only HTML copy (`index.html` + `style.css` + card HTML & attachments) you can browse in any web browser without Synkban. Reflects current state — permanent deletions propagate on update. |
 
 ---
 
@@ -545,6 +547,18 @@ Because every board, list, card, and attachment lives as plain files inside your
 - **Back up:** Copy your **Data Directory** (or its `boards/` folder). Because everything is plain files, standard backups (Time Machine, cloud backups, ZIP archives, or rsync) work cleanly without shutting Synkban down.
 - **Move to a new computer:** Copy the folder to the new computer and point Synkban at it via **Settings → Data folder → Browse…**.
 
+### Readable Mirror (HTML Export)
+
+Synkban's **Data Directory** stores descriptions as JSON and attachments as extensionless IDs. If you also want a copy you can read directly in any web browser or file explorer without Synkban installed, enable the **Readable Mirror**:
+
+- **Configure in Desktop Mode:** Open **Settings → Readable mirror → Browse…** to choose a destination folder (must not overlap your Data or Config folders), pick **Off**, **Daily**, or **Weekly**, and click **Save**. When a schedule is active, Synkban checks while open whether the interval has elapsed since the last successful update and refreshes changed cards automatically. Click **Mirror now** anytime to run an immediate update and view the last-updated timestamp or any error (for example, if an external drive is unplugged).
+- **In Web / Server Mode:** Periodic mirroring is not configured in the browser; instead, run `synkban export <folder>` from a terminal or cron job (see the [Technical & Self-Hosting Reference](technical-reference.md)).
+- **How browsing works:** Open `index.html` inside the mirror folder in any browser (`file://` directly from disk or hosted on an HTTP server). It shows a master-detail explorer in board, list, and card order with live search, arrow-key navigation (`↑` / `↓`), light/dark theme matching your system, and working links to standalone `card.html` files and attachments.
+- **Mirror vs. Backup (important):** The Readable Mirror reflects **current saved state**, not point-in-time snapshots:
+  - Archived boards and archived cards stay in the mirror until you permanently delete them in Synkban.
+  - Once you **permanently delete** a card or board in Synkban, the next mirror update removes it from the mirror too. Any unrelated files you keep inside the mirror folder are left untouched (only paths tracked in `.synkban-mirror.json` are managed).
+  - Always back up your **Data Directory** for restorable backups.
+
 ### Crash-Safe Drafts
 
 Only one card can be open for editing at a time (in the **Card Modal** or **Notes Pane**). While it has unsaved changes:
@@ -575,6 +589,8 @@ Click the **Settings** gear button in the top-right corner of the header on any 
   - **Last used board** — reopens the last board you visited (deep links to a specific board URL always take precedence, and if the last board was archived or deleted, Synkban falls back cleanly to the Board Overview).
 - **Data folder:**
   - In Desktop Mode, displays the active folder path with **Browse…**, **Use default**, and **Save & Restart** (restarts the app onto the chosen folder; existing boards stay in the old folder).
+- **Readable mirror:**
+  - In Desktop Mode, choose a mirror folder (**Browse…** / **Clear**), schedule (**Off**, **Daily**, **Weekly**), check the last-updated status and card count, or trigger **Mirror now**. (In Web Mode, shows the `synkban export <folder>` CLI command.)
 
 ![Settings dialog for Appearance, startup view, and Data folder](images/settings.png)
 

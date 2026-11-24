@@ -124,7 +124,7 @@ pub struct CardHistory {
     pub entries: Vec<HistoryEntry>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Card {
     pub id: String,
     pub list_id: String,
@@ -281,6 +281,19 @@ pub struct ReorderBoards {
     pub ids: Vec<String>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct MirrorStatus {
+    pub running: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_succeeded_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_attempt_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cards_mirrored: Option<usize>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SettingsResponse {
     pub startup_view: String,
@@ -292,6 +305,12 @@ pub struct SettingsResponse {
     /// data_dir as stored in synkban.toml, if set.
     pub configured_data_dir: Option<String>,
     pub default_data_dir: String,
+    /// Desktop-only readable mirror folder (`None` in Web Mode).
+    pub mirror_dir: Option<String>,
+    /// Desktop-only readable mirror schedule: "off" | "daily" | "weekly" ("off" in Web Mode).
+    pub mirror_schedule: String,
+    /// Desktop-only live/persisted readable mirror status (`None` in Web Mode).
+    pub mirror_status: Option<MirrorStatus>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -303,6 +322,9 @@ pub struct UpdateSettings {
     pub last_board_id: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_double_option")]
     pub data_dir: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    pub mirror_dir: Option<Option<String>>,
+    pub mirror_schedule: Option<String>,
 }
 
 /// Partial card update; `None` leaves a field unchanged.

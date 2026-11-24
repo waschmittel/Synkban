@@ -3,6 +3,7 @@ pub mod drafts;
 pub mod errors;
 pub mod guard;
 pub mod handlers;
+pub mod mirror;
 pub mod models;
 pub mod pdf;
 pub mod schema;
@@ -14,7 +15,43 @@ use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer};
 pub use guard::AllowedHosts;
 use include_dir::{include_dir, Dir};
 use std::path::PathBuf;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Condvar, Mutex};
+
+/// Marks whether the server was launched in Desktop Mode (`DESKTOP_TOKEN` set).
+#[derive(Clone, Copy, Debug)]
+pub struct DesktopMode(pub bool);
+
+/// Wakes the Desktop Mode periodic readable-mirror scheduler immediately after
+/// mirror settings change.
+#[derive(Clone, Default)]
+pub struct MirrorWake(Arc<(Mutex<bool>, Condvar)>);
+
+impl MirrorWake {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn notify(&self) {
+        let (lock, cv) = &*self.0;
+        let mut woken = lock.lock().unwrap_or_else(|e| e.into_inner());
+        *woken = true;
+        cv.notify_all();
+    }
+
+    fn wait_timeout(&self, dur: std::time::Duration) {
+        let (lock, cv) = &*self.0;
+        let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if *guard {
+            let mut g = guard;
+            *g = false;
+            return;
+        }
+        let (mut g, _) = cv
+            .wait_timeout(guard, dur)
+            .unwrap_or_else(|e| e.into_inner());
+        *g = false;
+    }
+}
 
 /// Build version: the release tag or a dated snapshot, baked in by build.rs.
 pub const VERSION: &str = env!("SYNKBAN_VERSION");
@@ -65,6 +102,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         "/api/settings",
         web::put().to(handlers::settings::update_settings),
     )
+    .route("/api/mirror/run", web::post().to(handlers::mirror::run_now))
     .route("/api/boards", web::get().to(handlers::boards::list_boards))
     .route("/api/draft", web::get().to(handlers::drafts::get_draft))
     .route(
@@ -268,6 +306,7 @@ pub async fn run_server(
         App::new()
             .wrap(from_fn(guard::middleware))
             .app_data(allowed_hosts.clone())
+            .app_data(web::Data::new(DesktopMode(false)))
             .app_data(web::Data::new(data_dir.clone()))
             .app_data(web::PayloadConfig::new(52 * 1024 * 1024))
             .configure(configure_routes)
@@ -284,6 +323,26 @@ pub async fn run_server(
 /// gets ECONNRESET (Node doesn't retry; e2e API calls flaked).
 const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(75);
 
+fn start_mirror_scheduler(data_dir: PathBuf, wake: MirrorWake) {
+    std::thread::spawn(move || {
+        // Brief startup settle before checking whether a periodic mirror is due.
+        wake.wait_timeout(std::time::Duration::from_secs(3));
+        loop {
+            let cfg = config::load();
+            let sched = cfg.mirror_schedule.as_deref().unwrap_or("off");
+            if cfg
+                .mirror_dir
+                .as_deref()
+                .is_some_and(|d| !d.trim().is_empty())
+                && mirror::is_schedule_due(sched, mirror::state::now_ms())
+            {
+                let _ = mirror::run_configured_mirror(&data_dir);
+            }
+            wake.wait_timeout(std::time::Duration::from_secs(60));
+        }
+    });
+}
+
 pub async fn run_desktop_server(
     data_dir: &str,
     token: &str,
@@ -292,6 +351,8 @@ pub async fn run_desktop_server(
     let data_dir = PathBuf::from(data_dir);
     std::fs::create_dir_all(&data_dir)?;
     reconcile_attachments(&data_dir);
+    let mirror_wake = MirrorWake::new();
+    start_mirror_scheduler(data_dir.clone(), mirror_wake.clone());
     let token = token.to_string();
     let data_dir_display = data_dir.display().to_string();
 
@@ -324,6 +385,8 @@ pub async fn run_desktop_server(
             // Outermost: rejects foreign hosts/origins before the token check.
             .wrap(from_fn(guard::middleware))
             .app_data(web::Data::new(AllowedHosts::loopback()))
+            .app_data(web::Data::new(DesktopMode(true)))
+            .app_data(web::Data::new(mirror_wake.clone()))
             .app_data(web::Data::new(data_dir.clone()))
             .app_data(web::PayloadConfig::new(52 * 1024 * 1024))
             .configure(configure_routes)

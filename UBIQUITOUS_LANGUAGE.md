@@ -30,7 +30,8 @@
 | **Warning** | A data-integrity notice for a corrupt/unreadable file the walkers skipped (`/api/warnings`) | Error banner |
 | **Network Banner** | Non-blocking alert (`NetworkBanner`) shown when the server is unreachable or a write fails, keeping loaded views intact (ADR-0026) | Warning |
 | **Data Directory** | Root of all board files; resolved `--data-dir` > `DATA_DIR` > config > default (ADR-0002) | Storage folder |
-| **Settings** | User preferences in `synkban.toml` (`startup_view`, `last_board_id`, `theme`, `data_dir`), served by the backend | Preferences, config (for UI choices) |
+| **Settings** | User preferences in `synkban.toml` (`startup_view`, `last_board_id`, `theme`, `data_dir`, `mirror_dir`, `mirror_schedule`), served by the backend | Preferences, config (for UI choices) |
+| **Readable Mirror** | One-way, incremental export of saved boards, lists, cards, and attachments (`index.html` + `style.css` + semantic `card.html`), tracked by `.synkban-mirror.json`; scheduled in **Desktop Mode** or run via `synkban export` (ADR-0035) | Backup (implies point-in-time restore), sync folder |
 
 ## UI and interaction
 
@@ -72,3 +73,4 @@
 
 - "Delete" in the UI means **Archive** for boards and cards; permanent removal is "Delete permanently" and only exists in an **Archive Panel**.
 - "Save" always means saving the **Card Modal** (or **Settings**), never autosave.
+- **Readable Mirror** is not a restorable backup: permanent deletions in Synkban also prune items from the mirror on the next run, and the mirror cannot be imported back into Synkban (copy the **Data Directory** for backups).

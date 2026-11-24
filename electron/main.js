@@ -38,6 +38,15 @@ function registerSettingsIpc() {
     return result.canceled ? null : result.filePaths[0];
   });
 
+  ipcMain.handle('synkban:pick-mirror-dir', async (_event, currentDir) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose readable mirror folder',
+      defaultPath: typeof currentDir === 'string' && currentDir ? currentDir : undefined,
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
+
   ipcMain.handle('synkban:relaunch', () => {
     app.relaunch();
     app.quit();

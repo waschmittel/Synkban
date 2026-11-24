@@ -25,6 +25,8 @@ export function recordLastBoard(id: string) {
 export interface DesktopBridge {
   /** Native folder picker; resolves the chosen path or null when cancelled. */
   pickDataDir(currentDir: string): Promise<string | null>;
+  /** Native folder picker for the Desktop-only readable mirror. */
+  pickMirrorDir(currentDir: string): Promise<string | null>;
   /** Relaunch the app (respawns the backend on the new data dir). */
   relaunch(): Promise<void>;
 }

@@ -8,6 +8,7 @@ This document covers the technical details that everyday **Desktop Mode** users 
 
 - [Standalone Web Server (Web Mode)](#standalone-web-server-web-mode)
 - [Self-Hosting with Docker & Installing as a PWA](#self-hosting-with-docker--installing-as-a-pwa)
+- [Readable Mirror (`synkban export`)](#readable-mirror-synkban-export)
 - [Data Directory, Config Directory & `synkban.toml`](#data-directory-config-directory--synkbantoml)
 - [Sync & Storage Internals](#sync--storage-internals)
 - [Building from Source & Developer Documentation](#building-from-source--developer-documentation)
@@ -30,6 +31,7 @@ Then open **`http://localhost:8080`** in your browser.
 
 | Option / Variable | Default | Description |
 | --- | --- | --- |
+| `export <output-dir>` | — | Subcommand that writes or incrementally updates a read-only HTML **Readable Mirror** in `<output-dir>` and exits (`--data-dir` supported). |
 | `--data-dir <path>` | *(see below)* | Path to the **Data Directory** (also accepts `--data-dir=<path>`). Takes precedence over `DATA_DIR` and config file. |
 | `-h`, `--help` | — | Print CLI usage help and exit. |
 | `-V`, `--version` | — | Print the Synkban version and exit. |
@@ -68,6 +70,41 @@ docker run -d \
 To expose Synkban over HTTPS with persistent single-prompt login and install it as a standalone **Progressive Web App (PWA)** on desktop browsers, Android, or iOS/iPadOS, follow the **[Self-Hosting & Docker Guide (Traefik + Tinyauth PWA)](docker/README.md)**.
 
 <img src="images/mobile-notes.png" alt="Synkban Notes Mode on a narrow mobile viewport" width="340">
+
+---
+
+## Readable Mirror (`synkban export`)
+
+A **Readable Mirror** exports a one-way, incremental, browser-browseable copy of saved boards (active and archived), lists, cards, and attachments:
+
+```text
+<output-dir>/
+├── README.md                                 # Explains mirror semantics & layout
+├── index.html                                # Master-detail explorer (file:// & http(s)://)
+├── style.css                                 # Shared light/dark/print stylesheet
+├── .synkban-mirror.json                      # Manifest of owned paths + incremental hashes
+└── boards/
+    └── {board-id}/
+        └── cards/
+            └── {card-id}/
+                ├── card.html                 # Pure semantic HTML (../../../../style.css)
+                └── attachments/              # Created only when the card has attachments
+                    ├── report-2026.pdf       # Simple unique ASCII filename kept verbatim
+                    └── {att-id}.tar.gz       # Fallback preserving compound/single ext
+```
+
+In **Desktop Mode**, the mirror folder and schedule (`off` | `daily` | `weekly`) live in **Settings → Readable mirror**. In **Web Mode** / Docker, periodic mirroring is not configurable over HTTP — run `synkban export` from cron, systemd, or a backup hook instead:
+
+```bash
+# Standalone binary (uses DATA_DIR / synkban.toml unless --data-dir is passed)
+./synkban export /path/to/mirror --data-dir /path/to/data
+
+# Inside Docker
+docker exec synkban /usr/local/bin/synkban export /mirror
+```
+
+- **Incremental & lock-guarded:** Unchanged cards and attachments are skipped; only `.synkban-mirror.json`-tracked paths are pruned when items are permanently deleted; corrupt source files abort the run before touching the mirror; and `<output-dir>` cannot overlap `DATA_DIR` or `SYNKBAN_CONFIG_DIR`.
+- **Static hosting note:** `index.html` renders cards inside `<iframe name="detail">` using relative links (no `fetch()`). If you serve the mirror behind a reverse proxy, set `X-Frame-Options: SAMEORIGIN` rather than `DENY`.
 
 ---
 
@@ -111,9 +148,13 @@ data_dir = "/home/me/Sync/synkban"
 startup_view = "last"      # "overview" (default) | "last"
 theme = "system"           # "system" (default) | "light" | "dark"
 last_board_id = "..."      # maintained automatically
+# Desktop Mode only:
+mirror_dir = "/home/me/Sync/synkban-mirror"
+mirror_schedule = "daily"  # "off" (default) | "daily" | "weekly"
 ```
 
 - **`draft.json`** — the machine's local crash-recovery **Draft** for the currently open card (never synced to other devices).
+- **`mirror-state.json`** — Desktop Mode readable-mirror run status (`last_succeeded_at`, `last_attempt_at`, `last_error`, `cards_mirrored`).
 
 ---
 

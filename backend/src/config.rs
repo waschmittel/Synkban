@@ -25,6 +25,12 @@ pub struct Config {
     /// "system" (default) | "light" | "dark"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
+    /// Desktop-only readable mirror output directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mirror_dir: Option<String>,
+    /// Desktop-only readable mirror schedule: "off" (default) | "daily" | "weekly".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mirror_schedule: Option<String>,
 }
 
 /// Serializes read-modify-write cycles from concurrent PUT /api/settings.
@@ -93,6 +99,8 @@ mod tests {
             startup_view: Some("last".into()),
             last_board_id: None,
             theme: Some("dark".into()),
+            mirror_dir: None,
+            mirror_schedule: None,
         };
         let text = toml::to_string_pretty(&config).unwrap();
         let parsed: Config = toml::from_str(&text).unwrap();

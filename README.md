@@ -23,7 +23,7 @@ Organise tasks across lists in **Kanban Mode**, switch any board to **Notes Mode
 - **Quick-add (`#label` & `due:`)** — Assign labels and due dates (`#design`, `due:fri`, `due:tomorrow`, `due:+3d`, `due:2026-12-01`) directly in a new card's title with live preview chips.
 - **Rich Card Detail** — Bold/italic titles (`**bold**`, `*italic*`), structured rich-text **Description** via the **`Cmd/Ctrl + K` Editor Menu** (Heading 1–3, 8-color text **Highlights**, semantic **Alerts**, code blocks, runnable **Lua Blocks** for short calculations and scratchpads, quotes, nested lists, smart links, numbered footnotes, tables, transposable 2D **Matrices**, and inline pasted/embedded images), keyboard-first **Due Date Picker** (`Cmd/Ctrl + U`), flat **Checklists** (`Cmd/Ctrl + L`), and file **Attachments** (≤50 MB) with thumbnails and preview lightbox.
 - **Ordered Labels & Filter Bar** — Manage and reorder board **Labels** in the **Label Drawer** (`G`, with safe **Label Merge** on rename), and narrow any board via the **Filter Bar** (`F`) combining text, due-date range (*Overdue*, *This week*, *Until…*), and labels.
-- **History, PDF/A Export & Safety** — Compare the last 100 saved versions field-by-field (`Cmd/Ctrl + J`), export saved cards offline to archival **PDF/A-2u** (`Cmd/Ctrl + P`), recover items from the **Archive Panel** (`A`), choose System / Light / Dark mode in **Settings**, and press **`?`** anywhere for contextual shortcut help.
+- **History, Export, Readable Mirror & Safety** — Compare the last 100 saved versions field-by-field (`Cmd/Ctrl + J`), export saved cards offline to archival **PDF/A-2u** (`Cmd/Ctrl + P`), maintain an incremental read-only HTML **Readable Mirror** (`index.html` + attachments, configurable daily/weekly in Desktop Mode or via `synkban export`), recover items from the **Archive Panel** (`A`), choose System / Light / Dark mode in **Settings**, and press **`?`** anywhere for contextual shortcut help.
 
 ## Install the Desktop App
 
@@ -62,7 +62,7 @@ docker pull ghcr.io/waschmittel/synkban:latest
 
 > **Security note:** Web Mode has **no built-in authentication** (single-user design). Bind to `127.0.0.1`, run over a private network such as Tailscale, or place it behind an authenticating reverse proxy (see the Traefik + Tinyauth PWA setup guide).
 
-Full CLI flags (`--data-dir`), environment variables (`HOST`, `PORT`, `DATA_DIR`, `SYNKBAN_CONFIG_DIR`), `synkban.toml`, and the on-disk JSON storage layout live in the **[Technical & Self-Hosting Reference](docs/technical-reference.md)**.
+Full CLI flags (`--data-dir`, `synkban export <output-dir>`), environment variables (`HOST`, `PORT`, `DATA_DIR`, `SYNKBAN_CONFIG_DIR`), `synkban.toml`, and the on-disk JSON storage layout live in the **[Technical & Self-Hosting Reference](docs/technical-reference.md)**.
 
 ### Build from Source
 

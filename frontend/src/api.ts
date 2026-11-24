@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import type { Attachment, Board, BoardDetail, BoardMode, Card, CardHistory, ChecklistItem, Draft, Label, ListWithCards, Settings, UpdateSettingsPayload } from "./types";
+import type { Attachment, Board, BoardDetail, BoardMode, Card, CardHistory, ChecklistItem, Draft, Label, ListWithCards, MirrorStatus, Settings, UpdateSettingsPayload } from "./types";
 
 const BASE = "/api";
 
@@ -168,6 +168,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+
+  runMirror: () => request<MirrorStatus>("/mirror/run", { method: "POST" }),
 
   getWarnings: () => request<{ warnings: string[] }>("/warnings"),
 

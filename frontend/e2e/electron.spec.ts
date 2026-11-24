@@ -185,6 +185,63 @@ test.describe("electron desktop shell", () => {
     expect(after.x).toBe(before.x);
     expect(after.y).toBe(before.y);
   });
+
+  test("readable mirror folder picker, schedule, and Mirror now work in Desktop Mode", async () => {
+    const userDataDir = mkdtempSync(join(tmpdir(), "synkban-electron-e2e-"));
+    const mirrorDir = mkdtempSync(join(tmpdir(), "synkban-electron-e2e-mirror-"));
+    app = await electron.launch({
+      executablePath: exe!,
+      args: [
+        join(__dirname, "..", "..", "electron", "main.js"),
+        `--user-data-dir=${userDataDir}`,
+      ],
+      env: {
+        ...process.env,
+        DATA_DIR: mkdtempSync(join(tmpdir(), "synkban-electron-e2e-data-")),
+        SYNKBAN_CONFIG_DIR: mkdtempSync(join(tmpdir(), "synkban-electron-e2e-config-")),
+      },
+    });
+
+    await app.evaluate(({ dialog }, dir) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] });
+    }, mirrorDir);
+
+    const page = await app.firstWindow();
+    await page.waitForLoadState("domcontentloaded");
+    await page.evaluate(async () => {
+      const post = (url: string, body: unknown) =>
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).then((r) => r.json());
+      const board = await post("/api/boards", { title: "Desktop Mirror Board" });
+      const list = await post(`/api/boards/${board.id}/lists`, { title: "Todo" });
+      await post(`/api/lists/${list.id}/cards`, { title: "Desktop Mirror Card" });
+    });
+
+    await page.locator(".btn-header-settings").click();
+    const mirrorSec = page.locator('[data-section="readable-mirror"]');
+    await mirrorSec.getByRole("button", { name: "Browse…" }).click();
+    await expect(mirrorSec.locator(".settings-path code")).toHaveText(mirrorDir);
+    await expect(mirrorSec.getByRole("radio", { name: "Daily" })).toBeChecked();
+
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.locator(".settings-overlay")).toHaveCount(0);
+
+    // Reopen Settings and trigger/verify Mirror now + status
+    await page.locator(".btn-header-settings").click();
+    const mirrorNow = mirrorSec.getByRole("button", { name: /Mirror now|Mirroring…/ });
+    await expect(mirrorNow).toBeVisible();
+    await expect(mirrorNow).toBeEnabled({ timeout: 10000 });
+    await mirrorNow.click();
+
+    await expect(mirrorSec.locator(".settings-mirror-status")).toContainText("Last updated");
+    await expect(mirrorSec.locator(".settings-mirror-status")).toContainText("1 card");
+    expect(existsSync(join(mirrorDir, "index.html"))).toBe(true);
+    expect(existsSync(join(mirrorDir, "style.css"))).toBe(true);
+    expect(existsSync(join(mirrorDir, "README.md"))).toBe(true);
+  });
 });
 
 // The Linux menu/taskbar icon is looked up by name in the hicolor theme, whose

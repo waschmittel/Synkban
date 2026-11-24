@@ -301,10 +301,10 @@
           </article>
 
           <article class="bento-card">
-            <h4>Themes, startup view &amp; data folder</h4>
-            <p>Open <strong>Settings</strong> from any view to pick System, Light, or Dark appearance, launch straight into your last board, or point the Desktop App at a synced folder.</p>
+            <h4>Themes, startup view &amp; Readable Mirror</h4>
+            <p>Open <strong>Settings</strong> from any view to pick System, Light, or Dark appearance, launch straight into your last board, point the Desktop App at a synced folder, or maintain a daily/weekly browser-ready <strong>Readable Mirror</strong>.</p>
             <div class="shot-card">
-              <img src="images/settings.png" alt="Settings dialog showing Appearance, startup view, and Data folder options" data-zoom data-caption="Settings — choose System/Light/Dark mode, startup view, and your Data Directory.">
+              <img src="images/settings.png" alt="Settings dialog showing Appearance, startup view, Data folder, and Readable mirror options" data-zoom data-caption="Settings — choose System/Light/Dark mode, startup view, Data Directory, and Readable Mirror.">
             </div>
           </article>
         </div>
@@ -427,10 +427,11 @@
 
         <div class="tech-grid">
           <article class="tech-card">
-            <h3>Standalone Web Server</h3>
-            <p>Single self-contained binary with embedded web assets. Configure via <code>--data-dir</code>, <code>DATA_DIR</code>, <code>HOST</code>, and <code>PORT</code>. Place behind a private network or login proxy.</p>
+            <h3>Standalone Web Server &amp; CLI Export</h3>
+            <p>Single self-contained binary with embedded web assets. Configure via <code>--data-dir</code>, <code>DATA_DIR</code>, <code>HOST</code>, and <code>PORT</code>, or run <code>synkban export</code> for a static HTML mirror.</p>
             <div class="code-block">
-              <pre><code>HOST=0.0.0.0 PORT=8080 ./synkban</code></pre>
+              <pre><code>HOST=0.0.0.0 PORT=8080 ./synkban
+./synkban export /path/to/mirror</code></pre>
               <button type="button" class="code-copy">Copy</button>
             </div>
           </article>

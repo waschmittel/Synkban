@@ -109,6 +109,7 @@
           <ul>
             <li><a href="#syncing-across-devices">Syncing Across Devices</a></li>
             <li><a href="#backups">Backups &amp; Moving Computers</a></li>
+            <li><a href="#readable-mirror">Readable Mirror (HTML Export)</a></li>
             <li><a href="#crash-drafts">Crash-Safe Drafts</a></li>
             <li><a href="#warnings">Warnings &amp; Offline Protection</a></li>
           </ul>
@@ -218,7 +219,8 @@
               <tr><td><strong>Label</strong></td><td>A coloured tag defined per board. Display order is shared across the board, card faces, Card Modal, and Filter Bar.</td></tr>
               <tr><td><strong>Archive</strong></td><td>Safe holding area for soft-deleted boards and cards. Items must be archived before they can be permanently deleted.</td></tr>
               <tr><td><strong>Data Directory</strong></td><td>The folder where all boards, cards, and attachments live (<code>boards/</code>). Back up and sync this folder across devices.</td></tr>
-              <tr><td><strong>Config Directory</strong></td><td>Machine-local folder (<code>~/.config/synkban</code> by default) keeping per-machine <strong>Settings</strong> and crash recovery. Never synced.</td></tr>
+              <tr><td><strong>Config Directory</strong></td><td>Machine-local folder (<code>~/.config/synkban</code> by default) keeping per-machine <strong>Settings</strong>, crash recovery, and mirror status. Never synced.</td></tr>
+              <tr><td><strong>Readable Mirror</strong></td><td>Read-only HTML export (<code>index.html</code> + <code>style.css</code> + card HTML &amp; attachments) browseable without Synkban. Reflects current state (deletions propagate).</td></tr>
             </tbody>
           </table>
         </div>
@@ -418,6 +420,13 @@
         <h3 id="backups">Backups &amp; Moving Computers</h3>
         <p>Copy your <strong>Data Directory</strong> (or its <code>boards/</code> folder) anytime — standard file backups (Time Machine, ZIP archives, cloud backup, rsync) work without stopping Synkban. On a new computer, copy the folder over and pick it in <strong>Settings → Data folder → Browse…</strong>.</p>
 
+        <h3 id="readable-mirror">Readable Mirror (HTML Export)</h3>
+        <p>If you want a copy you can read directly in any web browser without Synkban installed, enable the <strong>Readable Mirror</strong> in Desktop Mode via <strong>Settings → Readable mirror → Browse…</strong> (choose a folder outside your Data and Config folders), pick <strong>Off</strong>, <strong>Daily</strong>, or <strong>Weekly</strong>, and click <strong>Save</strong> (or trigger <strong>Mirror now</strong> anytime). In Web / Server Mode, run <code>synkban export &lt;folder&gt;</code> instead.</p>
+        <ul>
+          <li><strong>Browse offline or hosted:</strong> Open <code>index.html</code> in any browser (works on <code>file://</code> and <code>http(s)://</code>) for a master-detail explorer in board, list, and card order with live search, keyboard navigation (<kbd>↑</kbd>/<kbd>↓</kbd>), and working attachment links.</li>
+          <li><strong>Mirror vs. backup:</strong> Archived boards and cards stay in the mirror, but <strong>permanent deletions</strong> in Synkban remove those items from the mirror on the next update (unrelated files in the folder are left untouched). Always back up your <strong>Data Directory</strong> for restorable backups.</li>
+        </ul>
+
         <h3 id="crash-drafts">Crash-Safe Drafts</h3>
         <p>While a single card has unsaved edits, Synkban keeps a machine-local crash recovery <strong>Draft</strong>. If the app closes or reloads unexpectedly before you save, the next launch automatically reopens that card with your edits and offers a <strong>Discard</strong> option (safely dropping the draft if the card changed externally in the meantime).</p>
 
@@ -425,7 +434,7 @@
         <p>If Synkban encounters an unreadable or half-synced file, it skips only that file, leaves it intact on disk, keeps the rest of your boards usable, and shows a warning banner naming the exact file path.</p>
 
         <h2 id="settings">Settings &amp; Appearance</h2>
-        <p>Click the <strong>Settings</strong> gear button in the top-right corner of the header on any page to choose <strong>Appearance</strong> (System, Light, or Dark with live preview), <strong>On startup, open</strong> (Board overview or Last used board), and your <strong>Data folder</strong>.</p>
+        <p>Click the <strong>Settings</strong> gear button in the top-right corner of the header on any page to choose <strong>Appearance</strong> (System, Light, or Dark with live preview), <strong>On startup, open</strong> (Board overview or Last used board), your <strong>Data folder</strong>, and (in Desktop Mode) your <strong>Readable mirror</strong> folder, schedule, status, and <strong>Mirror now</strong> trigger.</p>
         <figure>
           <img src="../images/settings.png" alt="Settings dialog for Appearance, startup view, and Data folder" data-zoom data-caption="Settings — configure Appearance, startup behaviour, and your Data Directory.">
           <figcaption>Settings dialog for Appearance, startup view, and Data folder selection.</figcaption>

@@ -57,6 +57,9 @@
           <a href="#docker-pwa">Docker &amp; Mobile PWA</a>
         </li>
         <li>
+          <a href="#readable-mirror">Readable Mirror (<code>synkban export</code>)</a>
+        </li>
+        <li>
           <a href="#directories-and-config">Directories &amp; <code>synkban.toml</code></a>
           <ul>
             <li><a href="#data-directory">Data Directory Layout</a></li>
@@ -102,6 +105,7 @@
               <tr><th>Option / Variable</th><th>Default</th><th>Description</th></tr>
             </thead>
             <tbody>
+              <tr><td><code>export &lt;output-dir&gt;</code></td><td>—</td><td>Write or incrementally update a read-only HTML <strong>Readable Mirror</strong> in <code>&lt;output-dir&gt;</code> and exit (<code>--data-dir</code> supported).</td></tr>
               <tr><td><code>--data-dir &lt;path&gt;</code></td><td><em>(see resolution order)</em></td><td>Path to the <strong>Data Directory</strong> (also accepts <code>--data-dir=&lt;path&gt;</code>). Highest precedence.</td></tr>
               <tr><td><code>-h</code>, <code>--help</code></td><td>—</td><td>Print CLI usage help and exit.</td></tr>
               <tr><td><code>-V</code>, <code>--version</code></td><td>—</td><td>Print the Synkban version and exit.</td></tr>
@@ -141,6 +145,28 @@
           <figcaption>Notes Mode on a narrow viewport (&lt; 760 px), stacking the active list above the Notes Pane.</figcaption>
         </figure>
 
+        <h2 id="readable-mirror">Readable Mirror (<code>synkban export</code>)</h2>
+        <p>Generates an incremental, one-way, browser-browseable HTML mirror of saved boards (active and archived), lists, cards, and attachments:</p>
+        <div class="code-block">
+          <pre><code>&lt;output-dir&gt;/
+├── README.md
+├── index.html                   # Master-detail explorer (file:// &amp; http(s)://)
+├── style.css                    # Shared light/dark/print stylesheet
+├── .synkban-mirror.json         # Manifest of owned paths &amp; incremental hashes
+└── boards/{board-id}/cards/{card-id}/
+    ├── card.html                # Pure semantic HTML (../../../../style.css)
+    └── attachments/             # Simple unique names verbatim, else {att-id}.{ext}</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+        <p>In <strong>Desktop Mode</strong>, configure the folder and schedule (<code>off</code> | <code>daily</code> | <code>weekly</code>) in <strong>Settings → Readable mirror</strong>. In <strong>Web Mode</strong> / Docker, run the CLI subcommand from cron or a backup hook:</p>
+        <div class="code-block">
+          <pre><code>./synkban export /path/to/mirror --data-dir /path/to/data
+# Inside Docker:
+docker exec synkban /usr/local/bin/synkban export /mirror</code></pre>
+          <button type="button" class="code-copy">Copy</button>
+        </div>
+        <p>Unchanged cards and attachments are skipped; only manifest-tracked paths are pruned; corrupt source JSON aborts the run before touching the mirror; and overlapping <code>DATA_DIR</code> or <code>SYNKBAN_CONFIG_DIR</code> paths are refused. If hosting <code>index.html</code> behind a reverse proxy, allow same-origin framing (<code>X-Frame-Options: SAMEORIGIN</code>).</p>
+
         <h2 id="directories-and-config">Directories &amp; <code>synkban.toml</code></h2>
 
         <h3 id="data-directory">1. Data Directory (Sync Across Devices)</h3>
@@ -176,11 +202,15 @@
           <pre><code>data_dir = "/home/me/Sync/synkban"
 startup_view = "last"      # "overview" (default) | "last"
 theme = "system"           # "system" (default) | "light" | "dark"
-last_board_id = "..."      # maintained automatically</code></pre>
+last_board_id = "..."      # maintained automatically
+# Desktop Mode only:
+mirror_dir = "/home/me/Sync/synkban-mirror"
+mirror_schedule = "daily"  # "off" (default) | "daily" | "weekly"</code></pre>
           <button type="button" class="code-copy">Copy</button>
         </div>
         <ul>
           <li><strong><code>draft.json</code></strong> — the single local crash-recovery <strong>Draft</strong> for the currently open card.</li>
+          <li><strong><code>mirror-state.json</code></strong> — Desktop Mode readable-mirror status (<code>last_succeeded_at</code>, <code>last_attempt_at</code>, <code>last_error</code>, <code>cards_mirrored</code>).</li>
         </ul>
 
         <h2 id="sync-internals">Sync &amp; Storage Internals</h2>

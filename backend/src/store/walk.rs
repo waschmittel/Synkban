@@ -140,7 +140,7 @@ pub fn collect_warnings(data_dir: &Path) -> Vec<String> {
 /// Sidecars are read lazily during card responses (`attachments::load_attachments`),
 /// so the health check walks them explicitly to surface a corrupt one even when
 /// no card is being rendered.
-fn scan_attachment_sidecars(data_dir: &Path, board_id: &str) {
+pub(crate) fn scan_attachment_sidecars(data_dir: &Path, board_id: &str) {
     let root = board_dir(data_dir, board_id).join("attachments");
     let Ok(card_dirs) = fs::read_dir(&root) else {
         return;

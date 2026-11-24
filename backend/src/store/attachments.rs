@@ -44,7 +44,11 @@ pub(crate) fn load_attachments(data_dir: &Path, board_id: &str, card_id: &str) -
             }
         }
     }
-    out.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    out.sort_by(|a, b| {
+        a.created_at
+            .cmp(&b.created_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
     out
 }
 
@@ -206,6 +210,36 @@ pub fn get_thumbnail_data(
         return Err(AppError::NotFound("Thumbnail not found".into()));
     }
     Ok(fs::read(&thumb_path)?)
+}
+
+/// Atomically copy a single attachment's raw bytes into `dest` (via a `.tmp`
+/// sibling + rename) without loading all attachments into memory at once.
+pub fn copy_attachment_blob(
+    data_dir: &Path,
+    board_id: &str,
+    card_id: &str,
+    att_id: &str,
+    dest: &Path,
+) -> Result<(), AppError> {
+    check_id(board_id)?;
+    check_id(card_id)?;
+    check_id(att_id)?;
+    let src = attachment_dir(data_dir, board_id, card_id).join(att_id);
+    if !src.exists() {
+        return Err(AppError::NotFound("Attachment file not found".into()));
+    }
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("att");
+    let tmp = dest.with_file_name(format!(".{name}.{}.tmp", uuid::Uuid::new_v4()));
+    fs::copy(&src, &tmp).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })?;
+    fs::rename(&tmp, dest).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
