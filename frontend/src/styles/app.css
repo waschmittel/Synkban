@@ -2250,6 +2250,8 @@ dialog.image-preview-overlay::backdrop {
 :where(
   [popover].ProseMirror-menu-dropdown-menu,
   [popover].table-menu,
+  [popover].table-bar,
+  [popover].table-edge-add,
   [popover].highlight-swatch-popover,
   [popover].lua-autocomplete,
   [popover].due-picker
@@ -3445,6 +3447,156 @@ html.theme-dark .modal-history-btn:hover {
   border-top: 1px solid var(--color-border);
   font-size: 11px;
   color: var(--color-text-subtle);
+}
+
+/* Floating table toolbar (popover="manual", stays open across repeated actions) */
+.table-bar {
+  position: fixed;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 2px 4px;
+  background: color-mix(in srgb, var(--color-surface) 40%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--color-text);
+  border: 1px solid color-mix(in srgb, var(--color-border-strong) 36%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 9%, transparent);
+}
+
+.table-bar:not(:popover-open),
+.table-edge-add:not(:popover-open),
+.table-bar[hidden],
+.table-bar-btn[hidden],
+.table-bar-sep[hidden] {
+  display: none;
+}
+
+.table-bar-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: color-mix(in srgb, var(--color-border-strong) 34%, transparent);
+  flex: 0 0 auto;
+}
+
+.table-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.54;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: opacity 120ms, background-color 120ms, color 120ms;
+}
+
+.table-bar-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
+}
+
+.table-bar-btn:disabled {
+  opacity: 0.2;
+  cursor: default;
+}
+
+.table-bar-btn--active {
+  opacity: 0.82;
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
+}
+
+.table-bar-btn--active:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--color-surface);
+}
+
+.table-bar-btn--danger:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--color-danger);
+  background: var(--color-surface);
+}
+
+/* Edge '+' tabs for appending a row at bottom or column at right */
+.table-edge-add {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border-strong) 36%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface) 40%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--color-text);
+  cursor: pointer;
+  opacity: 0.54;
+  transition: opacity 120ms, background-color 120ms, color 120ms, border-color 120ms;
+}
+
+.table-edge-add:hover {
+  opacity: 1;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
+}
+
+.table-edge-add--row {
+  height: 14px;
+  border-radius: 999px;
+}
+
+.table-edge-add--col {
+  width: 14px;
+  border-radius: 999px;
+}
+
+/* Matrix (0, 0) corner transpose button: out-of-flow so row 0 height never grows */
+.editor-wrapper .ProseMirror:not(.ProseMirror-focused) .matrix-transpose-btn {
+  display: none;
+}
+
+.matrix-transpose-btn {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border-strong) 36%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface) 40%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--color-text);
+  opacity: 0.54;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 120ms, background-color 120ms, color 120ms, border-color 120ms;
+}
+
+.matrix-transpose-btn:hover {
+  opacity: 1;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 18%, transparent);
 }
 
 /* ProseMirror menu bar */

@@ -36,6 +36,7 @@ import {
   toggleDefaultHighlight,
 } from "./highlights";
 import { insertMatrix, insertTable, tablePlugins } from "./tables";
+import { tableBarPlugin } from "./tableBar";
 import { schema, TEXT_STYLES, validateDescription } from "./schema";
 import { api } from "./api";
 import { pastedImageFiles } from "./pasteImages";
@@ -534,6 +535,7 @@ export function createCardEditor(
       ...luaPlugins(),
       tableMenuKeymap,
       ...tablePlugins(),
+      tableBarPlugin(),
       blockEscapeKeymap,
       listKeymap,
       autolinkInputRules(schema),

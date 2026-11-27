@@ -355,6 +355,10 @@ Insert structured data directly in any card description using **Insert → Table
   - Designed for comparison grids and 2D tables: the top-left corner cell is intentionally empty and uneditable, while **both the first row and the first column** act as centred headers.
   - Body cells support **per-cell alignment**.
   - **Transpose (`X` in the Editor Menu):** Swaps rows and columns (headers and cell alignments included) in a single undoable step.
+- **Visual table controls (mouse & touch):**
+  - Focusing any cell shows a **floating table bar** above the table with one-click buttons to **Move** rows/columns (`↑ ↓ ← →`), **Insert** rows/columns, **Align** (`Left`, `Centre`, `Right`), **Transpose** (matrices), and **Delete** row/column/table. The bar is mostly transparent when idle (individual buttons turn opaque on hover) and **stays open across clicks** so you can nudge a column or test alignments in a row without reopening anything.
+  - On **tall or wide tables**, the bar pins smoothly just below the formatting bar as you scroll—staying in place without overlapping the formatting bar or jumping around.
+  - Dashed **`+`** strips along the bottom and right edges append a row or column in one click; in a **Matrix**, the empty top-left **`(0, 0)`** corner also holds a **Transpose** button.
 - **Keyboard navigation & editing inside tables/matrices:**
   - `Tab` / `Shift + Tab`: Move to next / previous cell (`Tab` from the very last cell appends a new row automatically; `Shift + Tab` skips the locked top-left corner of a matrix).
   - `Enter`: Move to the same column in the next row (exits the table from the last row).

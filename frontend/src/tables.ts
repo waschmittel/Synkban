@@ -204,6 +204,47 @@ export const removeColumn: Command = (state, dispatch) => {
 };
 export const removeTable: Command = deleteTable;
 
+/// Appends a row at the bottom of the active table and selects its first
+/// editable cell (column 1 in a matrix, column 0 in a table).
+export const appendRowBottom: Command = (state, dispatch) => {
+  const ctx = cellContext(state);
+  if (!ctx) return false;
+  if (dispatch) {
+    const { tablePos, map } = ctx;
+    const lastRow = map.height - 1;
+    const firstCol = isMatrix(ctx.table) && map.width > 1 ? 1 : 0;
+    const targetCellPos = tablePos + 1 + map.map[lastRow * map.width + firstCol];
+    const s = state.apply(selectCell(state.tr, targetCellPos));
+    return addRowAfter(s, (tr) => {
+      const newTable = tr.doc.nodeAt(tablePos)!;
+      const newMap = TableMap.get(newTable);
+      const newCellPos = tablePos + 1 + newMap.map[(lastRow + 1) * newMap.width + firstCol];
+      dispatch(selectCell(tr, newCellPos).scrollIntoView());
+    });
+  }
+  return true;
+};
+
+/// Appends a column at the right edge of the active table and selects the
+/// new cell on the current row.
+export const appendColumnRight: Command = (state, dispatch) => {
+  const ctx = cellContext(state);
+  if (!ctx) return false;
+  if (dispatch) {
+    const { tablePos, map, row } = ctx;
+    const lastCol = map.width - 1;
+    const targetCellPos = tablePos + 1 + map.map[row * map.width + lastCol];
+    const s = state.apply(selectCell(state.tr, targetCellPos));
+    return addColumnAfter(s, (tr) => {
+      const newTable = tr.doc.nodeAt(tablePos)!;
+      const newMap = TableMap.get(newTable);
+      const newCellPos = tablePos + 1 + newMap.map[row * newMap.width + (lastCol + 1)];
+      dispatch(selectCell(tr, newCellPos).scrollIntoView());
+    });
+  }
+  return true;
+};
+
 // ── Alignment ────────────────────────────────────────────────────────────
 
 /// In a normal table, aligns every selected column (header cell is the source

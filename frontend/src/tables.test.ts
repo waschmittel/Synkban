@@ -5,6 +5,7 @@ import { GapCursor } from "prosemirror-gapcursor";
 import { CellSelection, selectedRect } from "prosemirror-tables";
 import type { Node as PmNode } from "prosemirror-model";
 import { schema } from "./proseEditor";
+import { tableBarPlugin } from "./tableBar";
 import {
   arrowOutOfTable,
   createMatrix,
@@ -28,6 +29,8 @@ import {
   alignLeft,
   alignRight,
   alignCenter,
+  appendColumnRight,
+  appendRowBottom,
   tabBackward,
   tabForward,
   transposeMatrix,
@@ -528,5 +531,41 @@ describe("matrices", () => {
     const mLeftToPara = run(atCellEdge(mWrapped, "r0c1", "start"), arrowOutOfTable("horiz", -1));
     expect(mLeftToPara.selection instanceof GapCursor).toBe(false);
     expect(mLeftToPara.selection.$from.parent.textContent).toBe("before");
+  });
+
+  it("appendRowBottom and appendColumnRight add at the far edges and select the new cell", () => {
+    const t = inCell(stateWith(filled(2, 2)), "r0c0");
+    const withRow = run(t, appendRowBottom);
+    expect(withRow.doc.firstChild!.childCount).toBe(3);
+    expect(cellContext(withRow)?.row).toBe(2);
+    expect(cellContext(withRow)?.col).toBe(0);
+
+    const withCol = run(t, appendColumnRight);
+    expect(withCol.doc.firstChild!.firstChild!.childCount).toBe(3);
+    expect(cellContext(withCol)?.row).toBe(0);
+    expect(cellContext(withCol)?.col).toBe(2);
+
+    // Matrix appendRowBottom selects column 1 (skipping the locked corner column 0).
+    const m = inCell(stateWith(filledMatrix(2, 2)), "r0c1");
+    const mWithRow = run(m, appendRowBottom);
+    expect(mWithRow.doc.firstChild!.childCount).toBe(3);
+    expect(cellContext(mWithRow)?.row).toBe(2);
+    expect(cellContext(mWithRow)?.col).toBe(1);
+  });
+
+  it("tableBarPlugin adds a transpose widget only for matrices", () => {
+    const plugin = tableBarPlugin();
+    const decoFn = plugin.props.decorations!;
+
+    const tState = stateWith(filled(2, 2));
+    const tDecos = decoFn.call(plugin, tState) as import("prosemirror-view").DecorationSet;
+    expect(tDecos.find()).toHaveLength(0);
+
+    const mState = stateWith(para("before"), filledMatrix(2, 2));
+    const mOutDecos = decoFn.call(plugin, mState) as import("prosemirror-view").DecorationSet;
+    expect(mOutDecos.find()).toHaveLength(0);
+
+    const mInDecos = decoFn.call(plugin, inCell(mState, "r0c1")) as import("prosemirror-view").DecorationSet;
+    expect(mInDecos.find()).toHaveLength(1);
   });
 });

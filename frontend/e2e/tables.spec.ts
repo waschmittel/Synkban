@@ -570,3 +570,112 @@ test("escape a leading/trailing table or matrix via arrows, padding clicks, and 
   await expect(pm.locator(":scope > :first-child")).toHaveText("menu above");
   await expect(pm.locator(":scope > :last-child")).toHaveText("menu below");
 });
+
+test("floating table bar stays open for repeated actions, edge strips add rows/cols, and matrix corner transposes", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Visual Table Bar");
+  await insertTable(page);
+  await fill(page, ["A", "B", "C", "1", "2", "3", "4", "5", "6"]);
+
+  // Floating bar is visible while a cell is focused.
+  const bar = page.locator(".table-bar");
+  await expect(bar).toBeVisible();
+
+  // Repeated clicks: move column "A" right twice without reopening anything.
+  await clickCell(page, ".editor-wrapper .ProseMirror th", 0);
+  const moveRight = bar.getByRole("button", { name: "Move column right" });
+  await moveRight.click();
+  await expect(bar).toBeVisible();
+  await moveRight.click();
+  await expect(bar).toBeVisible();
+  expect((await rowsOf(page))[0]).toEqual(["B", "C", "A"]);
+
+  // Alignment toggle marks the active button and updates the column.
+  const alignRight = bar.getByRole("button", { name: "Align right" });
+  await alignRight.click();
+  await expect(alignRight).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".editor-wrapper .ProseMirror tbody tr:nth-child(2) td").nth(2)).toHaveCSS(
+    "text-align",
+    "right",
+  );
+
+  // Edge '+' strips append a row at bottom and a column at right.
+  await page.locator(".table-edge-add--row").click();
+  expect(await rowsOf(page)).toHaveLength(4);
+  await page.locator(".table-edge-add--col").click();
+  expect((await rowsOf(page))[0]).toHaveLength(4);
+
+  // Clicking outside the table hides the floating bar and edge strips.
+  await page.locator(".editor-wrapper .ProseMirror > p").last().click();
+  await expect(bar).not.toBeVisible();
+
+  // Matrix (0, 0) corner button transposes in place.
+  await page.locator(".editor-wrapper .ProseMirror").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await menuKey(page, "x");
+  await fill(page, ["C1", "C2", "R1", "a", "b", "R2", "c", "d"]);
+
+  const cornerTranspose = page.locator(".matrix-transpose-btn");
+  await expect(cornerTranspose).toBeVisible();
+  await cornerTranspose.click();
+  await expect(bar).toBeVisible();
+  expect(await rowsOf(page)).toEqual([
+    ["", "R1", "R2"],
+    ["C1", "a", "c"],
+    ["C2", "b", "d"],
+  ]);
+
+  // Leaving the matrix hides the corner transpose button too.
+  await page.locator(".editor-wrapper .ProseMirror > p").last().click();
+  await expect(cornerTranspose).toHaveCount(0);
+});
+
+test("tall table clamps floating bar inside scrollport without covering menubar or active cell", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Tall Table Clamp");
+  await insertTable(page);
+
+  // Add enough rows to overflow the modal scrollport.
+  await clickCell(page, ".editor-wrapper .ProseMirror td", 5);
+  for (let i = 0; i < 22; i++) {
+    await page.keyboard.press("Tab");
+    await page.keyboard.type(`R${i}`);
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+  }
+
+  const bar = page.locator(".table-bar");
+  await expect(bar).toBeVisible();
+
+  const menubarBox = (await page.locator(".ProseMirror-menubar").boundingBox())!;
+  const barBox = (await bar.boundingBox())!;
+  expect(barBox.y).toBeGreaterThanOrEqual(menubarBox.y + menubarBox.height);
+
+  // Active cell in the bottom row must not be covered by the floating bar.
+  const activeCellBox = (await page.locator(".editor-wrapper .ProseMirror tr").last().locator("td").first().boundingBox())!;
+  const overlaps =
+    barBox.y < activeCellBox.y + activeCellBox.height && barBox.y + barBox.height > activeCellBox.y;
+  expect(overlaps).toBe(false);
+
+  // Scrolling step-by-step keeps the bar monotonically pinned below the menubar
+  // (never overlapping it and never jumping to the bottom of the table).
+  const ys: number[] = [];
+  for (const frac of [0, 0.25, 0.5, 0.75, 1]) {
+    await page.locator(".modal-body").evaluate((el, f) => {
+      el.scrollTop = (el.scrollHeight - el.clientHeight) * f;
+    }, frac);
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 40)));
+    const curMenubar = (await page.locator(".ProseMirror-menubar").boundingBox())!;
+    const box = (await bar.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(curMenubar.y + curMenubar.height);
+    ys.push(Math.round(box.y));
+  }
+  for (let i = 1; i < ys.length; i++) {
+    expect(ys[i]).toBeLessThanOrEqual(ys[i - 1]);
+  }
+});
