@@ -3,6 +3,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "//prosemirror-view": "Pinned to 1.42.9 (keep in sync with pnpm-workspace.yaml): 1.43.0+/1.44.0 mouse-selection rewrite leaves selection outside <p> when clicking below it in an unfocused empty editor; unpin once fixed upstream.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,28 +12,28 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@solidjs/router": "^1.0.1",
+    "@solidjs/router": "^1.0.3",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-example-setup": "^1.2.4",
     "prosemirror-gapcursor": "^1.4.1",
-    "prosemirror-inputrules": "^1.6.0",
+    "prosemirror-inputrules": "^1.7.0",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-menu": "^1.3.2",
     "prosemirror-model": "^1.25.13",
     "prosemirror-schema-basic": "^1.2.5",
-    "prosemirror-schema-list": "^1.6.0",
+    "prosemirror-schema-list": "^1.6.1",
     "prosemirror-state": "^1.4.4",
     "prosemirror-tables": "^1.8.5",
-    "prosemirror-view": "^1.42.9",
-    "solid-js": "^1.9.18",
+    "prosemirror-view": "1.42.9",
+    "solid-js": "^1.9.20",
     "wasmoon": "^1.16.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
     "jsdom": "^31.0.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.8",
-    "vite-plugin-solid": "^2.11.16",
-    "vitest": "^5.1.0"
+    "vite": "^8.4.0",
+    "vite-plugin-solid": "^2.11.17",
+    "vitest": "^5.1.2"
   }
 }

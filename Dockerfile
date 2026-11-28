@@ -2,13 +2,13 @@ FROM node:22-bookworm-slim AS frontend-build
 ARG SYNKBAN_VERSION=dev
 ENV SYNKBAN_VERSION=${SYNKBAN_VERSION}
 WORKDIR /app/frontend
-RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
-COPY frontend/package.json frontend/pnpm-lock.yaml* ./
+RUN corepack enable && corepack prepare pnpm@12.23.0 --activate
+COPY frontend/package.json frontend/pnpm-lock.yaml* frontend/pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm run build
 
-FROM rust:1.100.0-bookworm AS backend-build
+FROM rust:1.100.1-bookworm AS backend-build
 ARG SYNKBAN_VERSION=dev
 ENV SYNKBAN_VERSION=${SYNKBAN_VERSION}
 WORKDIR /app/backend

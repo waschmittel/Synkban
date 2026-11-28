@@ -1,2 +1,4 @@
-allowBuilds:
-  esbuild: true
+# Pinned to 1.42.9: 1.43.0+/1.44.0 mouse-selection rewrite leaves selection outside <p>
+# when clicking below it in an unfocused empty editor. Remove once fixed upstream.
+overrides:
+  prosemirror-view: 1.42.9
