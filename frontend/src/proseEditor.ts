@@ -17,7 +17,7 @@ import { enclosingList, setListType } from "./lists";
 import { exampleSetup, buildMenuItems } from "prosemirror-example-setup";
 import { keymap } from "prosemirror-keymap";
 import { autolinkInputRules, handleAutolinkPaste } from "./autolink";
-import { blockEscapeKeymap, gapPosAtY } from "./blockEscape";
+import { blockEscapeKeymap, gapPosAtY, indentSelection, outdentSelection } from "./blockEscape";
 import {
   canInsertFootnote,
   createFootnoteDefView,
@@ -140,6 +140,17 @@ interface ToolbarDropdownOptions {
   updateTrigger?: (btn: HTMLButtonElement, state: EditorState) => void;
 }
 
+function renderIconLabel(btn: HTMLButtonElement, label: string, icon?: string) {
+  if (icon) {
+    btn.classList.add("insert-menu-item");
+    btn.innerHTML =
+      `<span class="insert-menu-icon">${svg(icon, 15)}</span>` +
+      `<span class="insert-menu-label">${label}</span>`;
+  } else {
+    btn.textContent = label;
+  }
+}
+
 /// Top-layer (`popover="manual"`) toolbar dropdown: stays inside `.editor-wrapper`
 /// so it remains interactive inside `<dialog>.showModal()`, never clips against
 /// `.editor-wrapper` or `.modal-body`, and supports `menuNav` + `dialogKeys`.
@@ -176,15 +187,8 @@ function createToolbarDropdown(opts: ToolbarDropdownOptions) {
           row.className = "ProseMirror-menu-dropdown-item";
           const b = document.createElement("button");
           b.type = "button";
-          if (item.icon) {
-            b.className = `insert-menu-item${item.className ? ` ${item.className}` : ""}`;
-            b.innerHTML =
-              `<span class="insert-menu-icon">${svg(item.icon, 15)}</span>` +
-              `<span class="insert-menu-label">${item.label}</span>`;
-          } else {
-            if (item.className) b.className = item.className;
-            b.textContent = item.label;
-          }
+          if (item.className) b.className = item.className;
+          renderIconLabel(b, item.label, item.icon);
           b.title = item.title ?? item.label;
           const enabled = item.enable ? item.enable(state) : true;
           const active = item.active ? item.active(state) : false;
@@ -374,15 +378,17 @@ export function createCardEditor(
     items: TEXT_STYLES.map((t) => ({
       label: t.label,
       title: t.label,
+      icon: t.icon,
       enable: (state) => t.command(state) || t.active(state),
       active: (state) => t.active(state),
       run: (state, dispatch, view) => t.command(state, dispatch, view),
     })),
     renderTrigger(btn) {
-      btn.textContent = "Text style";
+      renderIconLabel(btn, "Text style", ICONS.paragraph);
     },
     updateTrigger(btn, state) {
-      btn.textContent = TEXT_STYLES.find((t) => t.active(state))?.label ?? "Text style";
+      const current = TEXT_STYLES.find((t) => t.active(state));
+      renderIconLabel(btn, current?.label ?? "Text style", current?.icon ?? ICONS.paragraph);
       const changeable = TEXT_STYLES.some((t) => t.command(state));
       btn.disabled = !changeable;
       btn.title = changeable ? "Text style" : "Text style can't be changed here";
@@ -398,9 +404,8 @@ export function createCardEditor(
     ariaLabel: "Insert",
     title: "Insert",
     renderTrigger(btn) {
-      btn.innerHTML =
-        `<span class="insert-trigger-icon" aria-hidden="true">${svg(ICONS.plus, 14)}</span>` +
-        `<span>Insert</span>`;
+      btn.setAttribute("aria-label", "Insert");
+      btn.innerHTML = `<span class="insert-trigger-icon" aria-hidden="true">${svg(ICONS.plus, 14)}</span>`;
     },
     items: [
       {
@@ -476,6 +481,22 @@ export function createCardEditor(
     ],
   });
 
+  const shiftLabel = isMac ? "⇧Tab" : "Shift+Tab";
+  const indentItem = new MenuItem({
+    title: tip("Indent", "Tab"),
+    icon: { dom: iconDom(ICONS.indent) },
+    class: "editor-indent-btn",
+    enable: (state) => indentSelection(state),
+    run: indentSelection,
+  });
+  const outdentItem = new MenuItem({
+    title: tip("Outdent", shiftLabel),
+    icon: { dom: iconDom(ICONS.outdent) },
+    class: "editor-outdent-btn",
+    enable: (state) => outdentSelection(state),
+    run: outdentSelection,
+  });
+
   const searchItem = new MenuItem({
     title: tip("Find in description", accel("F")),
     icon: { dom: iconDom(ICONS.search) },
@@ -488,9 +509,9 @@ export function createCardEditor(
     },
   });
 
-  const menuContent = inlineMenu
-    .concat([[typeDropdown]])
-    .concat([[insertDropdown]])
+  const menuContent = ([[typeDropdown]] as any[][])
+    .concat(inlineMenu)
+    .concat([[insertDropdown, indentItem, outdentItem]])
     .concat([[undoItem, redoItem]])
     .concat([[searchItem]]);
 

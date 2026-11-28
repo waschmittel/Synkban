@@ -133,6 +133,8 @@ test("card detail controls show their shortcuts", async ({ page, request }) => {
     [".modal-history-btn", new RegExp(`${A("J")}\\)$`)],
     [".lua-block-run", new RegExp(`^Run Lua \\(${A("Enter")}\\)$`)],
     [".lua-block-clear", /^Clear output$/],
+    [".editor-indent-btn", /^Indent \(Tab\)$/],
+    [".editor-outdent-btn", /^Outdent \((?:⇧|Shift\+)Tab\)$/],
     [".editor-find-btn", new RegExp(`^Find in description \\(${A("F")}\\)$`)],
   ]);
 

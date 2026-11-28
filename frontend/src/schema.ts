@@ -20,6 +20,7 @@ import { addListNodes } from "prosemirror-schema-list";
 import { MenuItem } from "prosemirror-menu";
 import { tableNodeSpecs } from "./tables";
 import { isValidLinkHref } from "./links";
+import { ICONS } from "./tableIcons";
 import schemaSpec from "./schema.json";
 
 export { schemaSpec };
@@ -494,16 +495,21 @@ function setTextStyle(nodeType: NodeType, attrs: Attrs | null): Command {
 
 /// The text styles of the toolbar dropdown and the Accel+K menu.
 export const TEXT_STYLES = [
-  { label: "Plain text", short: "Plain text", node: schema.nodes.paragraph, attrs: null, key: "0" },
-  { label: "Code block", short: "Code block", node: schema.nodes.code_block, attrs: null, key: "b" },
-  { label: "Lua block", short: "Lua block", node: schema.nodes.lua_block, attrs: null, key: "e" },
-  ...[1, 2, 3].map((level) => ({
+  ...([
+    [1, ICONS.heading1],
+    [2, ICONS.heading2],
+    [3, ICONS.heading3],
+  ] as const).map(([level, icon]) => ({
     label: `Heading ${level}`,
     short: `Heading ${level}`,
     node: schema.nodes.heading,
     attrs: { level } as Attrs | null,
     key: String(level),
+    icon,
   })),
+  { label: "Plain text", short: "Plain text", node: schema.nodes.paragraph, attrs: null, key: "0", icon: ICONS.paragraph },
+  { label: "Code block", short: "Code block", node: schema.nodes.code_block, attrs: null, key: "b", icon: ICONS.codeBlock },
+  { label: "Lua block", short: "Lua block", node: schema.nodes.lua_block, attrs: null, key: "e", icon: ICONS.luaBlock },
 ].map((t) => ({
   ...t,
   /// Possible right now (false in table cells, and for the current style).

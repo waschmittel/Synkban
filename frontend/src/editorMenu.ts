@@ -18,7 +18,7 @@
 ///
 ///   always            l link (add/edit) · u remove link · i inline code · h highlight · g highlight color · m image · f footnote
 ///                     ↑ ↓ Home End move a highlight, Enter runs it
-///   outside a table   0 plain · b code block · e lua block · 1/2/3 heading · t table · x matrix · a alert
+///   outside a table   1/2/3 heading · 0 plain · b code block · e lua block · t table · x matrix · a alert
 ///   inside a list     c … convert between bullet and ordered list
 ///   in a block/table  Shift+P / P … insert paragraph above / below
 ///   inside a table    w s / a d … move the row up, down / column left, right
@@ -193,10 +193,9 @@ const DELETE_FOOTNOTE_ITEM: Item = {
   command: deleteCurrentFootnote,
 };
 
-const STYLE_ICONS = [ICONS.paragraph, ICONS.codeBlock, ICONS.luaBlock, ICONS.heading1, ICONS.heading2, ICONS.heading3];
-const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t, i) => ({
+const STYLE_ITEMS: Item[] = TEXT_STYLES.map((t) => ({
   label: t.label,
-  icon: STYLE_ICONS[i],
+  icon: t.icon,
   group: 2,
   hint: t.key.toUpperCase(),
   active: t.active,

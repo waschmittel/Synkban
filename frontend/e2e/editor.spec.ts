@@ -41,7 +41,7 @@ test("text style dropdown shows the current style; unavailable choices are greye
   await typeDropdown(page).click();
   const menu = page.locator(".ProseMirror-menu-dropdown-menu");
   await expect(menu.locator("button")).toHaveText([
-    "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
+    "Heading 1", "Heading 2", "Heading 3", "Plain text", "Code block", "Lua block",
   ]);
   await menu.locator("button", { hasText: "Heading 2" }).click();
   await expect(typeDropdown(page)).toHaveText("Heading 2");
@@ -84,25 +84,24 @@ test("new card in board view: text style and insert dropdowns are never clipped 
     expect(info.scrollHeight).toBeLessThanOrEqual(info.clientHeight + 1);
   };
 
-  // Text style dropdown: all 6 items visible and clickable without clipping.
+  // Text style dropdown: all 6 items visible with icons and clickable without clipping.
   await typeDropdown(page).click();
   await assertAllItemsUnclipped(".ProseMirror-menu-dropdown-menu.type-dropdown", 6);
+  await expect(page.locator(".ProseMirror-menu-dropdown-menu.type-dropdown .insert-menu-icon svg")).toHaveCount(6);
 
   // Opening Insert closes Text style (exclusive) and shows all 8 items unclipped.
   await page.locator(".ProseMirror-menu-dropdown.insert-dropdown").click();
   await expect(page.locator(".ProseMirror-menu-dropdown-menu.type-dropdown")).toHaveCount(0);
   await assertAllItemsUnclipped(".ProseMirror-menu-dropdown-menu.insert-dropdown", 8);
 
-  // Keyboard navigation inside the toolbar dropdown works (↓ + Enter).
+  // Keyboard navigation inside the toolbar dropdown works (↓ + Enter); Heading 1 is first.
   await page.keyboard.press("Escape");
   await expect(page.locator(".ProseMirror-menu-dropdown-menu")).toHaveCount(0);
   await typeDropdown(page).click();
-  await page.keyboard.press("ArrowDown"); // Plain text
-  await page.keyboard.press("ArrowDown"); // Code block
-  await page.keyboard.press("ArrowDown"); // Lua block
   await page.keyboard.press("ArrowDown"); // Heading 1
   await page.keyboard.press("Enter");
   await expect(typeDropdown(page)).toHaveText("Heading 1");
+  await expect(typeDropdown(page).locator(".insert-menu-icon svg")).toHaveCount(1);
   await expect(editor(page).locator("h1")).toHaveCount(1);
 });
 
@@ -121,6 +120,85 @@ test("text style dropdown is disabled inside a table cell", async ({ page, reque
   await page.keyboard.press("ArrowDown");
   await settle(page);
   await expect(typeDropdown(page)).toBeEnabled();
+});
+
+test("toolbar layout and clickable Indent/Outdent for lists, blockquotes, and alerts", async ({
+  page,
+  request,
+}) => {
+  await openEditor(page, request, "Editor Outdent");
+
+  // Text style dropdown is first; Insert, Indent, and Outdent are icon-only.
+  const firstMenuItem = page.locator(".ProseMirror-menubar .ProseMirror-menuitem").first();
+  await expect(firstMenuItem.locator(".type-dropdown")).toHaveCount(1);
+  const insertBtn = page.locator(".ProseMirror-menu-dropdown.insert-dropdown");
+  await expect(insertBtn).toHaveText("");
+  await expect(insertBtn).toHaveAttribute("aria-label", "Insert");
+
+  const indentBtn = page.locator(".editor-indent-btn");
+  const outdentBtn = page.locator(".editor-outdent-btn");
+  await expect(indentBtn).toHaveText("");
+  await expect(outdentBtn).toHaveText("");
+  await expect(indentBtn).toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(outdentBtn).toHaveClass(/ProseMirror-menu-disabled/);
+
+  // 1. Bullet list: Indent nests, Outdent unindents then lifts to a normal paragraph.
+  await page.keyboard.type("- first");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("second");
+  await expect(indentBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
+  await expect(outdentBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
+  await indentBtn.click();
+  await expect(editor(page).locator("ul > li > ul > li")).toHaveText("second");
+  await outdentBtn.click();
+  await expect(editor(page).locator("ul ul")).toHaveCount(0);
+  await outdentBtn.click();
+  await expect(editor(page).locator("ul > li")).toHaveCount(1);
+  await expect(editor(page).locator(":scope > p").last()).toHaveText("second");
+
+  // 2. Blockquote: + Insert wraps; Outdent button and Shift+Tab lift back to normal paragraph.
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("quoted");
+  await insertBtn.click();
+  await page.locator(".insert-blockquote-btn").click();
+  await expect(editor(page).locator("blockquote > p")).toHaveText("quoted");
+  await expect(outdentBtn).not.toHaveClass(/ProseMirror-menu-disabled/);
+  await outdentBtn.click();
+  await expect(editor(page).locator("blockquote")).toHaveCount(0);
+  await expect(editor(page).locator(":scope > p").last()).toHaveText("quoted");
+
+  // Shift+Tab also lifts out of blockquote without leaving the editor.
+  await insertBtn.click();
+  await page.locator(".insert-blockquote-btn").click();
+  await expect(editor(page).locator("blockquote > p")).toHaveText("quoted");
+  await page.keyboard.press("Shift+Tab");
+  await expect(editor(page)).toBeFocused();
+  await expect(editor(page).locator("blockquote")).toHaveCount(0);
+
+  // 3. Alert: + Insert wraps; Outdent lifts out; containers can nest inside each other.
+  await insertBtn.click();
+  await page.locator(".insert-alert-btn").click();
+  await page.locator('.alert-menu-item[data-alert-kind="note"]').click();
+  await expect(editor(page).locator(".editor-alert[data-alert='note'] p")).toHaveText("quoted");
+
+  // Wrapping a blockquote inside an alert via + Insert works (containers don't toggle off).
+  await insertBtn.click();
+  await page.locator(".insert-blockquote-btn").click();
+  await expect(editor(page).locator(".editor-alert blockquote p")).toHaveText("quoted");
+
+  // Accel+K has no Outdent item (Shift+Tab + toolbar Outdent cover it).
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".table-menu")).toBeVisible();
+  await expect(page.locator(".table-menu-item", { hasText: /Outdent/i })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Outdent twice: first out of blockquote, then out of alert.
+  await outdentBtn.click();
+  await expect(editor(page).locator(".editor-alert blockquote")).toHaveCount(0);
+  await expect(editor(page).locator(".editor-alert p")).toHaveText("quoted");
+  await outdentBtn.click();
+  await expect(editor(page).locator(".editor-alert")).toHaveCount(0);
+  await expect(editor(page).locator(":scope > p").last()).toHaveText("quoted");
 });
 
 test("toolbar link button edits the whole link from the cursor or a partial selection", async ({ page, request }) => {
@@ -228,7 +306,7 @@ test("Accel+K menu is contextual: link, inline code, text style", async ({ page,
   const labels = page.locator(".table-menu-item .table-menu-label");
   await expect(labels).toHaveText([
     "Add link…", "Remove link", "Inline code", "Highlight", "Highlight color…", "Insert image…", "Insert footnote",
-    "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
+    "Heading 1", "Heading 2", "Heading 3", "Plain text", "Code block", "Lua block",
     "Insert table (3×3)", "Insert matrix (3×3)", "Insert alert…",
   ]);
   // No link at the cursor and nothing selected: link actions are greyed out.

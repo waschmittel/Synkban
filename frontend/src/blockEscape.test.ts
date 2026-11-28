@@ -7,14 +7,18 @@ import { CellSelection } from "prosemirror-tables";
 import { schema } from "./proseEditor";
 import { createMatrix, createTable } from "./tables";
 import {
+  blockEscapeKeymap,
   clampGapCursor,
   clearEmptyCodeBlock,
   exitCodeOnTripleEnter,
   inEscapableBlock,
   indentCodeBlock,
+  indentSelection,
   insertParagraphAbove,
   insertParagraphBelow,
   isValidGapCursor,
+  liftEmptyQuoteOrAlert,
+  outdentSelection,
 } from "./blockEscape";
 
 const p = (text = "") => schema.node("paragraph", null, text ? [schema.text(text)] : []);
@@ -283,5 +287,92 @@ describe("indentCodeBlock (Tab / Shift+Tab)", () => {
     const multi = stateWith(code("a"), p("b"));
     const cross = multi.apply(multi.tr.setSelection(TextSelection.create(multi.doc, 1, 5)));
     expect(indentCodeBlock(1)(cross)).toBe(false);
+  });
+});
+
+describe("indentSelection / outdentSelection / container unindent", () => {
+  const bq = (...children: any[]) => schema.nodes.blockquote.create(null, children);
+  const alert = (kind: string, ...children: any[]) => schema.nodes.alert.create({ kind }, children);
+  const li = (text: string) => schema.nodes.list_item.create(null, p(text));
+  const ul = (...items: any[]) => schema.nodes.bullet_list.create(null, items);
+
+  it("outdents a blockquote and an alert to a normal paragraph", () => {
+    const qState = stateWith(bq(p("cited")));
+    const inQuote = qState.apply(qState.tr.setSelection(TextSelection.create(qState.doc, 3)));
+    expect(indentSelection(inQuote)).toBe(false);
+    const qRes = run(inQuote, outdentSelection);
+    expect(qRes.ok).toBe(true);
+    expect(qRes.state.doc.child(0).type).toBe(schema.nodes.paragraph);
+    expect(qRes.state.doc.child(0).textContent).toBe("cited");
+
+    const aState = stateWith(alert("note", p("heads up")));
+    const inAlert = aState.apply(aState.tr.setSelection(TextSelection.create(aState.doc, 3)));
+    const aRes = run(inAlert, outdentSelection);
+    expect(aRes.ok).toBe(true);
+    expect(aRes.state.doc.child(0).type).toBe(schema.nodes.paragraph);
+    expect(aRes.state.doc.child(0).textContent).toBe("heads up");
+  });
+
+  it("indents and outdents list items, and lifts a list inside a quote step by step", () => {
+    const lState = stateWith(ul(li("one"), li("two")));
+    // Caret in "two"
+    const posTwo = 1 + lState.doc.child(0).child(0).nodeSize + 2;
+    const inTwo = lState.apply(lState.tr.setSelection(TextSelection.create(lState.doc, posTwo)));
+    const nested = run(inTwo, indentSelection);
+    expect(nested.ok).toBe(true);
+    expect(nested.state.doc.child(0).child(0).childCount).toBe(2);
+
+    const liftedOnce = run(nested.state, outdentSelection);
+    expect(liftedOnce.ok).toBe(true);
+    expect(liftedOnce.state.doc.child(0).childCount).toBe(2);
+
+    const liftedTwice = run(liftedOnce.state, outdentSelection);
+    expect(liftedTwice.ok).toBe(true);
+    expect(liftedTwice.state.doc.child(1).type).toBe(schema.nodes.paragraph);
+    expect(liftedTwice.state.doc.child(1).textContent).toBe("two");
+  });
+
+  it("liftEmptyQuoteOrAlert lifts at start of empty or first block, not second non-empty block", () => {
+    const s0 = stateWith(bq(p("first"), p("second")));
+    // Start of "first": doc(0) -> blockquote(1) -> p(2)
+    const atFirst = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, 2)));
+    const resFirst = run(atFirst, liftEmptyQuoteOrAlert);
+    expect(resFirst.ok).toBe(true);
+    expect(resFirst.state.doc.child(0).type).toBe(schema.nodes.paragraph);
+    expect(resFirst.state.doc.child(0).textContent).toBe("first");
+    expect(resFirst.state.doc.child(1).type).toBe(schema.nodes.blockquote);
+
+    // Start of "second" (non-empty 2nd child): should return false so joinBackward joins it
+    const posSecond = 1 + s0.doc.child(0).child(0).nodeSize + 1;
+    const atSecond = s0.apply(s0.tr.setSelection(TextSelection.create(s0.doc, posSecond)));
+    expect(liftEmptyQuoteOrAlert(atSecond)).toBe(false);
+
+    // Empty 2nd paragraph inside alert: lifts out
+    const a0 = stateWith(alert("tip", p("keep"), p("")));
+    const posEmpty = 1 + a0.doc.child(0).child(0).nodeSize + 1;
+    const atEmpty = a0.apply(a0.tr.setSelection(TextSelection.create(a0.doc, posEmpty)));
+    const resEmpty = run(atEmpty, liftEmptyQuoteOrAlert);
+    expect(resEmpty.ok).toBe(true);
+    expect(resEmpty.state.doc.child(0).type).toBe(schema.nodes.alert);
+    expect(resEmpty.state.doc.child(1).type).toBe(schema.nodes.paragraph);
+  });
+
+  it("blockEscapeKeymap handles Shift-Tab inside quote/alert without returning false", () => {
+    const qState = stateWith(bq(p("cited")));
+    const inQuote = qState.apply(qState.tr.setSelection(TextSelection.create(qState.doc, 3)));
+    let nextState = inQuote;
+    const handler = blockEscapeKeymap.props.handleKeyDown!;
+    const handled = handler.call(
+      blockEscapeKeymap,
+      {
+        state: inQuote,
+        dispatch(tr: any) {
+          nextState = inQuote.apply(tr);
+        },
+      } as any,
+      new KeyboardEvent("keydown", { key: "Tab", shiftKey: true }),
+    );
+    expect(handled).toBe(true);
+    expect(nextState.doc.child(0).type).toBe(schema.nodes.paragraph);
   });
 });

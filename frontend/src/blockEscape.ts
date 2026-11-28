@@ -2,11 +2,12 @@
 /// inserting paragraphs above/below a block, padding clicks, and code-block
 /// Enter/Backspace ergonomics.
 
-import { chainCommands, setBlockType } from "prosemirror-commands";
+import { chainCommands, lift, setBlockType } from "prosemirror-commands";
 import { GapCursor } from "prosemirror-gapcursor";
 import { undoInputRule } from "prosemirror-inputrules";
 import { keymap } from "prosemirror-keymap";
 import type { ResolvedPos } from "prosemirror-model";
+import { liftListItem, sinkListItem } from "prosemirror-schema-list";
 import { type Command, EditorState, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
@@ -88,36 +89,48 @@ export const clearEmptyCodeBlock: Command = (state, dispatch) => {
 const CODE_INDENT = "  ";
 
 /// Indents (`dir = 1`) or unindents (`dir = -1`) every line touched by the
-/// selection inside a code block. Always returns `true` inside a code block so
-/// a no-op `Shift+Tab` never jumps focus out of the editor.
-export function indentCodeBlock(dir: 1 | -1): Command {
+/// selection inside a code block. When `onlyIfChanged` is false (default, used
+/// by `Tab`/`Shift+Tab`), always returns `true` inside a code block so a no-op
+/// `Shift+Tab` never jumps focus out of the editor.
+export function indentCodeBlock(dir: 1 | -1, onlyIfChanged = false): Command {
   return (state, dispatch) => {
     const sel = state.selection;
     if (!(sel instanceof TextSelection)) return false;
     const { $from, $to } = sel;
     if (!$from.parent.type.spec.code || !$from.sameParent($to)) return false;
 
-    if (dispatch) {
-      const blockStart = $from.start();
-      const text = $from.parent.textContent;
-      const fromOff = sel.from - blockStart;
-      const toOff = sel.to - blockStart;
-      const firstLineStart = fromOff === 0 ? 0 : text.lastIndexOf("\n", fromOff - 1) + 1;
-      const endLimit = toOff > fromOff && text[toOff - 1] === "\n" ? toOff - 1 : toOff;
-      const lineStarts = [firstLineStart];
-      for (let i = firstLineStart; i < endLimit; i++) {
-        if (text[i] === "\n") lineStarts.push(i + 1);
-      }
+    const blockStart = $from.start();
+    const text = $from.parent.textContent;
+    const fromOff = sel.from - blockStart;
+    const toOff = sel.to - blockStart;
+    const firstLineStart = fromOff === 0 ? 0 : text.lastIndexOf("\n", fromOff - 1) + 1;
+    const endLimit = toOff > fromOff && text[toOff - 1] === "\n" ? toOff - 1 : toOff;
+    const lineStarts = [firstLineStart];
+    for (let i = firstLineStart; i < endLimit; i++) {
+      if (text[i] === "\n") lineStarts.push(i + 1);
+    }
 
+    let wouldChange = false;
+    for (const start of lineStarts) {
+      if (dir > 0) {
+        if (lineStarts.length > 1 && (start === text.length || text[start] === "\n")) continue;
+        wouldChange = true;
+        break;
+      } else if (text[start] === "\t" || text[start] === " ") {
+        wouldChange = true;
+        break;
+      }
+    }
+    if (onlyIfChanged && !wouldChange) return false;
+
+    if (dispatch && wouldChange) {
       const tr = state.tr;
-      let changed = false;
       for (let i = lineStarts.length - 1; i >= 0; i--) {
         const start = lineStarts[i];
         const pos = blockStart + start;
         if (dir > 0) {
           if (lineStarts.length > 1 && (start === text.length || text[start] === "\n")) continue;
           tr.insertText(CODE_INDENT, pos);
-          changed = true;
         } else {
           const remove =
             text[start] === "\t"
@@ -127,30 +140,93 @@ export function indentCodeBlock(dir: 1 | -1): Command {
                 : text[start] === " "
                   ? 1
                   : 0;
-          if (remove > 0) {
-            tr.delete(pos, pos + remove);
-            changed = true;
-          }
+          if (remove > 0) tr.delete(pos, pos + remove);
         }
       }
 
-      if (changed) {
-        const startPos = blockStart + firstLineStart;
-        const anchorAssoc = !sel.empty && sel.anchor === startPos && sel.anchor < sel.head ? -1 : 1;
-        const headAssoc = !sel.empty && sel.head === startPos && sel.head < sel.anchor ? -1 : 1;
-        tr.setSelection(
-          TextSelection.create(
-            tr.doc,
-            tr.mapping.map(sel.anchor, anchorAssoc),
-            tr.mapping.map(sel.head, headAssoc),
-          ),
-        );
-        dispatch(tr.scrollIntoView());
-      }
+      const startPos = blockStart + firstLineStart;
+      const anchorAssoc = !sel.empty && sel.anchor === startPos && sel.anchor < sel.head ? -1 : 1;
+      const headAssoc = !sel.empty && sel.head === startPos && sel.head < sel.anchor ? -1 : 1;
+      tr.setSelection(
+        TextSelection.create(
+          tr.doc,
+          tr.mapping.map(sel.anchor, anchorAssoc),
+          tr.mapping.map(sel.head, headAssoc),
+        ),
+      );
+      dispatch(tr.scrollIntoView());
     }
     return true;
   };
 }
+
+function inNodeType(state: EditorState, name: string): boolean {
+  const { $from } = state.selection;
+  for (let d = $from.depth; d > 0; d--) {
+    if ($from.node(d).type.name === name) return true;
+  }
+  return false;
+}
+
+function enclosingContainerDepth(state: EditorState): number {
+  const { $from, $to } = state.selection;
+  const maxDepth = Math.min($from.depth, $to.depth);
+  for (let d = maxDepth; d > 0; d--) {
+    const name = $from.node(d).type.name;
+    if ((name === "blockquote" || name === "alert") && $from.before(d) === $to.before(d)) {
+      return d;
+    }
+  }
+  return 0;
+}
+
+/// Indents the current list item or code-block lines.
+export const indentSelection: Command = (state, dispatch) => {
+  if (indentCodeBlock(1, true)(state, dispatch)) return true;
+  if (inNodeType(state, "list_item")) {
+    return sinkListItem(state.schema.nodes.list_item)(state, dispatch);
+  }
+  return false;
+};
+
+/// Unindents code-block lines, lifts a list item (unindenting nested lists or
+/// lifting out of a top-level list), or lifts blocks out of a blockquote/alert.
+export const outdentSelection: Command = (state, dispatch) => {
+  if (indentCodeBlock(-1, true)(state, dispatch)) return true;
+  if (inNodeType(state, "list_item")) {
+    return liftListItem(state.schema.nodes.list_item)(state, dispatch);
+  }
+  if (enclosingContainerDepth(state) > 0) {
+    return lift(state, dispatch);
+  }
+  return false;
+};
+
+const liftContainerOnShiftTab: Command = (state, dispatch) => {
+  if (inNodeType(state, "list_item") || enclosingContainerDepth(state) === 0) return false;
+  lift(state, dispatch);
+  return true;
+};
+
+/// Backspace at the start of an empty paragraph (or the very first block)
+/// inside a blockquote or alert lifts it out to a normal block.
+export const liftEmptyQuoteOrAlert: Command = (state, dispatch) => {
+  if (!(state.selection instanceof TextSelection) || !state.selection.empty) return false;
+  const { $from } = state.selection;
+  if ($from.parentOffset !== 0 || inNodeType(state, "list_item")) return false;
+  const depth = enclosingContainerDepth(state);
+  if (depth === 0) return false;
+  const isEmpty = $from.parent.content.size === 0;
+  let atContainerStart = true;
+  for (let d = $from.depth; d > depth; d--) {
+    if ($from.index(d - 1) !== 0) {
+      atContainerStart = false;
+      break;
+    }
+  }
+  if (!isEmpty && !atContainerStart) return false;
+  return lift(state, dispatch);
+};
 
 /// Keeps a boundary gap cursor at the start/end of the document instead of
 /// letting the browser's native arrow fallback pull the caret back into the block.
@@ -163,9 +239,9 @@ export function clampGapCursor(dir: -1 | 1): Command {
 
 export const blockEscapeKeymap = keymap({
   Tab: indentCodeBlock(1),
-  "Shift-Tab": indentCodeBlock(-1),
+  "Shift-Tab": chainCommands(indentCodeBlock(-1), liftContainerOnShiftTab),
   Enter: exitCodeOnTripleEnter,
-  Backspace: chainCommands(undoInputRule, clearEmptyCodeBlock),
+  Backspace: chainCommands(undoInputRule, clearEmptyCodeBlock, liftEmptyQuoteOrAlert),
   ArrowUp: clampGapCursor(-1),
   ArrowLeft: clampGapCursor(-1),
   ArrowDown: clampGapCursor(1),

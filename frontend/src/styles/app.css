@@ -3920,10 +3920,12 @@ html.theme-dark .modal-history-btn:hover {
 .editor-wrapper .ProseMirror-menubar .type-dropdown {
   min-width: 118px;
   text-align: left;
+  font-weight: 400;
+  gap: 6px;
 }
 
-/* Insert menu trigger: flat action-menu button ("+ Insert ▾"), visually
-   distinct from the bordered Text-style select dropdown beside it.
+/* Insert menu trigger: flat icon-only action-menu button ("+ ▾"), visually
+   distinct from the bordered Text-style select dropdown.
    Scoped to `.ProseMirror-menu-dropdown` so it never hits the popup menu
    (`.ProseMirror-menu-dropdown-menu.insert-dropdown`). */
 .editor-wrapper .ProseMirror-menubar .ProseMirror-menu-dropdown.insert-dropdown {
@@ -3965,14 +3967,18 @@ html.theme-dark .modal-history-btn:hover {
   box-shadow: var(--shadow-lg);
 }
 
-.editor-wrapper .ProseMirror-menu-dropdown-menu .insert-menu-item {
-  display: flex;
+.editor-wrapper .insert-menu-item {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
 }
 
-.editor-wrapper .ProseMirror-menu-dropdown-menu .insert-menu-icon {
+.editor-wrapper .ProseMirror-menu-dropdown-menu .insert-menu-item {
+  display: flex;
+}
+
+.editor-wrapper .insert-menu-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -48,7 +48,7 @@ describe("linkTarget", () => {
 describe("TEXT_STYLES", () => {
   it("names headings 'Heading n'", () => {
     expect(TEXT_STYLES.map((t) => t.label)).toEqual([
-      "Plain text", "Code block", "Lua block", "Heading 1", "Heading 2", "Heading 3",
+      "Heading 1", "Heading 2", "Heading 3", "Plain text", "Code block", "Lua block",
     ]);
   });
 

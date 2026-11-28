@@ -2,18 +2,20 @@
 
 ## Text styles
 
-`TEXT_STYLES` (`schema.ts`): Plain text, Code block, Lua block, **Heading 1, 2, 3** — always spelled "Heading n", never "H1", in every menu and tooltip. The toolbar Text-style dropdown (`createToolbarDropdown` in `proseEditor.ts`, backed by `floatingPopup.ts` `popover="manual"`, ADR-0033) **shows the current style**; unavailable choices stay **listed but greyed**, the current one is marked; where the style can't change at all (table cells) the **whole dropdown is disabled**. Inline marks (bold, italic, inline code) work everywhere including table cells.
+`TEXT_STYLES` (`schema.ts`): **Heading 1, 2, 3**, Plain text, Code block, Lua block — always spelled "Heading n", never "H1", in every menu and tooltip, and sharing the same icons across the toolbar dropdown and `Accel+K` menu. The toolbar **Text style** dropdown (`createToolbarDropdown` in `proseEditor.ts`, backed by `floatingPopup.ts` `popover="manual"`, ADR-0033) sits **first** in the toolbar and **shows the current style**; unavailable choices stay **listed but greyed**, the current one is marked; where the style can't change at all (table cells) the **whole dropdown is disabled**. Inline marks (bold, italic, inline code) work everywhere including table cells.
 
 ## The menu
 
-`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a highlighter split button toggles the last-used highlight color on click (removing it when highlighted text is selected or under the caret) and opens a compact swatch-only popover from its right chevron; a flat **`+ Insert`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, and **Alert** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices/alerts inside a table, footnotes inside a footnote/code block, or a list type when already inside that same list type). **Bullet list** and **Ordered list** (both in `+ Insert` and via `Ctrl+Shift+8` / `Ctrl+Shift+9`) convert the innermost enclosing list when inside the other list type instead of nesting, leave nested sublists and adjacent lists separate, and do nothing when already in the same list type. Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
+`Accel+K` or right-click opens `.table-menu` (`editorMenu.ts::openEditorMenu`) beside the caret: one mechanism for keyboard and touch, items clickable *and* carrying on-screen single-key hints. In the toolbar, a highlighter split button toggles the last-used highlight color on click (removing it when highlighted text is selected or under the caret) and opens a compact swatch-only popover from its right chevron; an icon-only **`+`** menu button (`InsertDropdown`, visually distinct from the bordered Text-style select dropdown) groups **Footnote**, **Image**, **Table**, **Matrix**, **Bullet list**, **Ordered list**, **Blockquote**, and **Alert** — each with icon + text — and disables items where insertion is invalid (e.g. tables/matrices/alerts inside a table, footnotes inside a footnote/code block, or a list type when already inside that same list type). Beside it sit icon-only **Indent** and **Outdent** buttons (`indentSelection` / `outdentSelection` in `blockEscape.ts`).
+
+**Containers vs. text styles:** `+ Insert` wraps or inserts **containers** (`bullet_list`, `ordered_list`, `blockquote`, `alert`) and intentionally does **not** toggle them off—containers are wrappable inside each other (e.g. a quote inside an alert or list item), which is what distinguishes them from mutually exclusive text styles (`TEXT_STYLES`). Unwrapping or lifting out of any container uses **Outdent** (`Shift+Tab` or the toolbar Outdent button). **Bullet list** and **Ordered list** (both in `+ Insert` and via `Ctrl+Shift+8` / `Ctrl+Shift+9`) convert the innermost enclosing list when inside the other list type instead of nesting, leave nested sublists and adjacent lists separate, and do nothing when already in the same list type. Groups in the `Accel+K` menu, divided by separators, no headings, an icon each:
 
 | Group | Items (key) | Availability |
 |---|---|---|
 | Link | Add/Edit link… (`L`), Remove link (`U`) | greyed when not applicable |
 | Code / Inline | Inline code (`I`), Highlight / Remove highlight (`H`), Highlight color… (`G`), Insert image… (`M`), Insert/Jump footnote (`F`) | greyed when not applicable |
 | Footnote | Delete footnote (`D`; tinted danger) | inside a footnote definition |
-| Text style | Plain (`0`), Code block (`B`), Lua block (`E`), Heading 1–3 (`1`–`3`); current highlighted | **omitted in table cells** |
+| Text style | Heading 1–3 (`1`–`3`), Plain (`0`), Code block (`B`), Lua block (`E`); current highlighted | **omitted in table cells** |
 | Insert | Insert table 3×3 (`T`), Insert matrix 3×3 (`X`), Insert/Change alert… (`A`) | outside tables |
 | List | Convert to ordered list / Convert to bullet list (`C`) | inside a list |
 | Block | Insert paragraph above (`Shift+P`), Insert paragraph below (`P`) | inside tables, code blocks, quotes, alerts, lists (before Delete inside tables) |
@@ -21,7 +23,7 @@
 
 ## Why
 
-A modifier chord per operation doesn't scale and collides across OSes (ADR-0008); one chord opens a menu whose keys are visible. Text styles are omitted in cells (rather than greyed) because the block type is fixed there and the digits mean alignment.
+A modifier chord per operation doesn't scale and collides across OSes (ADR-0008); one chord opens a menu whose keys are visible. `Accel+K` is reserved for less-often-used or context-heavy actions where opening a menu via a single chord is sufficient and a dedicated global shortcut isn't warranted. Actions that already have a direct keyboard shortcut (such as **Outdent** via `Shift+Tab`, which also has a dedicated toolbar icon button for pointer/touch) are intentionally omitted from `Accel+K` to keep the menu compact. Text styles are omitted in cells (rather than greyed) because the block type is fixed there and the digits mean alignment.
 
 ## Rules
 

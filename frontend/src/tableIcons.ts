@@ -31,6 +31,10 @@ export const ICONS = {
     '<path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1v4M4 11.5c0-.8.7-1.3 1.5-1.3s1.5.5 1.5 1.3c0 1-3 2-3 3h3M4 17.5h2c.6 0 1 .4 1 1s-.4 1-1 1H4"/>',
   blockquote:
     '<path d="M5 6v12M10 8h9M10 12h9M10 16h6"/>',
+  indent:
+    '<path d="M3 6h18M11 12h10M11 18h10M3 10l4 4-4 4"/>',
+  outdent:
+    '<path d="M3 6h18M11 12h10M11 18h10M7 10l-4 4 4 4"/>',
   alert:
     '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
   highlight:
