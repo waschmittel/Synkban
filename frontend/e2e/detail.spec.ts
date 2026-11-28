@@ -97,12 +97,9 @@ for (const mode of ["kanban", "notes"] as const) {
     const [d, icon] = await Promise.all([dot.boundingBox(), root.locator(".modal-header-icon svg").boundingBox()]);
     expect(d!.x + d!.width / 2).toBeGreaterThan(icon!.x + icon!.width / 2);
     expect(d!.y + d!.height / 2).toBeLessThan(icon!.y + icon!.height / 2);
-    // Not on the master/board card.
+    // Not on the master/board card or Notes tab.
     await expect(page.locator(".card .dirty-dot")).toHaveCount(0);
-    if (mode === "notes") {
-      await expect(page.locator(".notes-tab", { hasText: "Todo" }).locator(".dirty-dot")).toHaveCount(1);
-      await expect(page.locator(".notes-tab", { hasText: "Later" }).locator(".dirty-dot")).toHaveCount(0);
-    }
+    await expect(page.locator(".notes-tab .dirty-dot")).toHaveCount(0);
 
     // Typing it back clears it; saving clears it too.
     await root.locator(".modal-title-input").fill("Dotted");

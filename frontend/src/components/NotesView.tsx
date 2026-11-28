@@ -14,8 +14,6 @@ interface Props {
   labels: Label[];
   activeListId: string | null;
   selectedCardId: string | null;
-  /// The card with unsaved edits (dot on it and on its list's tab).
-  dirtyCardId: string | null;
   renamingListId: string | null;
   /// The detail pane (a `CardDetail` in pane variant), or nothing selected.
   detail: JSX.Element;
@@ -44,8 +42,6 @@ export default function NotesView(props: Props) {
   let tabsEl!: HTMLElement;
   const [dropListId, setDropListId] = createSignal<string | null>(null);
   const active = () => props.filtered.find((l) => l.id === props.activeListId);
-  const dirtyListId = () =>
-    props.dirtyCardId ? props.lists.find((l) => l.cards.some((c) => c.id === props.dirtyCardId))?.id : undefined;
   const count = (list: ListWithCards) => {
     const shown = props.filtered.find((l) => l.id === list.id)?.cards.length ?? 0;
     return props.filtering ? `${shown}/${list.cards.length}` : `${list.cards.length}`;
@@ -113,9 +109,6 @@ export default function NotesView(props: Props) {
                         }
                       }}
                     >
-                      <Show when={dirtyListId() === list.id}>
-                        <span class="dirty-dot" title="Unsaved changes in this list" />
-                      </Show>
                       <span class="notes-tab-title">{list.title}</span>
                       <span class="notes-tab-count">{count(list)}</span>
                     </button>

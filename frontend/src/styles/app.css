@@ -2522,7 +2522,7 @@ dialog.image-preview-overlay::backdrop {
   margin-left: 8px;
 }
 
-/* Unsaved edits: on the detail's card icon and its Notes tab. */
+/* Unsaved edits: on the detail's card icon. */
 .dirty-dot {
   display: inline-block;
   flex: none;
@@ -2531,12 +2531,6 @@ dialog.image-preview-overlay::backdrop {
   border-radius: 50%;
   background: #e5a000;
   vertical-align: middle;
-}
-
-.notes-tab-btn > .dirty-dot {
-  margin-right: 6px;
-  position: relative;
-  top: -1px;
 }
 
 /* Save is the loud button only while there is something to save. */

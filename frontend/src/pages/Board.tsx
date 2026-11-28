@@ -124,10 +124,6 @@ export default function BoardPage() {
   });
 
   const [selectedCard, setSelectedCard] = createSignal<CardType | null>(null);
-  /// The open card (modal or Notes pane) while it has unsaved edits.
-  const [dirtyCardId, setDirtyCardId] = createSignal<string | null>(null);
-  const trackDirty = (id: string) => (d: boolean) =>
-    setDirtyCardId((cur) => (d ? id : cur === id ? null : cur));
   const [warnings, setWarnings] = createSignal<string[]>([]);
   const refreshWarnings = () =>
     api.getWarnings().then((r) => setWarnings(r.warnings)).catch(() => {});
@@ -1289,7 +1285,6 @@ export default function BoardPage() {
                   labels={b().labels}
                   activeListId={activeListId()}
                   selectedCardId={paneCard() ? notesCardId() : null}
-                  dirtyCardId={dirtyCardId()}
                   renamingListId={renamingListId()}
                   onSelectList={(id) => selectNotesList(id)}
                   onCardClick={(card, byKey) => selectNotesCard(card, !!byKey)}
@@ -1313,7 +1308,6 @@ export default function BoardPage() {
                     <Show when={paneCard() ? notesCardId() : null} keyed>
                       {(id) => (
                         <CardDetail
-                          onDirtyChange={trackDirty(id)}
                           boardId={b().id}
                           draft={takeDraft(id)}
                           variant="pane"

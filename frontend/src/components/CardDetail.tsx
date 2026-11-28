@@ -63,8 +63,6 @@ interface Props {
   /// Pane: attachments changed (the board refreshes its badges).
   onAttachmentsChanged?: () => void;
   control?: (c: CardDetailControl) => void;
-  /// Unsaved edits appeared/went (the board marks the card and its tab).
-  onDirtyChange?: (dirty: boolean) => void;
   /// Unsaved edits are kept as a draft of this board while dirty (ADR-0024).
   boardId?: string;
   /// A draft from before the app closed, checked against the card: start from it.
@@ -108,10 +106,6 @@ export default function CardDetail(props: Props) {
   });
   const dirty = createMemo(() => !sameContent(current(), base()));
   const titleValid = () => title().trim().length > 0;
-  // Captured: on unmount the prop getter may read a <Show> that already closed.
-  const onDirtyChange = props.onDirtyChange;
-  createEffect(() => onDirtyChange?.(dirty()));
-  onCleanup(() => onDirtyChange?.(false));
 
   // --- Draft: kept while dirty, so closing the app loses nothing (ADR-0024) ---
   const cardId = props.card.id;
